@@ -1,0 +1,79 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function meuUsuario() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && meuUsuario().perfil == 'administrador';
+    }
+
+    function isCoordenador() {
+      return isSignedIn() && meuUsuario().perfil == 'coordenador';
+    }
+
+    function meuRecursoId() {
+      return meuUsuario().recursoId;
+    }
+
+    // Documento público que marca se o admin seed já foi criado.
+    match /config/bootstrap {
+      allow read: if true;
+      allow write: if !exists(/databases/$(database)/documents/config/bootstrap) || isAdmin();
+    }
+
+    match /usuarios/{uid} {
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      // Autocadastro: só coordenador/consultor, exceto durante o bootstrap do admin seed.
+      allow create: if isSignedIn() && request.auth.uid == uid &&
+        (
+          request.resource.data.perfil in ['coordenador', 'consultor'] ||
+          (request.resource.data.perfil == 'administrador' &&
+            !exists(/databases/$(database)/documents/config/bootstrap))
+        );
+      allow update, delete: if isAdmin();
+    }
+
+    match /clientes/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /recursos/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /tiposDocumento/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /projetos/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isCoordenador();
+    }
+
+    match /eventosCalendario/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isCoordenador();
+    }
+
+    match /apontamentos/{id} {
+      allow read: if isAdmin() ||
+        (isSignedIn() && resource.data.recursoId == meuRecursoId());
+      allow create: if isSignedIn() && request.resource.data.recursoId == meuRecursoId();
+      allow delete: if isAdmin() ||
+        (isSignedIn() && resource.data.recursoId == meuRecursoId());
+      allow update: if isAdmin();
+    }
+  }
+}
