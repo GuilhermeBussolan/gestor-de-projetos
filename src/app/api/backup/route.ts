@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminDb, getAdminStorage } from "@/lib/firebaseAdmin";
+import { getAdminDb } from "@/lib/firebaseAdmin";
+import { excluirBackupDoGithub, listarBackups, salvarBackupNoGithub } from "@/lib/githubBackup";
 
 const COLECOES = [
   "usuarios",
@@ -28,20 +29,22 @@ export async function GET(request: NextRequest) {
   }
 
   const dataISO = new Date().toISOString().slice(0, 10);
-  const nomeArquivo = `backups/backup-${dataISO}.json`;
-  const bucket = getAdminStorage().bucket();
+  const nomeArquivo = `backup-${dataISO}.json`;
 
-  await bucket.file(nomeArquivo).save(JSON.stringify(dump, null, 2), {
-    contentType: "application/json",
-  });
+  await salvarBackupNoGithub(nomeArquivo, JSON.stringify(dump, null, 2));
 
-  const [arquivos] = await bucket.getFiles({ prefix: "backups/backup-" });
+  const arquivos = await listarBackups();
   const antigos = arquivos
-    .map((f) => f.name)
+    .map((a) => a.name)
+    .filter((nome) => nome.startsWith("backup-"))
     .sort()
     .reverse()
     .slice(RETENCAO_DIAS);
-  await Promise.all(antigos.map((nome) => bucket.file(nome).delete({ ignoreNotFound: true })));
+
+  for (const nome of antigos) {
+    const arquivo = arquivos.find((a) => a.name === nome);
+    if (arquivo) await excluirBackupDoGithub(nome, arquivo.sha);
+  }
 
   return NextResponse.json({
     ok: true,
