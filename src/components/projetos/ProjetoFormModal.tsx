@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
+import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
@@ -29,9 +30,8 @@ function ProjetoForm({
   const [consultorIds, setConsultorIds] = useState<string[]>([]);
   const [documentoIds, setDocumentoIds] = useState<string[]>(tiposDocumento.map((t) => t.id));
   const [observacoes, setObservacoes] = useState("");
-  const [valorTotal, setValorTotal] = useState("");
-  const [numeroParcelas, setNumeroParcelas] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
 
   const coordenadores = recursos.filter((r) => r.tipo === "coordenador");
   const consultoresDisponiveis = recursos.filter((r) => r.tipo !== "coordenador");
@@ -44,12 +44,9 @@ function ProjetoForm({
     setDocumentoIds((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
   }
 
-  const valorTotalNumero = Number(valorTotal) || 0;
-  const numeroParcelasNumero = Math.max(1, Number(numeroParcelas) || 1);
-
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
-    if (!clienteId) return;
+    if (!clienteId || !financeiroRef.current) return;
     setSalvando(true);
     try {
       const documentos = tiposDocumento
@@ -62,14 +59,6 @@ function ProjetoForm({
           status: "A_INICIAR" as const,
         }));
 
-      const valorParcela =
-        Math.round((valorTotalNumero / numeroParcelasNumero) * 100) / 100;
-      const parcelas = Array.from({ length: numeroParcelasNumero }, (_, i) => ({
-        numero: i + 1,
-        valor: valorParcela,
-        status: "LIBERADO" as const,
-      }));
-
       await addDoc(collection(db, "projetos"), {
         clienteId,
         codigoProposta,
@@ -79,7 +68,8 @@ function ProjetoForm({
         consultorIds,
         documentos,
         observacoes,
-        financeiro: { valorTotal: valorTotalNumero, numeroParcelas: numeroParcelasNumero, parcelas },
+        financeiro: financeiroRef.current.obterFinanceiro(),
+        ultimoContato: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -184,39 +174,7 @@ function ProjetoForm({
         <Textarea rows={3} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
       </FormRow>
 
-      <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-        <p className="mb-3 text-sm font-semibold text-slate-700">Financeiro</p>
-        <div className="grid grid-cols-2 gap-4">
-          <FormRow label="Valor total do projeto (R$)">
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0,00"
-              value={valorTotal}
-              onChange={(e) => setValorTotal(e.target.value)}
-              required
-            />
-          </FormRow>
-          <FormRow label="Número de parcelas">
-            <Input
-              type="number"
-              min="1"
-              placeholder="1"
-              value={numeroParcelas}
-              onChange={(e) => setNumeroParcelas(e.target.value)}
-              required
-            />
-          </FormRow>
-        </div>
-        <p className="mt-2 text-xs text-slate-500">
-          {numeroParcelasNumero}x de{" "}
-          {(valorTotalNumero / numeroParcelasNumero).toLocaleString("pt-BR", {
-            style: "currency",
-            currency: "BRL",
-          })}
-        </p>
-      </div>
+      <FinanceiroFields ref={financeiroRef} />
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>

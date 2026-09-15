@@ -56,14 +56,26 @@ export type StatusParcela = "LIBERADO" | "FATURADO" | "RECEBIDO";
 
 export interface Parcela {
   numero: number;
+  descricao?: string;
   valor: number;
   status: StatusParcela;
 }
 
+export type TipoFaturamento = "apontamento_horas" | "parcelado" | "marco_faturamento";
+
 export interface Financeiro {
+  tipoFaturamento: TipoFaturamento;
   valorTotal: number;
   numeroParcelas: number;
   parcelas: Parcela[];
+}
+
+export interface ContatoProjeto {
+  id: string;
+  texto: string;
+  usuarioId: string;
+  usuarioNome: string;
+  criadoEm: number;
 }
 
 export interface Projeto {
@@ -77,6 +89,11 @@ export interface Projeto {
   documentos: DocumentoProjeto[];
   observacoes: string;
   financeiro: Financeiro;
+  ultimoContato?: {
+    texto: string;
+    usuarioNome: string;
+    criadoEm: number;
+  } | null;
   createdAt: number;
   updatedAt: number;
 }

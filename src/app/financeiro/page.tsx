@@ -5,7 +5,12 @@ import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
-import { STATUS_PARCELA_CONFIG, STATUS_PARCELA_ORDEM, TIPO_RECURSO_CONFIG } from "@/lib/constants";
+import {
+  STATUS_PARCELA_CONFIG,
+  STATUS_PARCELA_ORDEM,
+  TIPO_FATURAMENTO_CONFIG,
+  TIPO_RECURSO_CONFIG,
+} from "@/lib/constants";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import type { Apontamento, Cliente, Projeto, Recurso, StatusParcela, TipoRecurso } from "@/types";
 
@@ -104,36 +109,54 @@ function FinanceiroPageContent() {
           return (
             <div key={p.id} className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="mb-2 flex items-center justify-between">
-                <p className="font-semibold text-slate-900">{nomeExibicaoCliente(cliente)}</p>
-                <p className="text-sm text-slate-500">
-                  {moeda(p.financeiro?.valorTotal ?? 0)} em {p.financeiro?.numeroParcelas ?? 0}x
+                <div>
+                  <p className="font-semibold text-slate-900">{nomeExibicaoCliente(cliente)}</p>
+                  <p className="text-xs text-slate-400">
+                    {TIPO_FATURAMENTO_CONFIG[p.financeiro?.tipoFaturamento ?? "parcelado"].label}
+                  </p>
+                </div>
+                {p.financeiro?.tipoFaturamento !== "apontamento_horas" && (
+                  <p className="text-sm text-slate-500">
+                    {moeda(p.financeiro?.valorTotal ?? 0)} em {p.financeiro?.numeroParcelas ?? 0}x
+                  </p>
+                )}
+              </div>
+              {p.financeiro?.tipoFaturamento === "apontamento_horas" ? (
+                <p className="text-sm text-slate-400">
+                  Faturamento por apontamento de horas — sem parcelas fixas.
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {(p.financeiro?.parcelas ?? []).map((parc) => (
-                  <div
-                    key={parc.numero}
-                    className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  >
-                    <span className="text-slate-500">#{parc.numero}</span>
-                    <span className="font-medium">{moeda(parc.valor)}</span>
-                    <select
-                      value={parc.status}
-                      onChange={(e) =>
-                        alterarStatusParcela(p, parc.numero, e.target.value as StatusParcela)
-                      }
-                      style={{ backgroundColor: STATUS_PARCELA_CONFIG[parc.status].color }}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-900"
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {(p.financeiro?.parcelas ?? []).map((parc) => (
+                    <div
+                      key={parc.numero}
+                      className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
                     >
-                      {STATUS_PARCELA_ORDEM.map((s) => (
-                        <option key={s} value={s}>
-                          {STATUS_PARCELA_CONFIG[s].label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
+                      <span className="text-slate-500">
+                        {parc.descricao ? parc.descricao : `#${parc.numero}`}
+                      </span>
+                      <span className="font-medium">{moeda(parc.valor)}</span>
+                      <select
+                        value={parc.status}
+                        onChange={(e) =>
+                          alterarStatusParcela(p, parc.numero, e.target.value as StatusParcela)
+                        }
+                        style={{ backgroundColor: STATUS_PARCELA_CONFIG[parc.status].color }}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-900"
+                      >
+                        {STATUS_PARCELA_ORDEM.map((s) => (
+                          <option key={s} value={s}>
+                            {STATUS_PARCELA_CONFIG[s].label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                  {(p.financeiro?.parcelas ?? []).length === 0 && (
+                    <p className="text-sm text-slate-400">Nenhuma parcela cadastrada.</p>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

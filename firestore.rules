@@ -60,6 +60,12 @@ service cloud.firestore {
     match /projetos/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin() || isCoordenador();
+
+      match /contatos/{contatoId} {
+        allow read: if isSignedIn();
+        allow create: if isAdmin() || isCoordenador();
+        allow update, delete: if false;
+      }
     }
 
     match /eventosCalendario/{id} {

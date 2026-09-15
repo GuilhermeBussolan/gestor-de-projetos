@@ -1,4 +1,4 @@
-import type { StatusDocumento, StatusParcela, TipoRecurso } from "@/types";
+import type { StatusDocumento, StatusParcela, TipoFaturamento, TipoRecurso } from "@/types";
 
 export const STATUS_DOCUMENTO_CONFIG: Record<
   StatusDocumento,
@@ -26,6 +26,27 @@ export const STATUS_PARCELA_CONFIG: Record<StatusParcela, { label: string; color
 };
 
 export const STATUS_PARCELA_ORDEM: StatusParcela[] = ["LIBERADO", "FATURADO", "RECEBIDO"];
+
+export const TIPO_FATURAMENTO_CONFIG: Record<TipoFaturamento, { label: string; descricao: string }> = {
+  apontamento_horas: {
+    label: "Apontamento de horas",
+    descricao: "Faturamento baseado nas horas apontadas — sem valor ou parcelas fixas.",
+  },
+  parcelado: {
+    label: "Parcelado",
+    descricao: "Valor total dividido igualmente pela quantidade de parcelas.",
+  },
+  marco_faturamento: {
+    label: "Marco de faturamento",
+    descricao: "Cada parcela tem uma descrição e um valor definidos manualmente.",
+  },
+};
+
+export const TIPO_FATURAMENTO_ORDEM: TipoFaturamento[] = [
+  "apontamento_horas",
+  "parcelado",
+  "marco_faturamento",
+];
 
 export const TIPO_RECURSO_CONFIG: Record<TipoRecurso, { label: string }> = {
   coordenador: { label: "Coordenador" },

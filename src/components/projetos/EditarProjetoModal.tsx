@@ -1,13 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
+import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import { MODULOS, TIPOS_ATENDIMENTO, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type Financeiro, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+
+function financeiroComStatusPreservado(anterior: Financeiro, novo: Financeiro): Financeiro {
+  if (
+    anterior.tipoFaturamento === novo.tipoFaturamento &&
+    anterior.parcelas.length === novo.parcelas.length
+  ) {
+    return {
+      ...novo,
+      parcelas: novo.parcelas.map((p, i) => ({ ...p, status: anterior.parcelas[i].status })),
+    };
+  }
+  return novo;
+}
 
 function EditarProjetoForm({
   projeto,
@@ -32,6 +46,7 @@ function EditarProjetoForm({
   );
   const [observacoes, setObservacoes] = useState(projeto.observacoes ?? "");
   const [salvando, setSalvando] = useState(false);
+  const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
 
   const coordenadores = recursos.filter((r) => r.tipo === "coordenador");
   const consultoresDisponiveis = recursos.filter((r) => r.tipo !== "coordenador");
@@ -46,6 +61,7 @@ function EditarProjetoForm({
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
+    if (!financeiroRef.current) return;
     setSalvando(true);
     try {
       const documentos = documentoIds.map((tipoDocumentoId) => {
@@ -61,6 +77,11 @@ function EditarProjetoForm({
         };
       });
 
+      const financeiro = financeiroComStatusPreservado(
+        projeto.financeiro,
+        financeiroRef.current.obterFinanceiro()
+      );
+
       await updateDoc(doc(db, "projetos", projeto.id), {
         codigoProposta,
         modulo,
@@ -69,6 +90,7 @@ function EditarProjetoForm({
         consultorIds,
         documentos,
         observacoes,
+        financeiro,
         updatedAt: serverTimestamp(),
       });
       onClose();
@@ -158,6 +180,8 @@ function EditarProjetoForm({
       <FormRow label="Observações gerais">
         <Textarea rows={3} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
       </FormRow>
+
+      <FinanceiroFields ref={financeiroRef} financeiroInicial={projeto.financeiro} />
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>
