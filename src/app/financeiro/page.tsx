@@ -12,7 +12,7 @@ import {
   TIPO_RECURSO_CONFIG,
 } from "@/lib/constants";
 import { nomeExibicaoCliente } from "@/lib/cliente";
-import type { Apontamento, Cliente, Projeto, Recurso, StatusParcela, TipoRecurso } from "@/types";
+import type { Cliente, EventoCalendario, Projeto, Recurso, StatusParcela, TipoRecurso } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -20,7 +20,7 @@ function FinanceiroPageContent() {
   const { data: projetos } = useCollection<Projeto>("projetos");
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: recursos } = useCollection<Recurso>("recursos");
-  const { data: apontamentos } = useCollection<Apontamento>("apontamentos", []);
+  const { data: eventos } = useCollection<EventoCalendario>("eventosCalendario", []);
 
   const resumoGeral = useMemo(() => {
     let totalContratado = 0;
@@ -42,13 +42,13 @@ function FinanceiroPageContent() {
       consultor_funcional: 0,
       consultor_tecnico: 0,
     };
-    for (const a of apontamentos) {
-      const recurso = recursos.find((r) => r.id === a.recursoId);
+    for (const ev of eventos) {
+      const recurso = recursos.find((r) => r.id === ev.recursoId);
       if (!recurso) continue;
-      totais[recurso.tipo] += a.totalHoras * recurso.valorHora;
+      totais[recurso.tipo] += ev.totalHoras * recurso.valorHora;
     }
     return totais;
-  }, [apontamentos, recursos]);
+  }, [eventos, recursos]);
 
   const totalPagoRecursos = Object.values(pagoPorTipoRecurso).reduce((a, b) => a + b, 0);
 

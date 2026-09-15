@@ -8,7 +8,7 @@ interface JsPdfComAutoTable extends jsPDF {
 import { saveAs } from "file-saver";
 import { formatarHoras } from "@/lib/horas";
 import { nomeExibicaoCliente } from "@/lib/cliente";
-import type { Apontamento, Projeto, Recurso, Cliente } from "@/types";
+import type { EventoCalendario, Projeto, Recurso, Cliente } from "@/types";
 
 export interface LinhaRelatorio {
   data: string;
@@ -27,7 +27,7 @@ export interface RelatorioRecurso {
 }
 
 export function montarRelatorio(
-  apontamentos: Apontamento[],
+  eventos: EventoCalendario[],
   recursos: Recurso[],
   projetos: Projeto[],
   clientes: Cliente[],
@@ -37,7 +37,7 @@ export function montarRelatorio(
 
   return recursosAlvo
     .map((recurso) => {
-      const doRecurso = apontamentos.filter((a) => a.recursoId === recurso.id);
+      const doRecurso = eventos.filter((a) => a.recursoId === recurso.id);
       const linhas: LinhaRelatorio[] = doRecurso.map((a) => {
         const projeto = projetos.find((p) => p.id === a.projetoId);
         const cliente = clientes.find((c) => c.id === projeto?.clienteId);

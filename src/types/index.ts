@@ -98,26 +98,15 @@ export interface Projeto {
   updatedAt: number;
 }
 
-export type Periodo = "manha" | "tarde";
-
 export interface EventoCalendario {
   id: string;
   data: string; // YYYY-MM-DD
-  periodo: Periodo;
   projetoId: string;
   recursoId: string;
-  descricao: string;
-  createdAt: number;
-}
-
-export interface Apontamento {
-  id: string;
-  recursoId: string;
-  projetoId: string;
-  data: string; // YYYY-MM-DD
   horaInicio: string; // HH:mm
   horaFim: string; // HH:mm
   horaDesconto: string; // HH:mm
   totalHoras: number; // decimal hours
+  descricao: string;
   createdAt: number;
 }

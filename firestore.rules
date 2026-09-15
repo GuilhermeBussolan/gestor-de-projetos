@@ -68,18 +68,16 @@ service cloud.firestore {
       }
     }
 
+    // Calendário/apontamento unificados: cada consultor só enxerga e mexe nos
+    // próprios eventos (onde recursoId é o recurso vinculado a ele); admin e
+    // coordenador enxergam e gerenciam o calendário de todo mundo.
     match /eventosCalendario/{id} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || isCoordenador();
-    }
-
-    match /apontamentos/{id} {
-      allow read: if isAdmin() ||
+      allow read: if isAdmin() || isCoordenador() ||
         (isSignedIn() && resource.data.recursoId == meuRecursoId());
-      allow create: if isSignedIn() && request.resource.data.recursoId == meuRecursoId();
-      allow delete: if isAdmin() ||
+      allow create: if isAdmin() || isCoordenador() ||
+        (isSignedIn() && request.resource.data.recursoId == meuRecursoId());
+      allow update, delete: if isAdmin() || isCoordenador() ||
         (isSignedIn() && resource.data.recursoId == meuRecursoId());
-      allow update: if isAdmin();
     }
   }
 }

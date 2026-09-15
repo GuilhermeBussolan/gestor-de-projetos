@@ -9,7 +9,6 @@ const COLECOES = [
   "tiposDocumento",
   "projetos",
   "eventosCalendario",
-  "apontamentos",
 ] as const;
 
 const RETENCAO_DIAS = 30;
