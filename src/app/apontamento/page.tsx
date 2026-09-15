@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormRow, Input, Select } from "@/components/ui/Field";
 import { useAuth } from "@/contexts/AuthContext";
 import { calcularTotalHoras, formatarHoras } from "@/lib/horas";
+import { nomeExibicaoCliente } from "@/lib/cliente";
 import {
   montarRelatorio,
   exportarRelatorioWord,
@@ -121,7 +122,7 @@ function MeusApontamentos() {
               return (
                 <tr key={a.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">{a.data.split("-").reverse().join("/")}</td>
-                  <td className="px-4 py-3">{cliente?.nomeFantasia ?? "—"}</td>
+                  <td className="px-4 py-3">{nomeExibicaoCliente(cliente)}</td>
                   <td className="px-4 py-3">{a.horaInicio}</td>
                   <td className="px-4 py-3">{a.horaFim}</td>
                   <td className="px-4 py-3">{a.horaDesconto}</td>
@@ -154,7 +155,7 @@ function MeusApontamentos() {
                 const cliente = clientes.find((c) => c.id === p.clienteId);
                 return (
                   <option key={p.id} value={p.id}>
-                    {cliente?.nomeFantasia ?? "Cliente"}
+                    {nomeExibicaoCliente(cliente)} — {p.codigoProposta}
                   </option>
                 );
               })}

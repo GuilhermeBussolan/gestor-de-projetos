@@ -11,6 +11,7 @@ import { ProjetoCard } from "@/components/projetos/ProjetoCard";
 import { ProjetoFormModal } from "@/components/projetos/ProjetoFormModal";
 import { EditarProjetoModal } from "@/components/projetos/EditarProjetoModal";
 import { useAuth } from "@/contexts/AuthContext";
+import { nomeExibicaoCliente } from "@/lib/cliente";
 import type { Cliente, Projeto, Recurso, TipoDocumento } from "@/types";
 
 function ProjetosPageContent() {
@@ -37,7 +38,7 @@ function ProjetosPageContent() {
 
   async function excluir(projeto: Projeto) {
     const cliente = clientes.find((c) => c.id === projeto.clienteId);
-    if (!confirm(`Excluir o projeto de "${cliente?.nomeFantasia ?? "cliente"}"?`)) return;
+    if (!confirm(`Excluir o projeto de "${nomeExibicaoCliente(cliente)}"?`)) return;
     await deleteDoc(doc(db, "projetos", projeto.id));
   }
 

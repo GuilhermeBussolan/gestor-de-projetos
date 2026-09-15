@@ -7,6 +7,7 @@ interface JsPdfComAutoTable extends jsPDF {
 }
 import { saveAs } from "file-saver";
 import { formatarHoras } from "@/lib/horas";
+import { nomeExibicaoCliente } from "@/lib/cliente";
 import type { Apontamento, Projeto, Recurso, Cliente } from "@/types";
 
 export interface LinhaRelatorio {
@@ -42,7 +43,7 @@ export function montarRelatorio(
         const cliente = clientes.find((c) => c.id === projeto?.clienteId);
         return {
           data: a.data,
-          projeto: cliente?.nomeFantasia ?? "—",
+          projeto: nomeExibicaoCliente(cliente),
           horaInicio: a.horaInicio,
           horaFim: a.horaFim,
           horaDesconto: a.horaDesconto,

@@ -5,9 +5,9 @@ import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { FormRow, Select, Textarea } from "@/components/ui/Field";
+import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import type { Projeto, Recurso, TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function EditarProjetoForm({
   projeto,
@@ -20,6 +20,11 @@ function EditarProjetoForm({
   recursos: Recurso[];
   tiposDocumento: TipoDocumento[];
 }) {
+  const [codigoProposta, setCodigoProposta] = useState(projeto.codigoProposta ?? "");
+  const [modulo, setModulo] = useState<Modulo>(projeto.modulo ?? MODULOS[0]);
+  const [tipoAtendimento, setTipoAtendimento] = useState<TipoAtendimento>(
+    projeto.tipoAtendimento ?? TIPOS_ATENDIMENTO[0]
+  );
   const [coordenadorId, setCoordenadorId] = useState(projeto.coordenadorId ?? "");
   const [consultorIds, setConsultorIds] = useState<string[]>(projeto.consultorIds ?? []);
   const [documentoIds, setDocumentoIds] = useState<string[]>(
@@ -52,11 +57,14 @@ function EditarProjetoForm({
           codigo: tipo.codigo,
           descricao: tipo.descricao,
           pesoIndividual: tipo.pesoIndividual,
-          status: "ANDAMENTO" as const,
+          status: "A_INICIAR" as const,
         };
       });
 
       await updateDoc(doc(db, "projetos", projeto.id), {
+        codigoProposta,
+        modulo,
+        tipoAtendimento,
         coordenadorId: coordenadorId || null,
         consultorIds,
         documentos,
@@ -71,6 +79,37 @@ function EditarProjetoForm({
 
   return (
     <form onSubmit={salvar} className="space-y-5">
+      <div className="grid grid-cols-3 gap-4">
+        <FormRow label="Código da proposta">
+          <Input
+            value={codigoProposta}
+            onChange={(e) => setCodigoProposta(e.target.value)}
+            required
+          />
+        </FormRow>
+        <FormRow label="Módulo de atendimento">
+          <Select value={modulo} onChange={(e) => setModulo(e.target.value as Modulo)}>
+            {MODULOS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
+        </FormRow>
+        <FormRow label="Tipo de atendimento">
+          <Select
+            value={tipoAtendimento}
+            onChange={(e) => setTipoAtendimento(e.target.value as TipoAtendimento)}
+          >
+            {TIPOS_ATENDIMENTO.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
+        </FormRow>
+      </div>
+
       <FormRow label="Coordenador (opcional)">
         <Select value={coordenadorId} onChange={(e) => setCoordenadorId(e.target.value)}>
           <option value="">Nenhum</option>
@@ -100,7 +139,7 @@ function EditarProjetoForm({
 
       <div>
         <p className="mb-1 text-sm font-medium text-slate-700">
-          Documentos (documentos já existentes mantêm o status; novos entram como Andamento)
+          Documentos (documentos já existentes mantêm o status; novos entram como A iniciar)
         </p>
         <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-slate-300 p-2">
           {tiposDocumento.map((t) => (

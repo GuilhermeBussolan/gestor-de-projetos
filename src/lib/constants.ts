@@ -4,6 +4,7 @@ export const STATUS_DOCUMENTO_CONFIG: Record<
   StatusDocumento,
   { label: string; color: string; fator: number }
 > = {
+  A_INICIAR: { label: "A iniciar", color: "#BFBFBF", fator: 0 },
   ANDAMENTO: { label: "Andamento", color: "#0F9ED5", fator: 0 },
   VALIDACAO: { label: "Validação", color: "#CCFF66", fator: 0.5 },
   ASSINADO: { label: "Assinado", color: "#92D050", fator: 1 },
@@ -11,6 +12,7 @@ export const STATUS_DOCUMENTO_CONFIG: Record<
 };
 
 export const STATUS_DOCUMENTO_ORDEM: StatusDocumento[] = [
+  "A_INICIAR",
   "ANDAMENTO",
   "VALIDACAO",
   "ASSINADO",
@@ -18,9 +20,12 @@ export const STATUS_DOCUMENTO_ORDEM: StatusDocumento[] = [
 ];
 
 export const STATUS_PARCELA_CONFIG: Record<StatusParcela, { label: string; color: string }> = {
+  LIBERADO: { label: "Liberado", color: "#BFBFBF" },
   FATURADO: { label: "Faturado", color: "#0F9ED5" },
   RECEBIDO: { label: "Recebido", color: "#92D050" },
 };
+
+export const STATUS_PARCELA_ORDEM: StatusParcela[] = ["LIBERADO", "FATURADO", "RECEBIDO"];
 
 export const TIPO_RECURSO_CONFIG: Record<TipoRecurso, { label: string }> = {
   coordenador: { label: "Coordenador" },

@@ -5,7 +5,8 @@ import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
-import { STATUS_PARCELA_CONFIG, TIPO_RECURSO_CONFIG } from "@/lib/constants";
+import { STATUS_PARCELA_CONFIG, STATUS_PARCELA_ORDEM, TIPO_RECURSO_CONFIG } from "@/lib/constants";
+import { nomeExibicaoCliente } from "@/lib/cliente";
 import type { Apontamento, Cliente, Projeto, Recurso, StatusParcela, TipoRecurso } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -103,7 +104,7 @@ function FinanceiroPageContent() {
           return (
             <div key={p.id} className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="mb-2 flex items-center justify-between">
-                <p className="font-semibold text-slate-900">{cliente?.nomeFantasia ?? "Cliente"}</p>
+                <p className="font-semibold text-slate-900">{nomeExibicaoCliente(cliente)}</p>
                 <p className="text-sm text-slate-500">
                   {moeda(p.financeiro?.valorTotal ?? 0)} em {p.financeiro?.numeroParcelas ?? 0}x
                 </p>
@@ -124,8 +125,11 @@ function FinanceiroPageContent() {
                       style={{ backgroundColor: STATUS_PARCELA_CONFIG[parc.status].color }}
                       className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-900"
                     >
-                      <option value="FATURADO">Faturado</option>
-                      <option value="RECEBIDO">Recebido</option>
+                      {STATUS_PARCELA_ORDEM.map((s) => (
+                        <option key={s} value={s}>
+                          {STATUS_PARCELA_CONFIG[s].label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 ))}

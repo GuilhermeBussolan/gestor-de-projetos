@@ -28,12 +28,9 @@ export type TipoAtendimento = (typeof TIPOS_ATENDIMENTO)[number];
 
 export interface Cliente {
   id: string;
-  razaoSocial: string;
-  nomeFantasia: string;
-  cnpj: string;
-  codigoProposta: string;
-  modulo: Modulo;
-  tipoAtendimento: TipoAtendimento;
+  nome: string;
+  nomeFantasia?: string;
+  cnpj?: string;
   createdAt: number;
 }
 
@@ -45,7 +42,7 @@ export interface TipoDocumento {
   ordem: number;
 }
 
-export type StatusDocumento = "ANDAMENTO" | "VALIDACAO" | "ASSINADO" | "CANCELADO";
+export type StatusDocumento = "A_INICIAR" | "ANDAMENTO" | "VALIDACAO" | "ASSINADO" | "CANCELADO";
 
 export interface DocumentoProjeto {
   tipoDocumentoId: string;
@@ -55,7 +52,7 @@ export interface DocumentoProjeto {
   status: StatusDocumento;
 }
 
-export type StatusParcela = "FATURADO" | "RECEBIDO";
+export type StatusParcela = "LIBERADO" | "FATURADO" | "RECEBIDO";
 
 export interface Parcela {
   numero: number;
@@ -72,6 +69,9 @@ export interface Financeiro {
 export interface Projeto {
   id: string;
   clienteId: string;
+  codigoProposta: string;
+  modulo: Modulo;
+  tipoAtendimento: TipoAtendimento;
   coordenadorId?: string | null;
   consultorIds: string[];
   documentos: DocumentoProjeto[];

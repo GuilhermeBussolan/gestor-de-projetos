@@ -10,7 +10,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormRow, Input } from "@/components/ui/Field";
 import type { TipoDocumento } from "@/types";
 
-const VAZIO = { codigo: "", descricao: "", pesoIndividual: 0 };
+const VAZIO = { codigo: "", descricao: "", pesoIndividual: "" };
 
 function DocumentosPageContent() {
   const { data: tipos, loading } = useCollection<TipoDocumento>("tiposDocumento", []);
@@ -30,7 +30,7 @@ function DocumentosPageContent() {
 
   function abrirEdicao(t: TipoDocumento) {
     setEditando(t);
-    setForm({ codigo: t.codigo, descricao: t.descricao, pesoIndividual: t.pesoIndividual });
+    setForm({ codigo: t.codigo, descricao: t.descricao, pesoIndividual: String(t.pesoIndividual) });
     setModalAberto(true);
   }
 
@@ -38,11 +38,12 @@ function DocumentosPageContent() {
     e.preventDefault();
     setSalvando(true);
     try {
+      const dados = { ...form, pesoIndividual: Number(form.pesoIndividual) || 0 };
       if (editando) {
-        await updateDoc(doc(db, "tiposDocumento", editando.id), { ...form });
+        await updateDoc(doc(db, "tiposDocumento", editando.id), dados);
       } else {
         await addDoc(collection(db, "tiposDocumento"), {
-          ...form,
+          ...dados,
           ordem: ordenados.length,
         });
       }
@@ -136,8 +137,9 @@ function DocumentosPageContent() {
             <Input
               type="number"
               min="0"
+              placeholder="Ex: 10"
               value={form.pesoIndividual}
-              onChange={(e) => setForm({ ...form, pesoIndividual: Number(e.target.value) })}
+              onChange={(e) => setForm({ ...form, pesoIndividual: e.target.value })}
               required
             />
           </FormRow>

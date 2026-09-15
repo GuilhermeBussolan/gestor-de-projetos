@@ -15,7 +15,7 @@ const RECURSO_VAZIO = {
   tipo: "consultor_funcional" as TipoRecurso,
   nomeCompleto: "",
   codigo: "",
-  valorHora: 0,
+  valorHora: "",
 };
 
 function RecursosPageContent() {
@@ -33,7 +33,12 @@ function RecursosPageContent() {
 
   function abrirEdicao(r: Recurso) {
     setEditando(r);
-    setForm({ tipo: r.tipo, nomeCompleto: r.nomeCompleto, codigo: r.codigo, valorHora: r.valorHora });
+    setForm({
+      tipo: r.tipo,
+      nomeCompleto: r.nomeCompleto,
+      codigo: r.codigo,
+      valorHora: String(r.valorHora),
+    });
     setModalAberto(true);
   }
 
@@ -41,10 +46,11 @@ function RecursosPageContent() {
     e.preventDefault();
     setSalvando(true);
     try {
+      const dados = { ...form, valorHora: Number(form.valorHora) || 0 };
       if (editando) {
-        await updateDoc(doc(db, "recursos", editando.id), { ...form });
+        await updateDoc(doc(db, "recursos", editando.id), dados);
       } else {
-        await addDoc(collection(db, "recursos"), { ...form, createdAt: Date.now() });
+        await addDoc(collection(db, "recursos"), { ...dados, createdAt: Date.now() });
       }
       setModalAberto(false);
     } finally {
@@ -145,8 +151,9 @@ function RecursosPageContent() {
               type="number"
               step="0.01"
               min="0"
+              placeholder="0,00"
               value={form.valorHora}
-              onChange={(e) => setForm({ ...form, valorHora: Number(e.target.value) })}
+              onChange={(e) => setForm({ ...form, valorHora: e.target.value })}
               required
             />
           </FormRow>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { calcularPercentualProjeto, corFaixaProgresso } from "@/lib/dashboardCalc";
+import { nomeExibicaoCliente } from "@/lib/cliente";
 import type { Cliente, Projeto } from "@/types";
 
 function DashboardPageContent() {
@@ -26,11 +27,10 @@ function DashboardPageContent() {
               onClick={() => router.push(`/projetos?projetoId=${p.id}`)}
               className="rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition-shadow hover:shadow-md"
             >
-              <p className="mb-1 font-semibold text-slate-900">
-                {cliente?.nomeFantasia ?? "Cliente"}
-              </p>
+              <p className="mb-1 font-semibold text-slate-900">{nomeExibicaoCliente(cliente)}</p>
               <p className="mb-3 text-xs text-slate-500">
-                {cliente?.modulo} · {cliente?.tipoAtendimento} · {p.documentos.length} documento(s)
+                {p.codigoProposta} · {p.modulo} · {p.tipoAtendimento} · {p.documentos.length}{" "}
+                documento(s)
               </p>
               <div className="mb-1 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
                 <div

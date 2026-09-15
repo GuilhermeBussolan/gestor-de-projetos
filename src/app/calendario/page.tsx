@@ -7,6 +7,7 @@ import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { EventoModal } from "@/components/calendario/EventoModal";
 import { useAuth } from "@/contexts/AuthContext";
+import { nomeExibicaoCliente } from "@/lib/cliente";
 import type { Cliente, EventoCalendario, Periodo, Projeto, Recurso } from "@/types";
 
 const PERIODOS: { key: Periodo; label: string }[] = [
@@ -139,7 +140,7 @@ function CalendarioPageContent() {
                           >
                             <span className="font-semibold">{recurso?.nomeCompleto}</span>
                             <br />
-                            {cliente?.nomeFantasia}
+                            {nomeExibicaoCliente(cliente)}
                           </button>
                         );
                       })}

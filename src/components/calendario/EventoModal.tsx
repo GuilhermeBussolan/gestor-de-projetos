@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Select, Textarea } from "@/components/ui/Field";
+import { nomeExibicaoCliente } from "@/lib/cliente";
 import type { Cliente, EventoCalendario, Periodo, Projeto, Recurso } from "@/types";
 
 export function EventoModal({
@@ -76,7 +77,7 @@ export function EventoModal({
               const cliente = clientes.find((c) => c.id === p.clienteId);
               return (
                 <option key={p.id} value={p.id}>
-                  {cliente?.nomeFantasia ?? "Cliente"}
+                  {nomeExibicaoCliente(cliente)} — {p.codigoProposta}
                 </option>
               );
             })}

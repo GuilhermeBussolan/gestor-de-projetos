@@ -7,7 +7,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import type { Cliente, Recurso, TipoDocumento } from "@/types";
+import { nomeExibicaoCliente } from "@/lib/cliente";
+import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function ProjetoForm({
   onClose,
@@ -21,12 +22,15 @@ function ProjetoForm({
   tiposDocumento: TipoDocumento[];
 }) {
   const [clienteId, setClienteId] = useState("");
+  const [codigoProposta, setCodigoProposta] = useState("");
+  const [modulo, setModulo] = useState<Modulo>(MODULOS[0]);
+  const [tipoAtendimento, setTipoAtendimento] = useState<TipoAtendimento>(TIPOS_ATENDIMENTO[0]);
   const [coordenadorId, setCoordenadorId] = useState("");
   const [consultorIds, setConsultorIds] = useState<string[]>([]);
   const [documentoIds, setDocumentoIds] = useState<string[]>(tiposDocumento.map((t) => t.id));
   const [observacoes, setObservacoes] = useState("");
-  const [valorTotal, setValorTotal] = useState(0);
-  const [numeroParcelas, setNumeroParcelas] = useState(1);
+  const [valorTotal, setValorTotal] = useState("");
+  const [numeroParcelas, setNumeroParcelas] = useState("");
   const [salvando, setSalvando] = useState(false);
 
   const coordenadores = recursos.filter((r) => r.tipo === "coordenador");
@@ -40,6 +44,9 @@ function ProjetoForm({
     setDocumentoIds((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
   }
 
+  const valorTotalNumero = Number(valorTotal) || 0;
+  const numeroParcelasNumero = Math.max(1, Number(numeroParcelas) || 1);
+
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
     if (!clienteId) return;
@@ -52,23 +59,27 @@ function ProjetoForm({
           codigo: t.codigo,
           descricao: t.descricao,
           pesoIndividual: t.pesoIndividual,
-          status: "ANDAMENTO" as const,
+          status: "A_INICIAR" as const,
         }));
 
-      const valorParcela = numeroParcelas > 0 ? Math.round((valorTotal / numeroParcelas) * 100) / 100 : 0;
-      const parcelas = Array.from({ length: numeroParcelas }, (_, i) => ({
+      const valorParcela =
+        Math.round((valorTotalNumero / numeroParcelasNumero) * 100) / 100;
+      const parcelas = Array.from({ length: numeroParcelasNumero }, (_, i) => ({
         numero: i + 1,
         valor: valorParcela,
-        status: "FATURADO" as const,
+        status: "LIBERADO" as const,
       }));
 
       await addDoc(collection(db, "projetos"), {
         clienteId,
+        codigoProposta,
+        modulo,
+        tipoAtendimento,
         coordenadorId: coordenadorId || null,
         consultorIds,
         documentos,
         observacoes,
-        financeiro: { valorTotal, numeroParcelas, parcelas },
+        financeiro: { valorTotal: valorTotalNumero, numeroParcelas: numeroParcelasNumero, parcelas },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -85,11 +96,43 @@ function ProjetoForm({
           <option value="">Selecione...</option>
           {clientes.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.nomeFantasia} — {c.modulo}/{c.tipoAtendimento}
+              {nomeExibicaoCliente(c)}
+              {c.cnpj ? ` — ${c.cnpj}` : ""}
             </option>
           ))}
         </Select>
       </FormRow>
+
+      <div className="grid grid-cols-3 gap-4">
+        <FormRow label="Código da proposta">
+          <Input
+            value={codigoProposta}
+            onChange={(e) => setCodigoProposta(e.target.value)}
+            required
+          />
+        </FormRow>
+        <FormRow label="Módulo de atendimento">
+          <Select value={modulo} onChange={(e) => setModulo(e.target.value as Modulo)}>
+            {MODULOS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
+        </FormRow>
+        <FormRow label="Tipo de atendimento">
+          <Select
+            value={tipoAtendimento}
+            onChange={(e) => setTipoAtendimento(e.target.value as TipoAtendimento)}
+          >
+            {TIPOS_ATENDIMENTO.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
+        </FormRow>
+      </div>
 
       <FormRow label="Coordenador (opcional)">
         <Select value={coordenadorId} onChange={(e) => setCoordenadorId(e.target.value)}>
@@ -149,8 +192,9 @@ function ProjetoForm({
               type="number"
               step="0.01"
               min="0"
+              placeholder="0,00"
               value={valorTotal}
-              onChange={(e) => setValorTotal(Number(e.target.value))}
+              onChange={(e) => setValorTotal(e.target.value)}
               required
             />
           </FormRow>
@@ -158,21 +202,20 @@ function ProjetoForm({
             <Input
               type="number"
               min="1"
+              placeholder="1"
               value={numeroParcelas}
-              onChange={(e) => setNumeroParcelas(Math.max(1, Number(e.target.value)))}
+              onChange={(e) => setNumeroParcelas(e.target.value)}
               required
             />
           </FormRow>
         </div>
-        {numeroParcelas > 0 && (
-          <p className="mt-2 text-xs text-slate-500">
-            {numeroParcelas}x de{" "}
-            {(valorTotal / numeroParcelas || 0).toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            })}
-          </p>
-        )}
+        <p className="mt-2 text-xs text-slate-500">
+          {numeroParcelasNumero}x de{" "}
+          {(valorTotalNumero / numeroParcelasNumero).toLocaleString("pt-BR", {
+            style: "currency",
+            currency: "BRL",
+          })}
+        </p>
       </div>
 
       <div className="flex justify-end gap-2 pt-2">

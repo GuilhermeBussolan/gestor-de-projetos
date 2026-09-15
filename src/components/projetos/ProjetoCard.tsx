@@ -4,6 +4,7 @@ import { updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { STATUS_DOCUMENTO_CONFIG, STATUS_DOCUMENTO_ORDEM, TIPO_RECURSO_CONFIG } from "@/lib/constants";
 import { calcularPercentualProjeto } from "@/lib/dashboardCalc";
+import { nomeExibicaoCliente } from "@/lib/cliente";
 import type { Cliente, Projeto, Recurso, StatusDocumento } from "@/types";
 
 export function ProjetoCard({
@@ -44,9 +45,9 @@ export function ProjetoCard({
       <div className="mb-3 flex items-start justify-between">
         <div className="space-y-1 text-sm">
           <p className="text-slate-700">
-            <span className="font-semibold text-slate-900">{cliente?.nomeFantasia ?? "—"}</span>
+            <span className="font-semibold text-slate-900">{nomeExibicaoCliente(cliente)}</span>
             {" · "}
-            {cliente?.modulo} · {cliente?.tipoAtendimento} ·{" "}
+            {projeto.codigoProposta} · {projeto.modulo} · {projeto.tipoAtendimento} ·{" "}
             {coordenador ? (
               <>
                 Coordenador: {coordenador.nomeCompleto} ({coordenador.codigo})
@@ -56,9 +57,9 @@ export function ProjetoCard({
             )}
           </p>
           <p className="text-slate-700">
-            <span className="font-semibold text-slate-900">{cliente?.nomeFantasia ?? "—"}</span>
+            <span className="font-semibold text-slate-900">{nomeExibicaoCliente(cliente)}</span>
             {" · "}
-            {cliente?.modulo} · {cliente?.tipoAtendimento} ·{" "}
+            {projeto.codigoProposta} · {projeto.modulo} · {projeto.tipoAtendimento} ·{" "}
             {consultores.length > 0
               ? consultores
                   .map((c) => `${c.nomeCompleto} (${c.codigo}) — ${TIPO_RECURSO_CONFIG[c.tipo].label}`)

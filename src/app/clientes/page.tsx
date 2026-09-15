@@ -13,23 +13,14 @@ import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { FormRow, Input, Select } from "@/components/ui/Field";
-import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type Modulo, type TipoAtendimento } from "@/types";
+import { FormRow, Input } from "@/components/ui/Field";
+import { nomeExibicaoCliente } from "@/lib/cliente";
+import type { Cliente } from "@/types";
 
-const CLIENTE_VAZIO: {
-  razaoSocial: string;
-  nomeFantasia: string;
-  cnpj: string;
-  codigoProposta: string;
-  modulo: Modulo;
-  tipoAtendimento: TipoAtendimento;
-} = {
-  razaoSocial: "",
+const CLIENTE_VAZIO = {
+  nome: "",
   nomeFantasia: "",
   cnpj: "",
-  codigoProposta: "",
-  modulo: MODULOS[0],
-  tipoAtendimento: TIPOS_ATENDIMENTO[0],
 };
 
 function ClientesPageContent() {
@@ -48,12 +39,9 @@ function ClientesPageContent() {
   function abrirEdicao(cliente: Cliente) {
     setEditando(cliente);
     setForm({
-      razaoSocial: cliente.razaoSocial,
-      nomeFantasia: cliente.nomeFantasia,
-      cnpj: cliente.cnpj,
-      codigoProposta: cliente.codigoProposta,
-      modulo: cliente.modulo,
-      tipoAtendimento: cliente.tipoAtendimento,
+      nome: cliente.nome,
+      nomeFantasia: cliente.nomeFantasia ?? "",
+      cnpj: cliente.cnpj ?? "",
     });
     setModalAberto(true);
   }
@@ -62,10 +50,15 @@ function ClientesPageContent() {
     e.preventDefault();
     setSalvando(true);
     try {
+      const dados = {
+        nome: form.nome,
+        nomeFantasia: form.nomeFantasia || null,
+        cnpj: form.cnpj || null,
+      };
       if (editando) {
-        await updateDoc(doc(db, "clientes", editando.id), { ...form });
+        await updateDoc(doc(db, "clientes", editando.id), dados);
       } else {
-        await addDoc(collection(db, "clientes"), { ...form, createdAt: Date.now() });
+        await addDoc(collection(db, "clientes"), { ...dados, createdAt: Date.now() });
       }
       setModalAberto(false);
     } finally {
@@ -74,7 +67,7 @@ function ClientesPageContent() {
   }
 
   async function excluir(cliente: Cliente) {
-    if (!confirm(`Excluir o cliente "${cliente.nomeFantasia}"?`)) return;
+    if (!confirm(`Excluir o cliente "${nomeExibicaoCliente(cliente)}"?`)) return;
     await deleteDoc(doc(db, "clientes", cliente.id));
   }
 
@@ -89,24 +82,18 @@ function ClientesPageContent() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
             <tr>
-              <th className="px-4 py-3">Razão social</th>
+              <th className="px-4 py-3">Nome</th>
               <th className="px-4 py-3">Nome fantasia</th>
               <th className="px-4 py-3">CNPJ</th>
-              <th className="px-4 py-3">Proposta</th>
-              <th className="px-4 py-3">Módulo</th>
-              <th className="px-4 py-3">Tipo</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {clientes.map((c) => (
               <tr key={c.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3">{c.razaoSocial}</td>
-                <td className="px-4 py-3">{c.nomeFantasia}</td>
-                <td className="px-4 py-3">{c.cnpj}</td>
-                <td className="px-4 py-3">{c.codigoProposta}</td>
-                <td className="px-4 py-3">{c.modulo}</td>
-                <td className="px-4 py-3">{c.tipoAtendimento}</td>
+                <td className="px-4 py-3">{c.nome}</td>
+                <td className="px-4 py-3">{c.nomeFantasia || "—"}</td>
+                <td className="px-4 py-3">{c.cnpj || "—"}</td>
                 <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => abrirEdicao(c)}
@@ -122,7 +109,7 @@ function ClientesPageContent() {
             ))}
             {!loading && clientes.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
                   Nenhum cliente cadastrado.
                 </td>
               </tr>
@@ -137,59 +124,25 @@ function ClientesPageContent() {
         title={editando ? "Editar cliente" : "Novo cliente"}
       >
         <form onSubmit={salvar} className="space-y-4">
-          <FormRow label="Razão social">
+          <FormRow label="Nome">
             <Input
-              value={form.razaoSocial}
-              onChange={(e) => setForm({ ...form, razaoSocial: e.target.value })}
+              value={form.nome}
+              onChange={(e) => setForm({ ...form, nome: e.target.value })}
+              placeholder="Razão social ou nome do cliente"
               required
             />
           </FormRow>
-          <FormRow label="Nome fantasia">
+          <FormRow label="Nome fantasia (opcional)">
             <Input
               value={form.nomeFantasia}
               onChange={(e) => setForm({ ...form, nomeFantasia: e.target.value })}
-              required
             />
           </FormRow>
-          <FormRow label="CNPJ">
+          <FormRow label="CNPJ (opcional)">
             <Input
               value={form.cnpj}
               onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
-              required
             />
-          </FormRow>
-          <FormRow label="Código da proposta">
-            <Input
-              value={form.codigoProposta}
-              onChange={(e) => setForm({ ...form, codigoProposta: e.target.value })}
-              required
-            />
-          </FormRow>
-          <FormRow label="Módulo de atendimento">
-            <Select
-              value={form.modulo}
-              onChange={(e) => setForm({ ...form, modulo: e.target.value as Modulo })}
-            >
-              {MODULOS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </Select>
-          </FormRow>
-          <FormRow label="Tipo de atendimento">
-            <Select
-              value={form.tipoAtendimento}
-              onChange={(e) =>
-                setForm({ ...form, tipoAtendimento: e.target.value as TipoAtendimento })
-              }
-            >
-              {TIPOS_ATENDIMENTO.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </Select>
           </FormRow>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setModalAberto(false)}>
