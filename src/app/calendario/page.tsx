@@ -4,13 +4,29 @@ import { useMemo, useState } from "react";
 import { addDays, addWeeks, format, startOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { where } from "firebase/firestore";
+import { Repeat } from "lucide-react";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { EventoModal } from "@/components/calendario/EventoModal";
+import { RecorrenciaModal } from "@/components/calendario/RecorrenciaModal";
+import { OcorrenciaModal } from "@/components/calendario/OcorrenciaModal";
+import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthContext";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { formatarHoras } from "@/lib/horas";
 import type { Cliente, EventoCalendario, Projeto, Recurso } from "@/types";
+
+function classeChip(ev: EventoCalendario): string {
+  if (ev.origem === "recorrencia") {
+    if (ev.status === "pendente") {
+      return "border border-dashed border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100";
+    }
+    if (ev.status === "cancelada") {
+      return "bg-slate-100 text-slate-400 line-through hover:bg-slate-200";
+    }
+  }
+  return "bg-sky-100 text-sky-800 hover:bg-sky-200";
+}
 
 function CalendarioPageContent() {
   const { usuario } = useAuth();
@@ -34,6 +50,8 @@ function CalendarioPageContent() {
     horaFimPadrao: string;
     evento: EventoCalendario | null;
   } | null>(null);
+  const [recorrenciaAberta, setRecorrenciaAberta] = useState(false);
+  const [ocorrenciaSelecionada, setOcorrenciaSelecionada] = useState<EventoCalendario | null>(null);
 
   const dias = useMemo(
     () => Array.from({ length: 5 }, (_, i) => addDays(semanaBase, i)),
@@ -51,6 +69,14 @@ function CalendarioPageContent() {
     return eventos
       .filter((e) => e.data === diaISO && recursosVisiveis.some((r) => r.id === e.recursoId))
       .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+  }
+
+  function abrirEvento(ev: EventoCalendario, diaISO: string) {
+    if (ev.origem === "recorrencia" && ev.status === "pendente") {
+      setOcorrenciaSelecionada(ev);
+      return;
+    }
+    setModalInfo({ data: diaISO, horaInicioPadrao: ev.horaInicio, horaFimPadrao: ev.horaFim, evento: ev });
   }
 
   if (souConsultor && !meuRecursoId) {
@@ -106,6 +132,9 @@ function CalendarioPageContent() {
             >
               Próxima semana →
             </button>
+            <Button variant="secondary" onClick={() => setRecorrenciaAberta(true)}>
+              <Repeat size={16} /> Agenda fixa
+            </Button>
           </div>
         </div>
 
@@ -135,23 +164,17 @@ function CalendarioPageContent() {
                     return (
                       <button
                         key={ev.id}
-                        onClick={() =>
-                          setModalInfo({
-                            data: diaISO,
-                            horaInicioPadrao: ev.horaInicio,
-                            horaFimPadrao: ev.horaFim,
-                            evento: ev,
-                          })
-                        }
-                        className="block w-full truncate rounded bg-sky-100 px-2 py-1 text-left text-xs text-sky-800 hover:bg-sky-200"
+                        onClick={() => abrirEvento(ev, diaISO)}
+                        className={`block w-full truncate rounded px-2 py-1 text-left text-xs ${classeChip(ev)}`}
                         title={ev.descricao}
                       >
-                        <span className="font-semibold">
+                        <span className="flex items-center gap-1 font-semibold">
+                          {ev.origem === "recorrencia" && <Repeat size={11} className="shrink-0" />}
                           {ev.horaInicio}–{ev.horaFim} ({formatarHoras(ev.totalHoras)})
                         </span>
-                        <br />
                         {!souConsultor && `${recurso?.nomeCompleto} · `}
                         {nomeExibicaoCliente(cliente)}
+                        {ev.origem === "recorrencia" && ev.status === "pendente" && " · pendente"}
                       </button>
                     );
                   })}
@@ -198,6 +221,28 @@ function CalendarioPageContent() {
           horaInicioPadrao={modalInfo.horaInicioPadrao}
           horaFimPadrao={modalInfo.horaFimPadrao}
           eventoEditando={modalInfo.evento}
+          projetos={projetos}
+          clientes={clientes}
+          recursos={recursos}
+          usuario={usuario}
+        />
+      )}
+
+      {usuario && (
+        <RecorrenciaModal
+          aberto={recorrenciaAberta}
+          onClose={() => setRecorrenciaAberta(false)}
+          projetos={projetos}
+          clientes={clientes}
+          recursos={recursos}
+          usuario={usuario}
+        />
+      )}
+
+      {usuario && (
+        <OcorrenciaModal
+          ocorrencia={ocorrenciaSelecionada}
+          onClose={() => setOcorrenciaSelecionada(null)}
           projetos={projetos}
           clientes={clientes}
           recursos={recursos}

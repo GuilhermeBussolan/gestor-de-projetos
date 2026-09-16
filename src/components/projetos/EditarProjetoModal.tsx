@@ -45,6 +45,12 @@ function EditarProjetoForm({
     projeto.documentos.map((d) => d.tipoDocumentoId)
   );
   const [observacoes, setObservacoes] = useState(projeto.observacoes ?? "");
+  const [horasPrevistasConsultor, setHorasPrevistasConsultor] = useState(
+    projeto.horasPrevistasConsultor ? String(projeto.horasPrevistasConsultor) : ""
+  );
+  const [horasPrevistasCoordenador, setHorasPrevistasCoordenador] = useState(
+    projeto.horasPrevistasCoordenador ? String(projeto.horasPrevistasCoordenador) : ""
+  );
   const [salvando, setSalvando] = useState(false);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
 
@@ -90,6 +96,8 @@ function EditarProjetoForm({
         consultorIds,
         documentos,
         observacoes,
+        horasPrevistasConsultor: Number(horasPrevistasConsultor) || 0,
+        horasPrevistasCoordenador: Number(horasPrevistasCoordenador) || 0,
         financeiro,
         updatedAt: serverTimestamp(),
       });
@@ -181,7 +189,34 @@ function EditarProjetoForm({
         <Textarea rows={3} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
       </FormRow>
 
-      <FinanceiroFields ref={financeiroRef} financeiroInicial={projeto.financeiro} />
+      <div className="grid grid-cols-2 gap-4">
+        <FormRow label="Horas estimadas de consultor">
+          <Input
+            type="number"
+            min="0"
+            step="0.5"
+            placeholder="0"
+            value={horasPrevistasConsultor}
+            onChange={(e) => setHorasPrevistasConsultor(e.target.value)}
+          />
+        </FormRow>
+        <FormRow label="Horas estimadas de coordenador">
+          <Input
+            type="number"
+            min="0"
+            step="0.5"
+            placeholder="0"
+            value={horasPrevistasCoordenador}
+            onChange={(e) => setHorasPrevistasCoordenador(e.target.value)}
+          />
+        </FormRow>
+      </div>
+
+      <FinanceiroFields
+        ref={financeiroRef}
+        financeiroInicial={projeto.financeiro}
+        tiposDocumento={tiposDocumento}
+      />
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>

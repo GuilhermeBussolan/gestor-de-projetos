@@ -75,6 +75,7 @@ export function EventoModal({
         await addDoc(collection(db, "eventosCalendario"), {
           data,
           ...dados,
+          origem: "avulso",
           createdAt: Date.now(),
         });
       }
@@ -92,7 +93,11 @@ export function EventoModal({
   }
 
   return (
-    <Modal open={aberto} onClose={onClose} title={eventoEditando ? "Editar lançamento" : "Novo lançamento"}>
+    <Modal
+      open={aberto}
+      onClose={onClose}
+      title={eventoEditando ? "Editar apontamento avulso" : "Novo apontamento avulso"}
+    >
       <form onSubmit={salvar} className="space-y-4">
         {!souConsultorEditandoMeuEvento && (
           <FormRow label="Recurso">

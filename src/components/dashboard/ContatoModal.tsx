@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { addDoc, collection, doc, orderBy, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { orderBy } from "firebase/firestore";
 import { useCollection } from "@/lib/useCollection";
 import { useAuth } from "@/contexts/AuthContext";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Field";
 import { nomeExibicaoCliente } from "@/lib/cliente";
+import { registrarContato } from "@/lib/contato";
 import type { Cliente, ContatoProjeto, Projeto } from "@/types";
 
 function formatarDataHora(timestamp: number): string {
@@ -35,16 +35,7 @@ function ContatoForm({ projeto, cliente }: { projeto: Projeto; cliente: Cliente 
     if (!usuario || !texto.trim()) return;
     setSalvando(true);
     try {
-      const criadoEm = Date.now();
-      await addDoc(collection(db, "projetos", projeto.id, "contatos"), {
-        texto: texto.trim(),
-        usuarioId: usuario.uid,
-        usuarioNome: usuario.nomeCompleto,
-        criadoEm,
-      });
-      await updateDoc(doc(db, "projetos", projeto.id), {
-        ultimoContato: { texto: texto.trim(), usuarioNome: usuario.nomeCompleto, criadoEm },
-      });
+      await registrarContato(projeto.id, texto.trim(), usuario);
       setTexto("");
     } finally {
       setSalvando(false);

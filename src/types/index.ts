@@ -31,6 +31,7 @@ export interface Cliente {
   nome: string;
   nomeFantasia?: string;
   cnpj?: string;
+  codigoCI?: string;
   createdAt: number;
 }
 
@@ -57,6 +58,7 @@ export type StatusParcela = "LIBERADO" | "FATURADO" | "RECEBIDO";
 export interface Parcela {
   numero: number;
   descricao?: string;
+  tipoDocumentoId?: string;
   valor: number;
   status: StatusParcela;
 }
@@ -89,6 +91,8 @@ export interface Projeto {
   documentos: DocumentoProjeto[];
   observacoes: string;
   financeiro: Financeiro;
+  horasPrevistasConsultor: number;
+  horasPrevistasCoordenador: number;
   ultimoContato?: {
     texto: string;
     usuarioNome: string;
@@ -97,6 +101,9 @@ export interface Projeto {
   createdAt: number;
   updatedAt: number;
 }
+
+export type OrigemEvento = "avulso" | "recorrencia";
+export type StatusOcorrencia = "pendente" | "realizada" | "cancelada";
 
 export interface EventoCalendario {
   id: string;
@@ -108,5 +115,8 @@ export interface EventoCalendario {
   horaDesconto: string; // HH:mm
   totalHoras: number; // decimal hours
   descricao: string;
+  origem: OrigemEvento;
+  seriesId?: string | null;
+  status?: StatusOcorrencia | null; // só usado quando origem === "recorrencia"
   createdAt: number;
 }

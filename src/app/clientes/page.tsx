@@ -21,6 +21,7 @@ const CLIENTE_VAZIO = {
   nome: "",
   nomeFantasia: "",
   cnpj: "",
+  codigoCI: "",
 };
 
 function ClientesPageContent() {
@@ -42,6 +43,7 @@ function ClientesPageContent() {
       nome: cliente.nome,
       nomeFantasia: cliente.nomeFantasia ?? "",
       cnpj: cliente.cnpj ?? "",
+      codigoCI: cliente.codigoCI ?? "",
     });
     setModalAberto(true);
   }
@@ -54,6 +56,7 @@ function ClientesPageContent() {
         nome: form.nome,
         nomeFantasia: form.nomeFantasia || null,
         cnpj: form.cnpj || null,
+        codigoCI: form.codigoCI || null,
       };
       if (editando) {
         await updateDoc(doc(db, "clientes", editando.id), dados);
@@ -85,6 +88,7 @@ function ClientesPageContent() {
               <th className="px-4 py-3">Nome</th>
               <th className="px-4 py-3">Nome fantasia</th>
               <th className="px-4 py-3">CNPJ</th>
+              <th className="px-4 py-3">Código CI</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -94,6 +98,7 @@ function ClientesPageContent() {
                 <td className="px-4 py-3">{c.nome}</td>
                 <td className="px-4 py-3">{c.nomeFantasia || "—"}</td>
                 <td className="px-4 py-3">{c.cnpj || "—"}</td>
+                <td className="px-4 py-3">{c.codigoCI || "—"}</td>
                 <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => abrirEdicao(c)}
@@ -142,6 +147,12 @@ function ClientesPageContent() {
             <Input
               value={form.cnpj}
               onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
+            />
+          </FormRow>
+          <FormRow label="Código CI (controle interno, opcional)">
+            <Input
+              value={form.codigoCI}
+              onChange={(e) => setForm({ ...form, codigoCI: e.target.value })}
             />
           </FormRow>
           <div className="flex justify-end gap-2 pt-2">

@@ -30,6 +30,8 @@ function ProjetoForm({
   const [consultorIds, setConsultorIds] = useState<string[]>([]);
   const [documentoIds, setDocumentoIds] = useState<string[]>(tiposDocumento.map((t) => t.id));
   const [observacoes, setObservacoes] = useState("");
+  const [horasPrevistasConsultor, setHorasPrevistasConsultor] = useState("");
+  const [horasPrevistasCoordenador, setHorasPrevistasCoordenador] = useState("");
   const [salvando, setSalvando] = useState(false);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
 
@@ -68,6 +70,8 @@ function ProjetoForm({
         consultorIds,
         documentos,
         observacoes,
+        horasPrevistasConsultor: Number(horasPrevistasConsultor) || 0,
+        horasPrevistasCoordenador: Number(horasPrevistasCoordenador) || 0,
         financeiro: financeiroRef.current.obterFinanceiro(),
         ultimoContato: null,
         createdAt: serverTimestamp(),
@@ -174,7 +178,30 @@ function ProjetoForm({
         <Textarea rows={3} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
       </FormRow>
 
-      <FinanceiroFields ref={financeiroRef} />
+      <div className="grid grid-cols-2 gap-4">
+        <FormRow label="Horas estimadas de consultor">
+          <Input
+            type="number"
+            min="0"
+            step="0.5"
+            placeholder="0"
+            value={horasPrevistasConsultor}
+            onChange={(e) => setHorasPrevistasConsultor(e.target.value)}
+          />
+        </FormRow>
+        <FormRow label="Horas estimadas de coordenador">
+          <Input
+            type="number"
+            min="0"
+            step="0.5"
+            placeholder="0"
+            value={horasPrevistasCoordenador}
+            onChange={(e) => setHorasPrevistasCoordenador(e.target.value)}
+          />
+        </FormRow>
+      </div>
+
+      <FinanceiroFields ref={financeiroRef} tiposDocumento={tiposDocumento} />
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>
