@@ -95,7 +95,7 @@ function OcorrenciaForm({
 
   return (
     <form onSubmit={salvar} className="space-y-4">
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-brand-muted">
         {recurso?.nomeCompleto} · {ocorrencia.data.split("-").reverse().join("/")}
       </p>
 
@@ -124,12 +124,12 @@ function OcorrenciaForm({
           <Input type="time" value={horaDesconto} onChange={(e) => setHoraDesconto(e.target.value)} />
         </FormRow>
       </div>
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-brand-muted">
         Total: <strong>{formatarHoras(calcularTotalHoras(horaInicio, horaFim, horaDesconto))}</strong>
       </p>
 
       {ocorrencia.seriesId && (
-        <label className="flex items-center gap-2 text-sm text-slate-600">
+        <label className="flex items-center gap-2 text-sm text-brand-muted">
           <input
             type="checkbox"
             checked={aplicarFuturas}

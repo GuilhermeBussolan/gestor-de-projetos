@@ -93,6 +93,8 @@ export interface Projeto {
   financeiro: Financeiro;
   horasPrevistasConsultor: number;
   horasPrevistasCoordenador: number;
+  dataInicio?: string | null;
+  dataFim?: string | null;
   ultimoContato?: {
     texto: string;
     usuarioNome: string;

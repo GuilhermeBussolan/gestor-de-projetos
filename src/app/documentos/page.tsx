@@ -5,6 +5,7 @@ import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestor
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { CadastrosTabs } from "@/components/layout/CadastrosTabs";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormRow, Input } from "@/components/ui/Field";
@@ -60,11 +61,14 @@ function DocumentosPageContent() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <CadastrosTabs />
+      <div className="mb-5 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Tipos de documento</h1>
-          <p className="text-sm text-slate-500">
-            Soma dos pesos individuais cadastrados: <strong>{somaPesos}</strong>
+          <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">
+            Tipos de documento
+          </h1>
+          <p className="mt-0.5 text-sm text-brand-muted">
+            Soma dos pesos individuais cadastrados: <strong className="text-brand-navy-2">{somaPesos}</strong>
             {somaPesos !== 100 && (
               <span className="text-amber-600"> (o padrão de negócio soma 100)</span>
             )}
@@ -73,26 +77,26 @@ function DocumentosPageContent() {
         <Button onClick={abrirNovo}>+ Novo tipo</Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Código</th>
-              <th className="px-4 py-3">Descrição</th>
-              <th className="px-4 py-3">Peso individual</th>
-              <th className="px-4 py-3" />
+      <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
+        <table className="w-full text-[13.5px]">
+          <thead>
+            <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+              <th className="px-[18px] py-3.5">Código</th>
+              <th className="px-[18px] py-3.5">Descrição</th>
+              <th className="px-[18px] py-3.5">Peso individual</th>
+              <th className="px-[18px] py-3.5" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {ordenados.map((t) => (
-              <tr key={t.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium">{t.codigo}</td>
-                <td className="px-4 py-3">{t.descricao}</td>
-                <td className="px-4 py-3">{t.pesoIndividual}</td>
-                <td className="px-4 py-3 text-right">
+              <tr key={t.id} className="border-t border-brand-border-soft hover:bg-brand-hover">
+                <td className="px-[18px] py-[15px] font-bold text-brand-navy-2">{t.codigo}</td>
+                <td className="px-[18px] py-[15px] text-brand-muted">{t.descricao}</td>
+                <td className="px-[18px] py-[15px] text-brand-navy-2">{t.pesoIndividual}</td>
+                <td className="px-[18px] py-[15px] text-right">
                   <button
                     onClick={() => abrirEdicao(t)}
-                    className="mr-3 text-sky-600 hover:underline"
+                    className="mr-3 text-brand-accent hover:underline"
                   >
                     Editar
                   </button>
@@ -104,7 +108,7 @@ function DocumentosPageContent() {
             ))}
             {!loading && ordenados.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={4} className="px-4 py-8 text-center text-brand-faint">
                   Nenhum tipo de documento cadastrado.
                 </td>
               </tr>

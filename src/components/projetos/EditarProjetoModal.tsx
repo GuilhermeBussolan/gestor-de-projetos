@@ -51,6 +51,8 @@ function EditarProjetoForm({
   const [horasPrevistasCoordenador, setHorasPrevistasCoordenador] = useState(
     projeto.horasPrevistasCoordenador ? String(projeto.horasPrevistasCoordenador) : ""
   );
+  const [dataInicio, setDataInicio] = useState(projeto.dataInicio ?? "");
+  const [dataFim, setDataFim] = useState(projeto.dataFim ?? "");
   const [salvando, setSalvando] = useState(false);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
 
@@ -98,6 +100,8 @@ function EditarProjetoForm({
         observacoes,
         horasPrevistasConsultor: Number(horasPrevistasConsultor) || 0,
         horasPrevistasCoordenador: Number(horasPrevistasCoordenador) || 0,
+        dataInicio: dataInicio || null,
+        dataFim: dataFim || null,
         financeiro,
         updatedAt: serverTimestamp(),
       });
@@ -152,8 +156,8 @@ function EditarProjetoForm({
       </FormRow>
 
       <div>
-        <p className="mb-1 text-sm font-medium text-slate-700">Consultores</p>
-        <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-slate-300 p-2">
+        <p className="mb-1 text-sm font-medium text-brand-navy-2">Consultores</p>
+        <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-brand-border p-2">
           {consultoresDisponiveis.map((c) => (
             <label key={c.id} className="flex items-center gap-2 text-sm">
               <input
@@ -168,10 +172,10 @@ function EditarProjetoForm({
       </div>
 
       <div>
-        <p className="mb-1 text-sm font-medium text-slate-700">
+        <p className="mb-1 text-sm font-medium text-brand-navy-2">
           Documentos (documentos já existentes mantêm o status; novos entram como A iniciar)
         </p>
-        <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-slate-300 p-2">
+        <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-brand-border p-2">
           {tiposDocumento.map((t) => (
             <label key={t.id} className="flex items-center gap-2 text-sm">
               <input
@@ -209,6 +213,20 @@ function EditarProjetoForm({
             value={horasPrevistasCoordenador}
             onChange={(e) => setHorasPrevistasCoordenador(e.target.value)}
           />
+        </FormRow>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <FormRow label="Data de início">
+          <Input
+            type="date"
+            value={dataInicio}
+            onChange={(e) => setDataInicio(e.target.value)}
+            required
+          />
+        </FormRow>
+        <FormRow label="Data de término (opcional, enquanto o projeto não finaliza)">
+          <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
         </FormRow>
       </div>
 

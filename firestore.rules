@@ -57,13 +57,23 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    match /projetos/{id} {
+    match /projetos/{projetoId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() || isCoordenador();
+      allow create, delete: if isAdmin() || isCoordenador();
+      // Update normal é só admin/coordenador; um consultor alocado no projeto
+      // pode atualizar exclusivamente o campo ultimoContato (registrar contato).
+      allow update: if isAdmin() || isCoordenador() ||
+        (isSignedIn() &&
+          meuRecursoId() in resource.data.consultorIds &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoContato']));
 
+      // Contato pode ser registrado por admin/coordenador, ou pelo consultor
+      // alocado naquele projeto (mas nunca editado/apagado depois).
       match /contatos/{contatoId} {
         allow read: if isSignedIn();
-        allow create: if isAdmin() || isCoordenador();
+        allow create: if isAdmin() || isCoordenador() ||
+          (isSignedIn() &&
+            meuRecursoId() in get(/databases/$(database)/documents/projetos/$(projetoId)).data.consultorIds);
         allow update, delete: if false;
       }
     }

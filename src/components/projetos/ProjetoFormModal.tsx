@@ -32,6 +32,8 @@ function ProjetoForm({
   const [observacoes, setObservacoes] = useState("");
   const [horasPrevistasConsultor, setHorasPrevistasConsultor] = useState("");
   const [horasPrevistasCoordenador, setHorasPrevistasCoordenador] = useState("");
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
   const [salvando, setSalvando] = useState(false);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
 
@@ -72,6 +74,8 @@ function ProjetoForm({
         observacoes,
         horasPrevistasConsultor: Number(horasPrevistasConsultor) || 0,
         horasPrevistasCoordenador: Number(horasPrevistasCoordenador) || 0,
+        dataInicio: dataInicio || null,
+        dataFim: dataFim || null,
         financeiro: financeiroRef.current.obterFinanceiro(),
         ultimoContato: null,
         createdAt: serverTimestamp(),
@@ -140,8 +144,8 @@ function ProjetoForm({
       </FormRow>
 
       <div>
-        <p className="mb-1 text-sm font-medium text-slate-700">Consultores (opcional, múltiplos)</p>
-        <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-slate-300 p-2">
+        <p className="mb-1 text-sm font-medium text-brand-navy-2">Consultores (opcional, múltiplos)</p>
+        <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-brand-border p-2">
           {consultoresDisponiveis.map((c) => (
             <label key={c.id} className="flex items-center gap-2 text-sm">
               <input
@@ -153,14 +157,14 @@ function ProjetoForm({
             </label>
           ))}
           {consultoresDisponiveis.length === 0 && (
-            <p className="text-xs text-slate-400">Nenhum consultor cadastrado.</p>
+            <p className="text-xs text-brand-faint">Nenhum consultor cadastrado.</p>
           )}
         </div>
       </div>
 
       <div>
-        <p className="mb-1 text-sm font-medium text-slate-700">Documentos do projeto</p>
-        <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-slate-300 p-2">
+        <p className="mb-1 text-sm font-medium text-brand-navy-2">Documentos do projeto</p>
+        <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-brand-border p-2">
           {tiposDocumento.map((t) => (
             <label key={t.id} className="flex items-center gap-2 text-sm">
               <input
@@ -198,6 +202,20 @@ function ProjetoForm({
             value={horasPrevistasCoordenador}
             onChange={(e) => setHorasPrevistasCoordenador(e.target.value)}
           />
+        </FormRow>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <FormRow label="Data de início">
+          <Input
+            type="date"
+            value={dataInicio}
+            onChange={(e) => setDataInicio(e.target.value)}
+            required
+          />
+        </FormRow>
+        <FormRow label="Data de término (opcional, enquanto o projeto não finaliza)">
+          <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
         </FormRow>
       </div>
 

@@ -5,10 +5,12 @@ import { ButtonHTMLAttributes } from "react";
 type Variant = "primary" | "secondary" | "danger" | "ghost";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-sky-600 text-white hover:bg-sky-700",
-  secondary: "bg-slate-200 text-slate-800 hover:bg-slate-300",
-  danger: "bg-red-600 text-white hover:bg-red-700",
-  ghost: "bg-transparent text-slate-600 hover:bg-slate-100",
+  primary:
+    "bg-brand-accent text-white font-bold shadow-[0_6px_16px_rgba(47,111,228,0.28)] hover:bg-brand-accent-dark hover:-translate-y-px",
+  secondary:
+    "bg-white text-brand-navy-2 font-semibold border border-brand-border hover:bg-brand-hover",
+  danger: "bg-red-600 text-white font-bold hover:bg-red-700",
+  ghost: "bg-transparent text-brand-muted font-semibold hover:bg-brand-hover",
 };
 
 export function Button({
@@ -19,7 +21,7 @@ export function Button({
   return (
     <button
       {...props}
-      className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}
+      className={`inline-flex h-10 items-center justify-center gap-2 rounded-[10px] px-4 text-[13.5px] transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 ${variants[variant]} ${className}`}
     />
   );
 }

@@ -5,6 +5,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import {
   STATUS_PARCELA_CONFIG,
   STATUS_PARCELA_ORDEM,
@@ -61,99 +62,152 @@ function FinanceiroPageContent() {
     });
   }
 
+  const aReceber = resumoGeral.totalContratado - resumoGeral.totalRecebido;
+
   return (
     <div>
-      <h1 className="mb-6 text-xl font-semibold text-slate-900">Financeiro</h1>
+      <div className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="relative overflow-hidden rounded-2xl border border-brand-border bg-white p-5 shadow-card">
+          <div
+            className="pointer-events-none absolute -top-[70px] -right-[50px] h-[170px] w-[170px] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(47,111,228,.12) 0%, rgba(47,111,228,0) 70%)" }}
+          />
+          <p className="relative mb-2.5 text-[11px] font-bold tracking-[.1em] text-brand-faint uppercase">
+            Total contratado
+          </p>
+          <p className="relative text-[27px] leading-none font-extrabold tracking-[-0.03em] text-brand-navy-2">
+            {moeda(resumoGeral.totalContratado)}
+          </p>
+          <p className="relative mt-1.5 text-xs text-brand-faint">{projetos.length} projetos</p>
+        </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase text-slate-400">Total contratado</p>
-          <p className="text-xl font-semibold text-slate-900">{moeda(resumoGeral.totalContratado)}</p>
+        <div className="relative overflow-hidden rounded-2xl border border-brand-border bg-white p-5 shadow-card">
+          <div
+            className="pointer-events-none absolute -top-[70px] -right-[50px] h-[170px] w-[170px] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(21,117,76,.14) 0%, rgba(21,117,76,0) 70%)" }}
+          />
+          <p className="relative mb-2.5 text-[11px] font-bold tracking-[.1em] text-[#15754c] uppercase opacity-75">
+            Recebido
+          </p>
+          <p className="relative text-[27px] leading-none font-extrabold tracking-[-0.03em] text-[#15754c]">
+            {moeda(resumoGeral.totalRecebido)}
+          </p>
+          <p className="relative mt-1.5 text-xs text-[#15754c] opacity-60">parcelas quitadas</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase text-slate-400">Total recebido</p>
-          <p className="text-xl font-semibold text-green-600">{moeda(resumoGeral.totalRecebido)}</p>
+
+        <div className="relative overflow-hidden rounded-2xl bg-brand-navy p-5 text-white shadow-navy">
+          <div
+            className="pointer-events-none absolute -top-[70px] -right-[50px] h-[170px] w-[170px] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(47,111,228,.55) 0%, rgba(47,111,228,0) 70%)" }}
+          />
+          <p className="relative mb-2.5 text-[11px] font-bold tracking-[.1em] text-white/75 uppercase">
+            A receber
+          </p>
+          <p className="relative text-[27px] leading-none font-extrabold tracking-[-0.03em]">
+            {moeda(aReceber)}
+          </p>
+          <p className="relative mt-1.5 text-xs text-white/60">liberadas e faturadas</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase text-slate-400">Total a receber</p>
-          <p className="text-xl font-semibold text-amber-600">{moeda(resumoGeral.totalAReceber)}</p>
+
+        <div className="relative overflow-hidden rounded-2xl border border-brand-border bg-white p-5 shadow-card">
+          <div
+            className="pointer-events-none absolute -top-[70px] -right-[50px] h-[170px] w-[170px] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(47,111,228,.12) 0%, rgba(47,111,228,0) 70%)" }}
+          />
+          <p className="relative mb-2.5 text-[11px] font-bold tracking-[.1em] text-brand-faint uppercase">
+            Pago aos recursos
+          </p>
+          <p className="relative text-[27px] leading-none font-extrabold tracking-[-0.03em] text-brand-navy-2">
+            {moeda(totalPagoRecursos)}
+          </p>
+          <p className="relative mt-1.5 text-xs text-brand-faint">por horas apontadas</p>
         </div>
       </div>
 
-      <div className="mb-10 rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">
-          Recebido x pago aos recursos
-        </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <p className="text-xs text-slate-400">Total recebido</p>
-            <p className="text-lg font-semibold text-green-600">{moeda(resumoGeral.totalRecebido)}</p>
+      <div className="mb-4 text-[15px] font-extrabold text-brand-navy-2">Recebido × pago aos recursos</div>
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-2xl border border-brand-border bg-white p-4 shadow-card">
+          <p className="mb-1.5 text-xs text-brand-faint">Total recebido</p>
+          <p className="text-xl font-extrabold tracking-[-0.02em] text-brand-navy-2">
+            {moeda(resumoGeral.totalRecebido)}
+          </p>
+        </div>
+        {(Object.keys(pagoPorTipoRecurso) as TipoRecurso[]).map((tipo) => (
+          <div key={tipo} className="rounded-2xl border border-brand-border bg-white p-4 shadow-card">
+            <p className="mb-1.5 text-xs text-brand-faint">Pago — {TIPO_RECURSO_CONFIG[tipo].label}</p>
+            <p className="text-xl font-extrabold tracking-[-0.02em] text-brand-navy-2">
+              {moeda(pagoPorTipoRecurso[tipo])}
+            </p>
           </div>
-          {(Object.keys(pagoPorTipoRecurso) as TipoRecurso[]).map((tipo) => (
-            <div key={tipo}>
-              <p className="text-xs text-slate-400">Pago — {TIPO_RECURSO_CONFIG[tipo].label}</p>
-              <p className="text-lg font-semibold text-slate-800">{moeda(pagoPorTipoRecurso[tipo])}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 text-sm text-slate-500">
-          Total pago aos recursos: <strong>{moeda(totalPagoRecursos)}</strong> · Saldo:{" "}
-          <strong>{moeda(resumoGeral.totalRecebido - totalPagoRecursos)}</strong>
-        </p>
+        ))}
       </div>
 
-      <h2 className="mb-4 text-lg font-semibold text-slate-900">Parcelas por projeto</h2>
-      <div className="space-y-4">
+      <div className="mb-4 text-[15px] font-extrabold text-brand-navy-2">Parcelas por projeto</div>
+      <div className="flex flex-col gap-4">
         {projetos.map((p) => {
           const cliente = clientes.find((c) => c.id === p.clienteId);
           return (
-            <div key={p.id} className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="mb-2 flex items-center justify-between">
+            <div key={p.id} className="rounded-2xl border border-brand-border bg-white p-5 shadow-card">
+              <div className="mb-4 flex flex-wrap items-baseline justify-between gap-4">
                 <div>
-                  <p className="font-semibold text-slate-900">{nomeExibicaoCliente(cliente)}</p>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-base font-extrabold tracking-[-0.02em] text-brand-navy-2">
+                    {nomeExibicaoCliente(cliente)}
+                  </p>
+                  <p className="text-[12.5px] text-brand-faint">
                     {TIPO_FATURAMENTO_CONFIG[p.financeiro?.tipoFaturamento ?? "parcelado"].label}
                   </p>
+                  <PeriodoBadge
+                    dataInicio={p.dataInicio}
+                    dataFim={p.dataFim}
+                    className="mt-1 text-[11px] text-brand-faint"
+                  />
                 </div>
                 {p.financeiro?.tipoFaturamento !== "apontamento_horas" && (
-                  <p className="text-sm text-slate-500">
-                    {moeda(p.financeiro?.valorTotal ?? 0)} em {p.financeiro?.numeroParcelas ?? 0}x
+                  <p className="text-[15px] font-extrabold text-brand-navy-2">
+                    {moeda(p.financeiro?.valorTotal ?? 0)} · {p.financeiro?.numeroParcelas ?? 0}x
                   </p>
                 )}
               </div>
               {p.financeiro?.tipoFaturamento === "apontamento_horas" ? (
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-brand-faint">
                   Faturamento por apontamento de horas — sem parcelas fixas.
                 </p>
               ) : (
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2.5">
                   {(p.financeiro?.parcelas ?? []).map((parc) => (
                     <div
                       key={parc.numero}
-                      className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
+                      className="flex min-w-[190px] flex-col gap-2 rounded-xl border border-brand-border-soft bg-brand-input px-3.5 py-3"
                     >
-                      <span className="text-slate-500">
-                        {parc.descricao ? parc.descricao : `#${parc.numero}`}
+                      <span className="text-[11.5px] text-brand-faint">
+                        {parc.descricao ? parc.descricao : `Parcela ${parc.numero}`}
                       </span>
-                      <span className="font-medium">{moeda(parc.valor)}</span>
-                      <select
-                        value={parc.status}
-                        onChange={(e) =>
-                          alterarStatusParcela(p, parc.numero, e.target.value as StatusParcela)
-                        }
-                        style={{ backgroundColor: STATUS_PARCELA_CONFIG[parc.status].color }}
-                        className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-900"
-                      >
-                        {STATUS_PARCELA_ORDEM.map((s) => (
-                          <option key={s} value={s}>
-                            {STATUS_PARCELA_CONFIG[s].label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[14.5px] font-extrabold text-brand-navy-2">
+                          {moeda(parc.valor)}
+                        </span>
+                        <select
+                          value={parc.status}
+                          onChange={(e) =>
+                            alterarStatusParcela(p, parc.numero, e.target.value as StatusParcela)
+                          }
+                          style={{
+                            backgroundColor: STATUS_PARCELA_CONFIG[parc.status].bg,
+                            color: STATUS_PARCELA_CONFIG[parc.status].text,
+                          }}
+                          className="rounded-full border-0 px-2.5 py-1 text-[10.5px] font-bold"
+                        >
+                          {STATUS_PARCELA_ORDEM.map((s) => (
+                            <option key={s} value={s}>
+                              {STATUS_PARCELA_CONFIG[s].label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   ))}
                   {(p.financeiro?.parcelas ?? []).length === 0 && (
-                    <p className="text-sm text-slate-400">Nenhuma parcela cadastrada.</p>
+                    <p className="text-sm text-brand-faint">Nenhuma parcela cadastrada.</p>
                   )}
                 </div>
               )}
@@ -161,7 +215,7 @@ function FinanceiroPageContent() {
           );
         })}
         {projetos.length === 0 && (
-          <p className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-slate-400">
+          <p className="rounded-2xl border border-dashed border-brand-border bg-white p-8 text-center text-brand-faint">
             Nenhum projeto cadastrado ainda.
           </p>
         )}

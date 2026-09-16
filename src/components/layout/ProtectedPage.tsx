@@ -30,7 +30,7 @@ export function ProtectedPage({
 
   if (loading || !usuario || !perfis.includes(usuario.perfil)) {
     return (
-      <div className="flex h-screen items-center justify-center text-sm text-slate-400">
+      <div className="flex h-screen items-center justify-center bg-brand-bg text-sm font-medium text-brand-faint">
         Carregando...
       </div>
     );

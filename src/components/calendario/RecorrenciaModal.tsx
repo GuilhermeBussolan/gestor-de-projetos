@@ -141,7 +141,7 @@ function RecorrenciaForm({
       </FormRow>
 
       <div>
-        <p className="mb-1 text-sm font-medium text-slate-700">Dias da semana</p>
+        <p className="mb-1 text-sm font-medium text-brand-navy-2">Dias da semana</p>
         <div className="flex gap-2">
           {DIAS_SEMANA.map((d) => (
             <button
@@ -150,8 +150,8 @@ function RecorrenciaForm({
               onClick={() => toggleDia(d.valor)}
               className={`rounded-md border px-3 py-1.5 text-sm font-medium ${
                 diasSemana.includes(d.valor)
-                  ? "border-sky-600 bg-sky-600 text-white"
-                  : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                  ? "border-brand-accent bg-brand-accent text-white"
+                  : "border-brand-border text-brand-muted hover:bg-brand-hover"
               }`}
             >
               {d.label}
@@ -186,7 +186,7 @@ function RecorrenciaForm({
         </FormRow>
       </div>
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-brand-muted">
         Cada ocorrência entra no calendário como <strong>pendente</strong> — quando chegar o dia, é só
         confirmar se foi realizada ou cancelada.
       </p>

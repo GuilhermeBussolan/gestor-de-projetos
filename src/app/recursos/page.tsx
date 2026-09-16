@@ -5,6 +5,7 @@ import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestor
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { CadastrosTabs } from "@/components/layout/CadastrosTabs";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormRow, Input, Select } from "@/components/ui/Field";
@@ -65,35 +66,36 @@ function RecursosPageContent() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">Recursos</h1>
+      <CadastrosTabs />
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Recursos</h1>
         <Button onClick={abrirNovo}>+ Novo recurso</Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Categoria</th>
-              <th className="px-4 py-3">Nome completo</th>
-              <th className="px-4 py-3">Código</th>
-              <th className="px-4 py-3">Valor/hora</th>
-              <th className="px-4 py-3" />
+      <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
+        <table className="w-full text-[13.5px]">
+          <thead>
+            <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+              <th className="px-[18px] py-3.5">Categoria</th>
+              <th className="px-[18px] py-3.5">Nome completo</th>
+              <th className="px-[18px] py-3.5">Código</th>
+              <th className="px-[18px] py-3.5">Valor/hora</th>
+              <th className="px-[18px] py-3.5" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {recursos.map((r) => (
-              <tr key={r.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3">{TIPO_RECURSO_CONFIG[r.tipo].label}</td>
-                <td className="px-4 py-3">{r.nomeCompleto}</td>
-                <td className="px-4 py-3">{r.codigo}</td>
-                <td className="px-4 py-3">
+              <tr key={r.id} className="border-t border-brand-border-soft hover:bg-brand-hover">
+                <td className="px-[18px] py-[15px] text-brand-muted">{TIPO_RECURSO_CONFIG[r.tipo].label}</td>
+                <td className="px-[18px] py-[15px] font-bold text-brand-navy-2">{r.nomeCompleto}</td>
+                <td className="px-[18px] py-[15px] text-brand-muted">{r.codigo}</td>
+                <td className="px-[18px] py-[15px] text-brand-navy-2">
                   {r.valorHora.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-[18px] py-[15px] text-right">
                   <button
                     onClick={() => abrirEdicao(r)}
-                    className="mr-3 text-sky-600 hover:underline"
+                    className="mr-3 text-brand-accent hover:underline"
                   >
                     Editar
                   </button>
@@ -105,7 +107,7 @@ function RecursosPageContent() {
             ))}
             {!loading && recursos.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-brand-faint">
                   Nenhum recurso cadastrado.
                 </td>
               </tr>

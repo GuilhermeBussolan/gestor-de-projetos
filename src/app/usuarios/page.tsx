@@ -63,39 +63,45 @@ function UsuariosPageContent() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">Usuários</h1>
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Usuários</h1>
       </div>
-      <p className="mb-4 text-sm text-slate-500">
+      <p className="mb-4 text-sm text-brand-muted">
         Novos usuários se cadastram pela tela de login. Aqui você ajusta o perfil e vincula o
         usuário a um recurso (necessário para Coordenador/Consultor aparecerem no calendário e
         apontamento).
       </p>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Nome</th>
-              <th className="px-4 py-3">E-mail</th>
-              <th className="px-4 py-3">Perfil</th>
-              <th className="px-4 py-3">Recurso vinculado</th>
-              <th className="px-4 py-3" />
+      <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
+        <table className="w-full text-[13.5px]">
+          <thead>
+            <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+              <th className="px-[18px] py-3.5">Nome</th>
+              <th className="px-[18px] py-3.5">E-mail</th>
+              <th className="px-[18px] py-3.5">Perfil</th>
+              <th className="px-[18px] py-3.5">Recurso vinculado</th>
+              <th className="px-[18px] py-3.5" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {usuarios.map((u) => {
               const recurso = recursos.find((r) => r.id === u.recursoId);
               return (
-                <tr key={u.uid} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">{u.nomeCompleto}</td>
-                  <td className="px-4 py-3">{u.email}</td>
-                  <td className="px-4 py-3">{PERFIL_LABEL[u.perfil]}</td>
-                  <td className="px-4 py-3">{recurso ? recurso.nomeCompleto : "—"}</td>
-                  <td className="px-4 py-3 text-right">
+                <tr key={u.uid} className="border-t border-brand-border-soft hover:bg-brand-hover">
+                  <td className="px-[18px] py-[15px] font-bold text-brand-navy-2">{u.nomeCompleto}</td>
+                  <td className="px-[18px] py-[15px] text-brand-muted">{u.email}</td>
+                  <td className="px-[18px] py-[15px]">
+                    <span className="rounded-full bg-brand-accent-soft px-2.5 py-1 text-[11px] font-bold text-[#2456b8]">
+                      {PERFIL_LABEL[u.perfil]}
+                    </span>
+                  </td>
+                  <td className="px-[18px] py-[15px] text-brand-muted">
+                    {recurso ? recurso.nomeCompleto : "—"}
+                  </td>
+                  <td className="px-[18px] py-[15px] text-right">
                     <button
                       onClick={() => abrirEdicao(u)}
-                      className="mr-3 text-sky-600 hover:underline"
+                      className="mr-3 text-brand-accent hover:underline"
                     >
                       Editar
                     </button>
@@ -111,7 +117,7 @@ function UsuariosPageContent() {
             })}
             {!loading && usuarios.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-brand-faint">
                   Nenhum usuário cadastrado.
                 </td>
               </tr>

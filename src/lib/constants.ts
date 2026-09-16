@@ -2,13 +2,13 @@ import type { StatusDocumento, StatusParcela, TipoFaturamento, TipoRecurso } fro
 
 export const STATUS_DOCUMENTO_CONFIG: Record<
   StatusDocumento,
-  { label: string; color: string; fator: number }
+  { label: string; bg: string; text: string; fator: number }
 > = {
-  A_INICIAR: { label: "A iniciar", color: "#BFBFBF", fator: 0 },
-  ANDAMENTO: { label: "Andamento", color: "#0F9ED5", fator: 0 },
-  VALIDACAO: { label: "Validação", color: "#CCFF66", fator: 0.5 },
-  ASSINADO: { label: "Assinado", color: "#92D050", fator: 1 },
-  CANCELADO: { label: "Cancelado", color: "#EE0000", fator: 0 },
+  A_INICIAR: { label: "A iniciar", bg: "#eef1f8", text: "#6a7594", fator: 0 },
+  ANDAMENTO: { label: "Andamento", bg: "#e8efff", text: "#2456b8", fator: 0 },
+  VALIDACAO: { label: "Validação", bg: "#fff2de", text: "#a4650d", fator: 0.5 },
+  ASSINADO: { label: "Assinado", bg: "#e3f5ea", text: "#15754c", fator: 1 },
+  CANCELADO: { label: "Cancelado", bg: "#fdeceb", text: "#b5392a", fator: 0 },
 };
 
 export const STATUS_DOCUMENTO_ORDEM: StatusDocumento[] = [
@@ -19,10 +19,10 @@ export const STATUS_DOCUMENTO_ORDEM: StatusDocumento[] = [
   "CANCELADO",
 ];
 
-export const STATUS_PARCELA_CONFIG: Record<StatusParcela, { label: string; color: string }> = {
-  LIBERADO: { label: "Liberado", color: "#BFBFBF" },
-  FATURADO: { label: "Faturado", color: "#0F9ED5" },
-  RECEBIDO: { label: "Recebido", color: "#92D050" },
+export const STATUS_PARCELA_CONFIG: Record<StatusParcela, { label: string; bg: string; text: string }> = {
+  LIBERADO: { label: "Liberado", bg: "#eef1f8", text: "#6a7594" },
+  FATURADO: { label: "Faturado", bg: "#e8efff", text: "#2456b8" },
+  RECEBIDO: { label: "Recebido", bg: "#e3f5ea", text: "#15754c" },
 };
 
 export const STATUS_PARCELA_ORDEM: StatusParcela[] = ["LIBERADO", "FATURADO", "RECEBIDO"];

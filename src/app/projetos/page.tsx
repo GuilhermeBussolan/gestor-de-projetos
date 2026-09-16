@@ -1,19 +1,23 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Field";
 import { Drawer } from "@/components/ui/Drawer";
+import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import { ProjetoDrawerConteudo } from "@/components/projetos/ProjetoDrawer";
 import { ProjetoFormModal } from "@/components/projetos/ProjetoFormModal";
 import { EditarProjetoModal } from "@/components/projetos/EditarProjetoModal";
+import { ContatoModal } from "@/components/dashboard/ContatoModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { nomeExibicaoCliente } from "@/lib/cliente";
-import { calcularPercentualProjeto, corFaixaProgresso } from "@/lib/dashboardCalc";
+import { calcularPercentualProjeto } from "@/lib/dashboardCalc";
+import { MODULOS, TIPOS_ATENDIMENTO } from "@/types";
 import type { Cliente, EventoCalendario, Projeto, Recurso, TipoDocumento } from "@/types";
 
 function ProjetosPageContent() {
@@ -30,10 +34,26 @@ function ProjetosPageContent() {
   const [modalNovoAberto, setModalNovoAberto] = useState(false);
   const [editando, setEditando] = useState<Projeto | null>(null);
   const [detalheId, setDetalheId] = useState<string | null>(destaqueId);
+  const [contatoProjeto, setContatoProjeto] = useState<Projeto | null>(null);
+  const [busca, setBusca] = useState("");
+  const [filtroModulo, setFiltroModulo] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("");
 
   const podeEditar = usuario?.perfil === "administrador" || usuario?.perfil === "coordenador";
 
   const projetoDetalhe = projetos.find((p) => p.id === detalheId) ?? null;
+
+  const projetosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return projetos.filter((p) => {
+      if (filtroModulo && p.modulo !== filtroModulo) return false;
+      if (filtroTipo && p.tipoAtendimento !== filtroTipo) return false;
+      if (!termo) return true;
+      const cliente = clientes.find((c) => c.id === p.clienteId);
+      const alvo = `${nomeExibicaoCliente(cliente)} ${p.codigoProposta}`.toLowerCase();
+      return alvo.includes(termo);
+    });
+  }, [projetos, clientes, busca, filtroModulo, filtroTipo]);
 
   async function excluir(projeto: Projeto) {
     const cliente = clientes.find((c) => c.id === projeto.clienteId);
@@ -44,89 +64,151 @@ function ProjetosPageContent() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">Projetos</h1>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <Input
+            placeholder="Buscar cliente ou proposta"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-64"
+          />
+          <Select
+            value={filtroModulo}
+            onChange={(e) => setFiltroModulo(e.target.value)}
+            className="w-40"
+          >
+            <option value="">Todos os módulos</option>
+            {MODULOS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
+          <Select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="w-44">
+            <option value="">Todos os tipos</option>
+            {TIPOS_ATENDIMENTO.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
+        </div>
         {podeEditar && <Button onClick={() => setModalNovoAberto(true)}>+ Novo projeto</Button>}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Cliente</th>
-              <th className="px-4 py-3">Proposta</th>
-              <th className="px-4 py-3">Módulo</th>
-              <th className="px-4 py-3">Tipo</th>
-              <th className="px-4 py-3">Coordenador</th>
-              <th className="px-4 py-3">Progresso</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {projetos.map((p) => {
-              const cliente = clientes.find((c) => c.id === p.clienteId);
-              const coordenador = recursos.find((r) => r.id === p.coordenadorId);
-              const percentual = calcularPercentualProjeto(p.documentos);
-              const cor = corFaixaProgresso(percentual);
-              return (
-                <tr
-                  key={p.id}
-                  onClick={() => setDetalheId(p.id)}
-                  className={`cursor-pointer hover:bg-slate-50 ${
-                    detalheId === p.id ? "bg-sky-50" : ""
-                  }`}
-                >
-                  <td className="px-4 py-3 font-medium text-slate-900">
-                    {nomeExibicaoCliente(cliente)}
-                  </td>
-                  <td className="px-4 py-3">{p.codigoProposta}</td>
-                  <td className="px-4 py-3">{p.modulo}</td>
-                  <td className="px-4 py-3">{p.tipoAtendimento}</td>
-                  <td className="px-4 py-3">{coordenador ? coordenador.nomeCompleto : "—"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${percentual}%`, backgroundColor: cor }}
-                        />
-                      </div>
-                      <span className="text-xs font-semibold" style={{ color: cor }}>
-                        {percentual}%
+      <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[780px] text-[13.5px]">
+            <thead>
+              <tr className="bg-brand-hover">
+                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+                  Cliente
+                </th>
+                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+                  Proposta
+                </th>
+                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+                  Módulo
+                </th>
+                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+                  Tipo
+                </th>
+                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+                  Coordenador
+                </th>
+                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+                  Período
+                </th>
+                <th className="w-[210px] px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+                  Progresso
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {projetosFiltrados.map((p) => {
+                const cliente = clientes.find((c) => c.id === p.clienteId);
+                const coordenador = recursos.find((r) => r.id === p.coordenadorId);
+                const percentual = calcularPercentualProjeto(p.documentos);
+                return (
+                  <tr
+                    key={p.id}
+                    onClick={() => setDetalheId(p.id)}
+                    className={`cursor-pointer border-t border-brand-border-soft hover:bg-brand-hover ${
+                      detalheId === p.id ? "bg-brand-accent-soft/40" : ""
+                    }`}
+                  >
+                    <td className="px-[18px] py-[15px] font-bold text-brand-navy-2">
+                      {nomeExibicaoCliente(cliente)}
+                    </td>
+                    <td className="px-[18px] py-[15px] text-brand-muted">{p.codigoProposta}</td>
+                    <td className="px-[18px] py-[15px]">
+                      <span className="rounded-full bg-brand-accent-soft px-2.5 py-1 text-[11px] font-bold text-[#2456b8]">
+                        {p.modulo}
                       </span>
-                    </div>
+                    </td>
+                    <td className="px-[18px] py-[15px] text-brand-muted">{p.tipoAtendimento}</td>
+                    <td className="px-[18px] py-[15px] text-brand-navy-2">
+                      {coordenador ? coordenador.nomeCompleto : "—"}
+                    </td>
+                    <td className="px-[18px] py-[15px] text-[12.5px]">
+                      <PeriodoBadge dataInicio={p.dataInicio} dataFim={p.dataFim} className="text-brand-muted" />
+                    </td>
+                    <td className="px-[18px] py-[15px]">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-1.5 w-[110px] overflow-hidden rounded-full bg-brand-accent-soft">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${percentual}%`,
+                              background:
+                                percentual >= 100
+                                  ? "linear-gradient(90deg,#1f9a63,#15754c)"
+                                  : "linear-gradient(90deg,#4d8bf5,#2f6fe4)",
+                            }}
+                          />
+                        </div>
+                        <span className="text-[12.5px] font-bold text-brand-navy-2">{percentual}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {projetosFiltrados.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-brand-faint">
+                    Nenhum projeto encontrado.
                   </td>
                 </tr>
-              );
-            })}
-            {projetos.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                  Nenhum projeto cadastrado ainda.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <Drawer
-        open={!!projetoDetalhe}
-        onClose={() => setDetalheId(null)}
-        title={nomeExibicaoCliente(clientes.find((c) => c.id === projetoDetalhe?.clienteId))}
-      >
+      <Drawer open={!!projetoDetalhe} onClose={() => setDetalheId(null)} flush>
         {projetoDetalhe && (
           <ProjetoDrawerConteudo
             projeto={projetoDetalhe}
+            cliente={nomeExibicaoCliente(clientes.find((c) => c.id === projetoDetalhe.clienteId))}
             coordenador={recursos.find((r) => r.id === projetoDetalhe.coordenadorId)}
             consultores={recursos.filter((r) => projetoDetalhe.consultorIds?.includes(r.id))}
             eventos={eventos}
             recursos={recursos}
             podeEditar={!!podeEditar}
+            podeVerFinanceiro={!!podeEditar}
             onEditar={() => setEditando(projetoDetalhe)}
             onExcluir={() => excluir(projetoDetalhe)}
+            onClose={() => setDetalheId(null)}
+            onRegistrarContato={() => setContatoProjeto(projetoDetalhe)}
           />
         )}
       </Drawer>
+
+      <ContatoModal
+        projeto={contatoProjeto}
+        cliente={clientes.find((c) => c.id === contatoProjeto?.clienteId)}
+        onClose={() => setContatoProjeto(null)}
+      />
 
       <ProjetoFormModal
         open={modalNovoAberto}

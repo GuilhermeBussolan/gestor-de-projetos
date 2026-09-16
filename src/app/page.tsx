@@ -24,7 +24,7 @@ export default function Home() {
   }, [usuario, loading, router]);
 
   return (
-    <div className="flex h-screen items-center justify-center text-sm text-slate-400">
+    <div className="flex h-screen items-center justify-center bg-brand-bg text-sm font-medium text-brand-faint">
       Carregando...
     </div>
   );

@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f6fc;
+  --foreground: #152849;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-archivo);
   --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Gestor de Projetos — paleta do redesign */
+  --color-brand-bg: #f4f6fc;
+  --color-brand-surface: #ffffff;
+  --color-brand-border: #e4e8f2;
+  --color-brand-border-soft: #edf0f7;
+  --color-brand-navy: #0f1d38;
+  --color-brand-navy-2: #152849;
+  --color-brand-navy-deep: #0e1c34;
+  --color-brand-accent: #2f6fe4;
+  --color-brand-accent-dark: #245ac0;
+  --color-brand-accent-soft: #e8efff;
+  --color-brand-muted: #6a7594;
+  --color-brand-faint: #8b94ad;
+  --color-brand-input: #f8f9fd;
+  --color-brand-hover: #f7f9fd;
+
+  --shadow-card: 0 1px 2px rgba(21, 40, 73, 0.05), 0 12px 28px rgba(21, 40, 73, 0.06);
+  --shadow-card-lg: 0 1px 2px rgba(21, 40, 73, 0.05), 0 16px 40px rgba(21, 40, 73, 0.08);
+  --shadow-card-hover: 0 1px 2px rgba(21, 40, 73, 0.05), 0 22px 44px rgba(21, 40, 73, 0.16);
+  --shadow-navy: 0 14px 32px rgba(15, 29, 56, 0.28);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-archivo), Arial, Helvetica, sans-serif;
 }

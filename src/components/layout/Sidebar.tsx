@@ -11,9 +11,7 @@ import {
   FileText,
   FolderKanban,
   LayoutDashboard,
-  PanelLeftClose,
-  PanelLeftOpen,
-  UserCog,
+  Menu,
   Users,
   Wallet,
   type LucideIcon,
@@ -31,7 +29,6 @@ const CADASTROS: NavItem[] = [
   { href: "/clientes", label: "Clientes", icon: Building2, perfis: ["administrador"] },
   { href: "/recursos", label: "Recursos", icon: Users, perfis: ["administrador"] },
   { href: "/documentos", label: "Documentos", icon: FileText, perfis: ["administrador"] },
-  { href: "/usuarios", label: "Usuários", icon: UserCog, perfis: ["administrador"] },
 ];
 
 const PRINCIPAIS: NavItem[] = [
@@ -45,7 +42,7 @@ const PRINCIPAIS: NavItem[] = [
     href: "/dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
-    perfis: ["administrador", "coordenador"],
+    perfis: ["administrador", "coordenador", "consultor"],
   },
 ];
 
@@ -106,15 +103,15 @@ export function Sidebar() {
       <Link
         href={item.href}
         title={colapsada ? item.label : undefined}
-        className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+        className={`flex items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-[13.5px] font-semibold transition-colors ${
           colapsada ? "justify-center" : ""
         } ${
           ativo
-            ? "bg-sky-600 text-white"
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            ? "bg-gradient-to-r from-brand-accent/95 to-brand-accent/55 text-white shadow-[0_8px_18px_rgba(47,111,228,0.32)]"
+            : "text-white/65 hover:bg-white/8 hover:text-white"
         }`}
       >
-        <Icone size={18} className="shrink-0" />
+        <Icone size={17} className="shrink-0" />
         {!colapsada && <span className="truncate">{item.label}</span>}
       </Link>
     );
@@ -122,38 +119,49 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`flex h-full shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] ${
-        colapsada ? "w-16" : "w-60"
+      className={`relative flex h-full shrink-0 flex-col overflow-hidden bg-brand-navy text-white transition-[width] ${
+        colapsada ? "w-16" : "w-[232px]"
       }`}
     >
       <div
-        className={`flex items-center gap-2 border-b border-slate-200 px-4 py-4 ${
-          colapsada ? "justify-center px-2" : ""
+        className="pointer-events-none absolute -top-[120px] -left-[90px] h-[340px] w-[340px] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(47,111,228,.35) 0%, rgba(47,111,228,0) 70%)",
+        }}
+      />
+
+      <div
+        className={`relative flex items-center border-b border-white/8 py-3 ${
+          colapsada ? "justify-center px-2" : "justify-between px-4"
         }`}
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sky-600 text-sm font-bold text-white">
-          GP
-        </div>
         {!colapsada && (
-          <span className="truncate text-sm font-semibold text-slate-900">
-            Gestor de Projetos
-          </span>
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/logo-white.png" alt="NG" className="h-6 w-auto shrink-0" />
         )}
+        <button
+          onClick={alternarColapsada}
+          title={colapsada ? "Expandir menu" : "Recolher menu"}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-white/8 text-white/75 hover:bg-white/18 hover:text-white"
+        >
+          <Menu size={16} />
+        </button>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+      <nav className="relative flex-1 space-y-1 overflow-y-auto p-3">
         {PRINCIPAIS.filter(podeVer).map((item) => (
           <NavLink key={item.href} item={item} />
         ))}
 
         {cadastrosVisiveis.length > 0 && (
-          <div className="pt-2">
+          <div className="pt-3">
             {colapsada ? (
-              <div className="my-2 border-t border-slate-100" />
+              <div className="my-2 border-t border-white/10" />
             ) : (
               <button
                 onClick={alternarCadastros}
-                className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600"
+                className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.14em] text-white/38 hover:text-white/60"
               >
                 Cadastros
                 <ChevronDown
@@ -167,26 +175,13 @@ export function Sidebar() {
           </div>
         )}
 
-        <div className="pt-2">
-          {colapsada && <div className="my-2 border-t border-slate-100" />}
+        <div className="pt-3">
+          {colapsada && <div className="my-2 border-t border-white/10" />}
           {OPERACAO.filter(podeVer).map((item) => (
             <NavLink key={item.href} item={item} />
           ))}
         </div>
       </nav>
-
-      <div className="border-t border-slate-200 p-2">
-        <button
-          onClick={alternarColapsada}
-          title={colapsada ? "Expandir menu" : "Recolher menu"}
-          className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700 ${
-            colapsada ? "justify-center" : ""
-          }`}
-        >
-          {colapsada ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-          {!colapsada && <span>Recolher menu</span>}
-        </button>
-      </div>
     </aside>
   );
 }

@@ -116,8 +116,8 @@ export const FinanceiroFields = forwardRef<
   }));
 
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-      <p className="mb-3 text-sm font-semibold text-slate-700">Financeiro</p>
+    <div className="rounded-md border border-brand-border bg-brand-hover p-4">
+      <p className="mb-3 text-sm font-semibold text-brand-navy-2">Financeiro</p>
 
       <FormRow label="Tipo de faturamento">
         <Select
@@ -131,7 +131,7 @@ export const FinanceiroFields = forwardRef<
           ))}
         </Select>
       </FormRow>
-      <p className="mt-1 text-xs text-slate-500">
+      <p className="mt-1 text-xs text-brand-muted">
         {TIPO_FATURAMENTO_CONFIG[tipoFaturamento].descricao}
       </p>
 
@@ -158,7 +158,7 @@ export const FinanceiroFields = forwardRef<
               required
             />
           </FormRow>
-          <p className="col-span-2 text-xs text-slate-500">
+          <p className="col-span-2 text-xs text-brand-muted">
             {numeroParcelasNumero}x de {moeda(valorTotalNumero / numeroParcelasNumero)}
           </p>
         </div>
@@ -202,7 +202,7 @@ export const FinanceiroFields = forwardRef<
               <button
                 type="button"
                 onClick={() => removerMarco(i)}
-                className="shrink-0 text-slate-400 hover:text-red-600"
+                className="shrink-0 text-brand-faint hover:text-red-600"
                 aria-label="Remover marco"
               >
                 ✕
@@ -212,11 +212,11 @@ export const FinanceiroFields = forwardRef<
           <button
             type="button"
             onClick={adicionarMarco}
-            className="text-sm font-medium text-sky-600 hover:underline"
+            className="text-sm font-medium text-brand-accent hover:underline"
           >
             + Adicionar marco
           </button>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-brand-muted">
             Total: {moeda(totalMarcos)} em {marcos.length} marco(s)
           </p>
         </div>

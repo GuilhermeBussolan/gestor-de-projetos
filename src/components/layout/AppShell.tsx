@@ -18,11 +18,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen w-full bg-slate-50">
+    <div className="flex h-screen w-full bg-brand-bg">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
-          <div />
+        <header className="flex h-[68px] shrink-0 items-center justify-end border-b border-brand-border bg-white px-7">
           {usuario && (
             <AccountMenu
               usuario={usuario}
@@ -31,7 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             />
           )}
         </header>
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto px-7 py-6">{children}</main>
       </div>
       <TrocarSenhaModal open={trocarSenhaAberto} onClose={() => setTrocarSenhaAberto(false)} />
     </div>

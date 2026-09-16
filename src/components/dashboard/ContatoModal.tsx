@@ -59,21 +59,22 @@ function ContatoForm({ projeto, cliente }: { projeto: Projeto; cliente: Cliente 
         </div>
       </form>
 
-      <div className="border-t border-slate-100 pt-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+      <div className="border-t border-brand-border-soft pt-4">
+        <p className="mb-3 text-xs font-bold uppercase tracking-[.08em] text-brand-faint">
           Histórico — {nomeExibicaoCliente(cliente)}
         </p>
-        <div className="max-h-72 space-y-3 overflow-y-auto">
+        <div className="max-h-72 space-y-4 overflow-y-auto border-l-2 border-brand-border pl-4">
           {contatos.map((c) => (
-            <div key={c.id} className="rounded-md bg-slate-50 p-3 text-sm">
-              <p className="text-slate-700">{c.texto}</p>
-              <p className="mt-1 text-xs text-slate-400">
-                {c.usuarioNome} · {formatarDataHora(c.criadoEm)}
+            <div key={c.id} className="relative">
+              <span className="absolute top-1.5 -left-[21px] h-2 w-2 rounded-full border-2 border-white bg-brand-accent" />
+              <p className="text-[11.5px] font-semibold text-brand-faint">
+                {formatarDataHora(c.criadoEm)} · {c.usuarioNome}
               </p>
+              <p className="text-[13px] leading-relaxed text-brand-navy-2">{c.texto}</p>
             </div>
           ))}
           {!loading && contatos.length === 0 && (
-            <p className="text-sm text-slate-400">Nenhum contato registrado ainda.</p>
+            <p className="text-sm text-brand-faint">Nenhum contato registrado ainda.</p>
           )}
         </div>
       </div>

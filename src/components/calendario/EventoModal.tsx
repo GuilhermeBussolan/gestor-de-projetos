@@ -40,6 +40,7 @@ export function EventoModal({
   const [recursoId, setRecursoId] = useState(
     eventoEditando?.recursoId ?? (souConsultorEditandoMeuEvento ? meuRecursoId : "")
   );
+  const [dataEvento, setDataEvento] = useState(eventoEditando?.data ?? data);
   const [horaInicio, setHoraInicio] = useState(
     eventoEditando?.horaInicio ?? horaInicioPadrao ?? "08:00"
   );
@@ -61,6 +62,7 @@ export function EventoModal({
     try {
       const totalHoras = calcularTotalHoras(horaInicio, horaFim, horaDesconto);
       const dados = {
+        data: dataEvento,
         projetoId,
         recursoId,
         horaInicio,
@@ -73,7 +75,6 @@ export function EventoModal({
         await updateDoc(doc(db, "eventosCalendario", eventoEditando.id), dados);
       } else {
         await addDoc(collection(db, "eventosCalendario"), {
-          data,
           ...dados,
           origem: "avulso",
           createdAt: Date.now(),
@@ -112,7 +113,7 @@ export function EventoModal({
           </FormRow>
         )}
         {souConsultorEditandoMeuEvento && recurso && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-brand-muted">
             Lançando para: <strong>{recurso.nomeCompleto}</strong>
           </p>
         )}
@@ -136,6 +137,10 @@ export function EventoModal({
           )}
         </FormRow>
 
+        <FormRow label="Data">
+          <Input type="date" value={dataEvento} onChange={(e) => setDataEvento(e.target.value)} required />
+        </FormRow>
+
         <div className="grid grid-cols-3 gap-3">
           <FormRow label="Hora início">
             <Input
@@ -156,7 +161,7 @@ export function EventoModal({
             />
           </FormRow>
         </div>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-brand-muted">
           Total: <strong>{formatarHoras(calcularTotalHoras(horaInicio, horaFim, horaDesconto))}</strong>
         </p>
 

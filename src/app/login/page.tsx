@@ -64,100 +64,107 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-sm rounded-lg bg-white p-8 shadow-md">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-sky-600 text-sm font-bold text-white">
-            GP
-          </div>
-          <h1 className="text-lg font-semibold text-slate-900">Gestor de Projetos</h1>
+    <div className="flex min-h-screen w-full items-center justify-center bg-brand-bg px-6 py-14">
+      <div className="w-full max-w-[390px] rounded-2xl border border-brand-border bg-white p-9 shadow-card-lg">
+        <div className="mb-7 flex flex-col items-center text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-navy.png" alt="NG" className="h-10 w-auto" />
+          <span className="mt-2.5 text-sm font-bold text-brand-navy-2">Gestor de Projetos</span>
         </div>
 
         {modo === "login" ? (
-          <form onSubmit={handleLogin} className="space-y-4">
-            <FormRow label="E-mail">
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-              />
-            </FormRow>
-            <FormRow label="Senha">
-              <Input
-                type="password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                required
-              />
-            </FormRow>
-            {erro && <p className="text-sm text-red-600">{erro}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Entrando..." : "Entrar"}
-            </Button>
-            <button
-              type="button"
-              onClick={() => {
-                setErro("");
-                setModo("cadastro");
-              }}
-              className="w-full text-center text-sm text-sky-600 hover:underline"
-            >
-              Criar uma conta
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleCadastro} className="space-y-4">
-            <FormRow label="Nome completo">
-              <Input
-                value={nomeCompleto}
-                onChange={(e) => setNomeCompleto(e.target.value)}
-                required
-                autoFocus
-              />
-            </FormRow>
-            <FormRow label="E-mail de trabalho">
-              <Input
-                type="email"
-                value={emailCadastro}
-                onChange={(e) => setEmailCadastro(e.target.value)}
-                required
-              />
-            </FormRow>
-            <FormRow label="Senha">
-              <Input
-                type="password"
-                value={senhaCadastro}
-                onChange={(e) => setSenhaCadastro(e.target.value)}
-                required
-              />
-            </FormRow>
-            <FormRow label="Perfil">
-              <Select
-                value={perfilCadastro}
-                onChange={(e) => setPerfilCadastro(e.target.value as Perfil)}
+            <form onSubmit={handleLogin} className="space-y-4">
+              <FormRow label="E-mail">
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </FormRow>
+              <FormRow label="Senha">
+                <Input
+                  type="password"
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  required
+                />
+              </FormRow>
+              {erro && <p className="text-sm font-medium text-red-600">{erro}</p>}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Entrando..." : "Entrar"}
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setErro("");
+                  setModo("cadastro");
+                }}
+                className="w-full text-center text-sm font-semibold text-brand-accent hover:underline"
               >
-                <option value="consultor">Consultor</option>
-                <option value="coordenador">Coordenador</option>
-              </Select>
-            </FormRow>
-            {erro && <p className="text-sm text-red-600">{erro}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Cadastrando..." : "Cadastrar"}
-            </Button>
-            <button
-              type="button"
-              onClick={() => {
-                setErro("");
-                setModo("login");
-              }}
-              className="w-full text-center text-sm text-sky-600 hover:underline"
-            >
-              Já tenho conta, fazer login
-            </button>
-          </form>
-        )}
+                Criar uma conta
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleCadastro} className="space-y-4">
+              <div className="mb-6">
+                <h2 className="text-2xl font-extrabold tracking-[-0.02em] text-brand-navy-2">
+                  Criar acesso
+                </h2>
+                <p className="mt-1.5 text-sm text-brand-muted">
+                  Um administrador ajusta seu perfil e recurso depois.
+                </p>
+              </div>
+              <FormRow label="Nome completo">
+                <Input
+                  value={nomeCompleto}
+                  onChange={(e) => setNomeCompleto(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </FormRow>
+              <FormRow label="E-mail de trabalho">
+                <Input
+                  type="email"
+                  value={emailCadastro}
+                  onChange={(e) => setEmailCadastro(e.target.value)}
+                  required
+                />
+              </FormRow>
+              <FormRow label="Senha">
+                <Input
+                  type="password"
+                  value={senhaCadastro}
+                  onChange={(e) => setSenhaCadastro(e.target.value)}
+                  required
+                />
+              </FormRow>
+              <FormRow label="Perfil">
+                <Select
+                  value={perfilCadastro}
+                  onChange={(e) => setPerfilCadastro(e.target.value as Perfil)}
+                >
+                  <option value="consultor">Consultor</option>
+                  <option value="coordenador">Coordenador</option>
+                </Select>
+              </FormRow>
+              {erro && <p className="text-sm font-medium text-red-600">{erro}</p>}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Cadastrando..." : "Cadastrar"}
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setErro("");
+                  setModo("login");
+                }}
+                className="w-full text-center text-sm font-semibold text-brand-accent hover:underline"
+              >
+                Já tenho conta, fazer login
+              </button>
+            </form>
+          )}
       </div>
     </div>
   );
