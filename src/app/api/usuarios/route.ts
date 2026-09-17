@@ -5,10 +5,8 @@ import type { Perfil } from "@/types";
 const PERFIS_VALIDOS: Perfil[] = ["administrador", "coordenador", "consultor", "financeiro"];
 
 function erroServidor(err: unknown, prefixo: string) {
-  const code = (err as { code?: string } | null)?.code;
-  const detalhe = err instanceof Error ? err.message : String(err);
   console.error(prefixo, err);
-  return NextResponse.json({ erro: `${prefixo} [${code ?? "sem código"}] ${detalhe}` }, { status: 500 });
+  return NextResponse.json({ erro: "Não foi possível criar o usuário. Tente novamente." }, { status: 500 });
 }
 
 /** Cria uma conta nova (Auth + doc em usuarios). Só um administrador pode chamar. */
