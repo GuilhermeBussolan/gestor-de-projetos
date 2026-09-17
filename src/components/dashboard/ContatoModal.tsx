@@ -47,21 +47,21 @@ function ContatoForm({ projeto, cliente }: { projeto: Projeto; cliente: Cliente 
       <form onSubmit={salvar} className="space-y-3">
         <Textarea
           rows={3}
-          placeholder="O que foi conversado com o cliente?"
+          placeholder="Qual foi a atualização com o cliente?"
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           required
         />
         <div className="flex justify-end">
           <Button type="submit" disabled={salvando || !texto.trim()}>
-            {salvando ? "Registrando..." : "Registrar contato"}
+            {salvando ? "Registrando..." : "Registrar atualização"}
           </Button>
         </div>
       </form>
 
       <div className="border-t border-brand-border-soft pt-4">
         <p className="mb-3 text-xs font-bold uppercase tracking-[.08em] text-brand-faint">
-          Histórico — {nomeExibicaoCliente(cliente)}
+          Linha do tempo — {nomeExibicaoCliente(cliente)}
         </p>
         <div className="max-h-72 space-y-4 overflow-y-auto border-l-2 border-brand-border pl-4">
           {contatos.map((c) => (
@@ -74,7 +74,7 @@ function ContatoForm({ projeto, cliente }: { projeto: Projeto; cliente: Cliente 
             </div>
           ))}
           {!loading && contatos.length === 0 && (
-            <p className="text-sm text-brand-faint">Nenhum contato registrado ainda.</p>
+            <p className="text-sm text-brand-faint">Nenhuma atualização registrada ainda.</p>
           )}
         </div>
       </div>
@@ -92,7 +92,7 @@ export function ContatoModal({
   onClose: () => void;
 }) {
   return (
-    <Modal open={!!projeto} onClose={onClose} title="Último contato">
+    <Modal open={!!projeto} onClose={onClose} title="Linha do tempo do cliente">
       {projeto && <ContatoForm key={projeto.id} projeto={projeto} cliente={cliente} />}
     </Modal>
   );

@@ -105,6 +105,12 @@ export interface Escopo {
   createdAt: number;
 }
 
+export interface EnvolvidoChave {
+  nome: string;
+  email?: string;
+  telefone?: string;
+}
+
 export interface Projeto {
   id: string;
   clienteId: string;
@@ -125,6 +131,7 @@ export interface Projeto {
   escopoId?: string | null;
   escopoNome?: string | null;
   escopoAtividades?: EscopoAtividade[] | null;
+  principaisEnvolvidos?: EnvolvidoChave[] | null;
   ultimoContato?: {
     texto: string;
     usuarioNome: string;

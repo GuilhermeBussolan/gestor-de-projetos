@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { updateDoc, doc, serverTimestamp } from "firebase/firestore";
+import { updateDoc, doc, serverTimestamp, orderBy, limit } from "firebase/firestore";
 import { ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { db } from "@/lib/firebase";
+import { useCollection } from "@/lib/useCollection";
 import { Button } from "@/components/ui/Button";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import {
@@ -14,9 +15,18 @@ import {
   TIPO_RECURSO_CONFIG,
 } from "@/lib/constants";
 import { calcularAtividadesConcluidas, calcularHorasRealizadas, calcularPercentualProjeto } from "@/lib/dashboardCalc";
-import type { EventoCalendario, Projeto, Recurso, StatusDocumento } from "@/types";
+import type { ContatoProjeto, EventoCalendario, Projeto, Recurso, StatusDocumento } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+function formatarDataHoraCurta(timestamp: number): string {
+  return new Date(timestamp).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function BarraHorasDrawer({ label, realizado, previsto }: { label: string; realizado: number; previsto: number }) {
   const percentual = previsto > 0 ? Math.min(100, (realizado / previsto) * 100) : 0;
@@ -69,6 +79,11 @@ export function ProjetoDrawerConteudo({
   onRegistrarContato: () => void;
 }) {
   const [escopoAberto, setEscopoAberto] = useState(false);
+
+  const { data: atualizacoesRecentes } = useCollection<ContatoProjeto>(
+    `projetos/${projeto.id}/contatos`,
+    [orderBy("criadoEm", "desc"), limit(3)]
+  );
 
   const percentual = calcularPercentualProjeto(projeto.documentos);
   const horas = calcularHorasRealizadas(projeto.id, eventos, recursos);
@@ -178,6 +193,49 @@ export function ProjetoDrawerConteudo({
           </div>
         )}
 
+        {projeto.escopoAtividades && projeto.escopoAtividades.length > 0 && (
+          <div className="mb-5.5">
+            <button
+              type="button"
+              onClick={() => setEscopoAberto((v) => !v)}
+              className="mb-2 flex w-full items-center justify-between gap-3 text-left"
+            >
+              <span className="text-sm font-extrabold text-brand-navy-2">
+                Escopo do projeto — {projeto.escopoNome}
+              </span>
+              <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-bold text-brand-faint">
+                {atividadesConcluidas.size}/{projeto.escopoAtividades.length} concluídas
+                {escopoAberto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </span>
+            </button>
+            <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-brand-accent-soft">
+              <div
+                className="h-full rounded-full bg-[#1f9a63]"
+                style={{
+                  width: `${projeto.escopoAtividades.length > 0 ? (atividadesConcluidas.size / projeto.escopoAtividades.length) * 100 : 0}%`,
+                }}
+              />
+            </div>
+            {escopoAberto && (
+              <div className="max-h-72 overflow-y-auto rounded-xl border border-brand-border bg-white p-4 shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
+                <ol className="list-decimal space-y-1 pl-4 text-[12.5px]">
+                  {projeto.escopoAtividades.map((a) => {
+                    const feita = atividadesConcluidas.has(a.id);
+                    return (
+                      <li key={a.id} className={feita ? "text-[#15754c]" : "text-brand-muted"}>
+                        <span className={feita ? "line-through decoration-[#15754c]/50" : ""}>
+                          {a.descricao}
+                        </span>
+                        {feita && <CheckCircle2 size={12} className="ml-1 -mt-0.5 inline align-middle" />}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            )}
+          </div>
+        )}
+
         <p className="mb-2.5 text-sm font-extrabold text-brand-navy-2">Documentos do projeto</p>
         <div className="mb-5.5 overflow-hidden rounded-xl border border-brand-border bg-white shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
           {projeto.documentos.map((d) => {
@@ -277,46 +335,21 @@ export function ProjetoDrawerConteudo({
           </div>
         )}
 
-        {projeto.escopoAtividades && projeto.escopoAtividades.length > 0 && (
+        {projeto.principaisEnvolvidos && projeto.principaisEnvolvidos.length > 0 && (
           <div className="mb-5.5">
-            <button
-              type="button"
-              onClick={() => setEscopoAberto((v) => !v)}
-              className="mb-2 flex w-full items-center justify-between gap-3 text-left"
-            >
-              <span className="text-sm font-extrabold text-brand-navy-2">
-                Escopo do projeto — {projeto.escopoNome}
-              </span>
-              <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-bold text-brand-faint">
-                {atividadesConcluidas.size}/{projeto.escopoAtividades.length} concluídas
-                {escopoAberto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </span>
-            </button>
-            <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-brand-accent-soft">
-              <div
-                className="h-full rounded-full bg-[#1f9a63]"
-                style={{
-                  width: `${projeto.escopoAtividades.length > 0 ? (atividadesConcluidas.size / projeto.escopoAtividades.length) * 100 : 0}%`,
-                }}
-              />
+            <p className="mb-2.5 text-sm font-extrabold text-brand-navy-2">Principais envolvidos</p>
+            <div className="overflow-hidden rounded-xl border border-brand-border bg-white shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
+              {projeto.principaisEnvolvidos.map((env, i) => (
+                <div
+                  key={i}
+                  className="flex flex-wrap items-baseline gap-x-3 border-t border-brand-border-soft px-4 py-2.5 first:border-t-0"
+                >
+                  <span className="text-[12.5px] font-semibold text-brand-navy-2">{env.nome}</span>
+                  {env.email && <span className="text-[12px] text-brand-muted">{env.email}</span>}
+                  {env.telefone && <span className="text-[12px] text-brand-muted">{env.telefone}</span>}
+                </div>
+              ))}
             </div>
-            {escopoAberto && (
-              <div className="max-h-72 overflow-y-auto rounded-xl border border-brand-border bg-white p-4 shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
-                <ol className="list-decimal space-y-1 pl-4 text-[12.5px]">
-                  {projeto.escopoAtividades.map((a) => {
-                    const feita = atividadesConcluidas.has(a.id);
-                    return (
-                      <li key={a.id} className={feita ? "text-[#15754c]" : "text-brand-muted"}>
-                        <span className={feita ? "line-through decoration-[#15754c]/50" : ""}>
-                          {a.descricao}
-                        </span>
-                        {feita && <CheckCircle2 size={12} className="ml-1 -mt-0.5 inline align-middle" />}
-                      </li>
-                    );
-                  })}
-                </ol>
-              </div>
-            )}
           </div>
         )}
 
@@ -327,10 +360,41 @@ export function ProjetoDrawerConteudo({
           </div>
         )}
 
+        <div className="mb-5.5">
+          <div className="mb-2.5 flex items-center justify-between">
+            <p className="text-sm font-extrabold text-brand-navy-2">Linha do tempo</p>
+            {atualizacoesRecentes.length > 0 && (
+              <button
+                type="button"
+                onClick={onRegistrarContato}
+                className="text-[12.5px] font-semibold text-brand-accent hover:underline"
+              >
+                Ver tudo
+              </button>
+            )}
+          </div>
+          {atualizacoesRecentes.length > 0 ? (
+            <div className="rounded-xl border border-brand-border bg-white p-4 shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
+              {atualizacoesRecentes.map((c) => (
+                <div key={c.id} className="border-t border-brand-border-soft pt-2.5 pb-2.5 first:border-t-0 first:pt-0 last:pb-0">
+                  <p className="text-[11px] font-semibold text-brand-faint">
+                    {formatarDataHoraCurta(c.criadoEm)} · {c.usuarioNome}
+                  </p>
+                  <p className="text-[12.5px] leading-relaxed text-brand-navy-2">{c.texto}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-brand-border bg-white p-4 text-[12.5px] text-brand-faint">
+              Nenhuma atualização registrada ainda.
+            </p>
+          )}
+        </div>
+
         <div className="flex flex-wrap gap-2.5">
           {podeEditar && <Button onClick={onEditar}>Editar projeto</Button>}
           <Button variant="secondary" onClick={onRegistrarContato}>
-            Registrar contato
+            Registrar atualização
           </Button>
           {podeEditar && finalizado && (
             <Button variant="secondary" onClick={reabrirProjeto}>

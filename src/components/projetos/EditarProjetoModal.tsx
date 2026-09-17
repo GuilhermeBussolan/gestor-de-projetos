@@ -6,10 +6,11 @@ import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
+import { EnvolvidosFields } from "@/components/projetos/EnvolvidosFields";
 import { EscopoSelector } from "@/components/projetos/EscopoSelector";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import { MODULOS, TIPOS_ATENDIMENTO, type Escopo, type EscopoAtividade, type Financeiro, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type EnvolvidoChave, type Escopo, type EscopoAtividade, type Financeiro, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function financeiroComStatusPreservado(anterior: Financeiro, novo: Financeiro): Financeiro {
   if (
@@ -62,6 +63,7 @@ function EditarProjetoForm({
   const [contatoTelefone, setContatoTelefone] = useState(projeto.contatoFaturamento?.telefone ?? "");
   const [contatoEmailNF, setContatoEmailNF] = useState(projeto.contatoFaturamento?.emailNF ?? "");
   const [contatoMemo, setContatoMemo] = useState(projeto.contatoFaturamento?.memo ?? "");
+  const [envolvidos, setEnvolvidos] = useState<EnvolvidoChave[]>(projeto.principaisEnvolvidos ?? []);
   const [escopoId, setEscopoId] = useState<string | null>(projeto.escopoId ?? null);
   const [escopoNome, setEscopoNome] = useState<string | null>(projeto.escopoNome ?? null);
   const [escopoAtividades, setEscopoAtividades] = useState<EscopoAtividade[]>(
@@ -143,6 +145,10 @@ function EditarProjetoForm({
         escopoId,
         escopoNome,
         escopoAtividades: escopoAtividades.length > 0 ? escopoAtividades : null,
+        principaisEnvolvidos:
+          envolvidos.filter((e) => e.nome.trim()).length > 0
+            ? envolvidos.filter((e) => e.nome.trim())
+            : null,
         contatoFaturamento: {
           nome: contatoNome,
           cnpj: contatoCnpj,
@@ -327,6 +333,8 @@ function EditarProjetoForm({
           </div>
         </div>
       </div>
+
+      <EnvolvidosFields envolvidos={envolvidos} onChange={setEnvolvidos} />
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>

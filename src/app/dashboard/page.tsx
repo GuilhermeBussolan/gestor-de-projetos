@@ -613,7 +613,7 @@ function DashboardPageContent() {
                 <span className="truncate">
                   {p.ultimoContato
                     ? `${formatarDataHora(p.ultimoContato.criadoEm)} · ${p.ultimoContato.texto}`
-                    : "Registrar contato"}
+                    : "Registrar atualização"}
                 </span>
               </button>
             </div>

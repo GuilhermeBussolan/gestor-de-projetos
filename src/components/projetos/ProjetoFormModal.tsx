@@ -7,10 +7,11 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { ClienteCombobox } from "@/components/projetos/ClienteCombobox";
+import { EnvolvidosFields } from "@/components/projetos/EnvolvidosFields";
 import { EscopoSelector } from "@/components/projetos/EscopoSelector";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type Escopo, type EscopoAtividade, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type EnvolvidoChave, type Escopo, type EscopoAtividade, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function ProjetoForm({
   onClose,
@@ -43,6 +44,7 @@ function ProjetoForm({
   const [contatoTelefone, setContatoTelefone] = useState("");
   const [contatoEmailNF, setContatoEmailNF] = useState("");
   const [contatoMemo, setContatoMemo] = useState("");
+  const [envolvidos, setEnvolvidos] = useState<EnvolvidoChave[]>([]);
   const [escopoId, setEscopoId] = useState<string | null>(null);
   const [escopoNome, setEscopoNome] = useState<string | null>(null);
   const [escopoAtividades, setEscopoAtividades] = useState<EscopoAtividade[]>([]);
@@ -104,6 +106,10 @@ function ProjetoForm({
         escopoId,
         escopoNome,
         escopoAtividades: escopoAtividades.length > 0 ? escopoAtividades : null,
+        principaisEnvolvidos:
+          envolvidos.filter((e) => e.nome.trim()).length > 0
+            ? envolvidos.filter((e) => e.nome.trim())
+            : null,
         contatoFaturamento: {
           nome: contatoNome,
           cnpj: contatoCnpj,
@@ -292,6 +298,8 @@ function ProjetoForm({
           </div>
         </div>
       </div>
+
+      <EnvolvidosFields envolvidos={envolvidos} onChange={setEnvolvidos} />
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>
