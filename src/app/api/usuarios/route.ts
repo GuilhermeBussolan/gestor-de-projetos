@@ -4,8 +4,23 @@ import type { Perfil } from "@/types";
 
 const PERFIS_VALIDOS: Perfil[] = ["administrador", "coordenador", "consultor", "financeiro"];
 
+function erroServidor(err: unknown, prefixo: string) {
+  const code = (err as { code?: string } | null)?.code;
+  const detalhe = err instanceof Error ? err.message : String(err);
+  console.error(prefixo, err);
+  return NextResponse.json({ erro: `${prefixo} [${code ?? "sem código"}] ${detalhe}` }, { status: 500 });
+}
+
 /** Cria uma conta nova (Auth + doc em usuarios). Só um administrador pode chamar. */
 export async function POST(request: NextRequest) {
+  try {
+    return await handlePOST(request);
+  } catch (err) {
+    return erroServidor(err, "Erro inesperado ao criar o usuário.");
+  }
+}
+
+async function handlePOST(request: NextRequest) {
   const authHeader = request.headers.get("authorization") ?? "";
   const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   if (!idToken) {
@@ -27,8 +42,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ erro: "Sessão inválida." }, { status: 401 });
   }
 
-  const db = getAdminDb();
-  const chamadorSnap = await db.collection("usuarios").doc(uidChamador).get();
+  let db: ReturnType<typeof getAdminDb>;
+  try {
+    db = getAdminDb();
+  } catch (err) {
+    return erroServidor(err, "Falha ao inicializar o Firestore Admin.");
+  }
+
+  let chamadorSnap;
+  try {
+    chamadorSnap = await db.collection("usuarios").doc(uidChamador).get();
+  } catch (err) {
+    return erroServidor(err, "Falha ao ler o usuário chamador.");
+  }
   if (!chamadorSnap.exists || chamadorSnap.data()?.perfil !== "administrador") {
     return NextResponse.json({ erro: "Apenas administradores podem criar usuários." }, { status: 403 });
   }
@@ -50,22 +76,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ erro: "Perfil inválido." }, { status: 400 });
   }
 
+  let userRecord;
   try {
-    const userRecord = await getAdminAuth().createUser({
+    userRecord = await getAdminAuth().createUser({
       email,
       password: senha,
       displayName: nomeCompleto,
     });
-
-    await db.collection("usuarios").doc(userRecord.uid).set({
-      nomeCompleto,
-      email,
-      perfil,
-      recursoId,
-      createdAt: Date.now(),
-    });
-
-    return NextResponse.json({ uid: userRecord.uid }, { status: 201 });
   } catch (err) {
     const code = (err as { code?: string } | null)?.code;
     if (code === "auth/email-already-exists") {
@@ -74,11 +91,20 @@ export async function POST(request: NextRequest) {
     if (code === "auth/invalid-password") {
       return NextResponse.json({ erro: "Senha inválida (mínimo 6 caracteres)." }, { status: 400 });
     }
-    console.error("Erro ao criar usuário:", err);
-    const detalhe = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      { erro: `Não foi possível criar o usuário. [${code ?? "sem código"}] ${detalhe}` },
-      { status: 500 }
-    );
+    return erroServidor(err, "Falha ao criar o usuário no Firebase Auth.");
   }
+
+  try {
+    await db.collection("usuarios").doc(userRecord.uid).set({
+      nomeCompleto,
+      email,
+      perfil,
+      recursoId,
+      createdAt: Date.now(),
+    });
+  } catch (err) {
+    return erroServidor(err, "Usuário criado no Auth, mas falhou ao gravar o perfil no Firestore.");
+  }
+
+  return NextResponse.json({ uid: userRecord.uid }, { status: 201 });
 }
