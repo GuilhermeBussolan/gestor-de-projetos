@@ -353,13 +353,6 @@ export function ProjetoDrawerConteudo({
           </div>
         )}
 
-        {projeto.observacoes && (
-          <div className="mb-5.5">
-            <p className="mb-1.5 text-sm font-extrabold text-brand-navy-2">Observações</p>
-            <p className="text-sm text-brand-muted">{projeto.observacoes}</p>
-          </div>
-        )}
-
         <div className="mb-5.5">
           <div className="mb-2.5 flex items-center justify-between">
             <p className="text-sm font-extrabold text-brand-navy-2">Linha do tempo</p>
@@ -390,6 +383,13 @@ export function ProjetoDrawerConteudo({
             </p>
           )}
         </div>
+
+        {projeto.observacoes && (
+          <div className="mb-5.5">
+            <p className="mb-1.5 text-sm font-extrabold text-brand-navy-2">Observações</p>
+            <p className="text-sm text-brand-muted">{projeto.observacoes}</p>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2.5">
           {podeEditar && <Button onClick={onEditar}>Editar projeto</Button>}
