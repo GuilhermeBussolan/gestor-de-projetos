@@ -6,14 +6,17 @@ import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input } from "@/components/ui/Field";
+import { AlterarStatusParcelaModal } from "@/components/financeiro/AlterarStatusParcelaModal";
 import { STATUS_FATURAMENTO_ORDEM, STATUS_PARCELA_CONFIG, STATUS_PARCELA_ORDEM } from "@/lib/constants";
-import { alterarStatusParcela } from "@/lib/parcela";
+import { alterarStatusParcela, type DadosStatusParcela } from "@/lib/parcela";
 import {
   montarRelatorioLiberacao,
   exportarLiberacaoExcel,
   exportarLiberacaoPdf,
 } from "@/lib/relatorioLiberacao";
 import type { Cliente, Projeto, StatusParcela } from "@/types";
+
+const PRECISA_DADOS: StatusParcela[] = ["FATURADO", "RECEBIDO", "CANCELADO"];
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -62,6 +65,11 @@ function FinanceiroLiberacaoPageContent() {
   const [filtroDe, setFiltroDe] = useState("");
   const [filtroAte, setFiltroAte] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<StatusParcela | null>(null);
+  const [alterando, setAlterando] = useState<{
+    projeto: Projeto;
+    numero: number;
+    status: StatusParcela;
+  } | null>(null);
 
   const todasLiberacoes = useMemo(() => montarRelatorioLiberacao(projetos, clientes), [projetos, clientes]);
 
@@ -105,10 +113,20 @@ function FinanceiroLiberacaoPageContent() {
     setFiltroAte("");
   }
 
-  async function alterarStatus(l: (typeof liberacoesExibidas)[number], status: StatusParcela) {
+  function alterarStatus(l: (typeof liberacoesExibidas)[number], status: StatusParcela) {
     const projeto = projetos.find((p) => p.id === l.projetoId);
     if (!projeto) return;
-    await alterarStatusParcela(projeto, l.numero, status);
+    if (PRECISA_DADOS.includes(status)) {
+      setAlterando({ projeto, numero: l.numero, status });
+    } else {
+      alterarStatusParcela(projeto, l.numero, status);
+    }
+  }
+
+  async function confirmarAlteracao(dados: DadosStatusParcela) {
+    if (!alterando) return;
+    await alterarStatusParcela(alterando.projeto, alterando.numero, alterando.status, dados);
+    setAlterando(null);
   }
 
   return (
@@ -248,6 +266,12 @@ function FinanceiroLiberacaoPageContent() {
           </table>
         </div>
       </div>
+
+      <AlterarStatusParcelaModal
+        statusAlvo={alterando?.status ?? null}
+        onCancelar={() => setAlterando(null)}
+        onConfirmar={confirmarAlteracao}
+      />
     </div>
   );
 }

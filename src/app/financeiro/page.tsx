@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
+import { AlterarStatusParcelaModal } from "@/components/financeiro/AlterarStatusParcelaModal";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import {
   STATUS_PARCELA_CONFIG,
@@ -12,9 +13,11 @@ import {
   TIPO_RECURSO_CONFIG,
 } from "@/lib/constants";
 import { nomeExibicaoCliente } from "@/lib/cliente";
-import { alterarStatusParcela } from "@/lib/parcela";
+import { alterarStatusParcela, type DadosStatusParcela } from "@/lib/parcela";
 import { statusEfetivo } from "@/lib/statusHora";
 import type { Cliente, EventoCalendario, Projeto, Recurso, StatusParcela, TipoRecurso } from "@/types";
+
+const PRECISA_DADOS: StatusParcela[] = ["FATURADO", "RECEBIDO", "CANCELADO"];
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -23,6 +26,25 @@ function FinanceiroPageContent() {
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: recursos } = useCollection<Recurso>("recursos");
   const { data: eventos } = useCollection<EventoCalendario>("eventosCalendario", []);
+  const [alterando, setAlterando] = useState<{
+    projeto: Projeto;
+    numero: number;
+    status: StatusParcela;
+  } | null>(null);
+
+  function aoMudarStatus(projeto: Projeto, numero: number, novoStatus: StatusParcela) {
+    if (PRECISA_DADOS.includes(novoStatus)) {
+      setAlterando({ projeto, numero, status: novoStatus });
+    } else {
+      alterarStatusParcela(projeto, numero, novoStatus);
+    }
+  }
+
+  async function confirmarAlteracao(dados: DadosStatusParcela) {
+    if (!alterando) return;
+    await alterarStatusParcela(alterando.projeto, alterando.numero, alterando.status, dados);
+    setAlterando(null);
+  }
 
   const resumoGeral = useMemo(() => {
     let totalContratado = 0;
@@ -181,7 +203,7 @@ function FinanceiroPageContent() {
                         <select
                           value={parc.status}
                           onChange={(e) =>
-                            alterarStatusParcela(p, parc.numero, e.target.value as StatusParcela)
+                            aoMudarStatus(p, parc.numero, e.target.value as StatusParcela)
                           }
                           style={{
                             backgroundColor: STATUS_PARCELA_CONFIG[parc.status].bg,
@@ -212,6 +234,12 @@ function FinanceiroPageContent() {
           </p>
         )}
       </div>
+
+      <AlterarStatusParcelaModal
+        statusAlvo={alterando?.status ?? null}
+        onCancelar={() => setAlterando(null)}
+        onConfirmar={confirmarAlteracao}
+      />
     </div>
   );
 }

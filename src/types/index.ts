@@ -63,6 +63,14 @@ export interface Parcela {
   status: StatusParcela;
   /** Timestamp de quando o status virou LIBERADO (usado na tela de Liberação de Faturamento). */
   dataLiberacao?: number | null;
+  /** Nota fiscal (obrigatória ao marcar como FATURADO). */
+  notaFiscal?: string | null;
+  /** Data em que a parcela foi recebida (YYYY-MM-DD, obrigatória ao marcar como RECEBIDO). */
+  dataRecebimento?: string | null;
+  /** Data em que a parcela foi cancelada (YYYY-MM-DD, obrigatória ao marcar como CANCELADO). */
+  dataCancelamento?: string | null;
+  /** Motivo do cancelamento (obrigatório ao marcar como CANCELADO). */
+  motivoCancelamento?: string | null;
 }
 
 export type TipoFaturamento = "apontamento_horas" | "parcelado" | "marco_faturamento";
