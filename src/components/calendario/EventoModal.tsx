@@ -26,6 +26,7 @@ export function EventoModal({
   clientes,
   recursos,
   usuario,
+  eventos,
 }: {
   aberto: boolean;
   onClose: () => void;
@@ -37,6 +38,7 @@ export function EventoModal({
   clientes: Cliente[];
   recursos: Recurso[];
   usuario: Usuario;
+  eventos: EventoCalendario[];
 }) {
   const souConsultorEditandoMeuEvento = usuario.perfil === "consultor";
   const meuRecursoId = usuario.recursoId ?? "";
@@ -80,6 +82,20 @@ export function EventoModal({
     if (!projetoId || !recursoId) return;
     if (souConsultorEditandoMeuEvento && dataEvento > hojeISO) {
       setErro("Não é permitido apontar horas em datas futuras.");
+      return;
+    }
+    const temConflito = eventos.some(
+      (e) =>
+        e.id !== eventoEditando?.id &&
+        e.recursoId === recursoId &&
+        e.data === dataEvento &&
+        !e.retroativo &&
+        statusEfetivo(e) !== "cancelado" &&
+        horaInicio < e.horaFim &&
+        e.horaInicio < horaFim
+    );
+    if (temConflito) {
+      setErro("Já existe um apontamento para esse mesmo dia e horário.");
       return;
     }
     setSalvando(true);

@@ -18,7 +18,6 @@ import { Plus, Repeat } from "lucide-react";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { EventoModal } from "@/components/calendario/EventoModal";
-import { RecorrenciaModal } from "@/components/calendario/RecorrenciaModal";
 import { OcorrenciaModal } from "@/components/calendario/OcorrenciaModal";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,7 +50,6 @@ function CalendarioPageContent() {
     horaFimPadrao: string;
     evento: EventoCalendario | null;
   } | null>(null);
-  const [recorrenciaAberta, setRecorrenciaAberta] = useState(false);
   const [ocorrenciaSelecionada, setOcorrenciaSelecionada] = useState<EventoCalendario | null>(null);
 
   const dias = useMemo(() => {
@@ -137,9 +135,6 @@ function CalendarioPageContent() {
                 ›
               </button>
             </div>
-            <Button variant="secondary" onClick={() => setRecorrenciaAberta(true)}>
-              <Repeat size={16} /> Agenda fixa
-            </Button>
             <Button onClick={() => abrirNovo(hojeISO, "08:00", "12:00")}>
               <Plus size={16} /> Novo lançamento
             </Button>
@@ -225,6 +220,7 @@ function CalendarioPageContent() {
       </div>
 
       <aside className="flex w-[260px] shrink-0 flex-col gap-4">
+        <div className="h-10 shrink-0" aria-hidden="true" />
         {!souConsultor && (
           <div className="rounded-2xl border border-brand-border bg-white p-4 shadow-card">
             <p className="mb-2.5 text-[11px] font-bold tracking-[.1em] text-brand-faint uppercase">
@@ -307,17 +303,7 @@ function CalendarioPageContent() {
           clientes={clientes}
           recursos={recursos}
           usuario={usuario}
-        />
-      )}
-
-      {usuario && (
-        <RecorrenciaModal
-          aberto={recorrenciaAberta}
-          onClose={() => setRecorrenciaAberta(false)}
-          projetos={projetos}
-          clientes={clientes}
-          recursos={recursos}
-          usuario={usuario}
+          eventos={eventos}
         />
       )}
 
