@@ -11,6 +11,7 @@ import {
   CODIGO_TERMO_ENCERRAMENTO,
   STATUS_DOCUMENTO_CONFIG,
   STATUS_DOCUMENTO_ORDEM,
+  STATUS_PARCELA_CONFIG,
   TIPO_FATURAMENTO_CONFIG,
   TIPO_RECURSO_CONFIG,
 } from "@/lib/constants";
@@ -59,6 +60,7 @@ export function ProjetoDrawerConteudo({
   podeEditar,
   podeVerFinanceiro,
   souConsultor = false,
+  telaCheia = false,
   onEditar,
   onExcluir,
   onClose,
@@ -73,6 +75,8 @@ export function ProjetoDrawerConteudo({
   podeEditar: boolean;
   podeVerFinanceiro: boolean;
   souConsultor?: boolean;
+  /** Tela cheia (módulo Projetos): mais largo e com o detalhe de cada parcela. */
+  telaCheia?: boolean;
   onEditar: () => void;
   onExcluir: () => void;
   onClose: () => void;
@@ -115,7 +119,7 @@ export function ProjetoDrawerConteudo({
   }
 
   return (
-    <div>
+    <div className={telaCheia ? "mx-auto max-w-4xl overflow-hidden rounded-2xl shadow-card-lg" : undefined}>
       <div className="relative overflow-hidden bg-brand-navy px-6 pt-6 pb-6 text-white">
         <div
           className="pointer-events-none absolute -top-[140px] -right-20 h-80 w-80 rounded-full"
@@ -290,6 +294,36 @@ export function ProjetoDrawerConteudo({
                     : `${moeda(projeto.financeiro?.valorTotal ?? 0)} em ${projeto.financeiro?.numeroParcelas ?? 0}x`}
                 </span>
               </div>
+              {telaCheia &&
+                projeto.financeiro?.tipoFaturamento !== "apontamento_horas" &&
+                (projeto.financeiro?.parcelas ?? []).length > 0 && (
+                  <div className="mt-3.5 flex flex-wrap gap-2.5 border-t border-brand-border-soft pt-3.5">
+                    {projeto.financeiro!.parcelas.map((parc) => {
+                      const cfgParcela = STATUS_PARCELA_CONFIG[parc.status];
+                      return (
+                        <div
+                          key={parc.numero}
+                          className="flex min-w-[170px] flex-col gap-1.5 rounded-xl border border-brand-border-soft bg-brand-input px-3.5 py-2.5"
+                        >
+                          <span className="text-[11px] text-brand-faint">
+                            {parc.descricao ? parc.descricao : `Parcela ${parc.numero}`}
+                          </span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[13.5px] font-extrabold text-brand-navy-2">
+                              {moeda(parc.valor)}
+                            </span>
+                            <span
+                              style={{ backgroundColor: cfgParcela.bg, color: cfgParcela.text }}
+                              className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap"
+                            >
+                              {cfgParcela.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
             </div>
           </>
         )}

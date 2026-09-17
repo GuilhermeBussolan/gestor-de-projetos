@@ -8,7 +8,7 @@ import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Field";
-import { Drawer } from "@/components/ui/Drawer";
+import { TelaCheia } from "@/components/ui/TelaCheia";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import { ProjetoDrawerConteudo } from "@/components/projetos/ProjetoDrawer";
 import { ProjetoFormModal } from "@/components/projetos/ProjetoFormModal";
@@ -203,24 +203,27 @@ function ProjetosPageContent() {
         </div>
       </div>
 
-      <Drawer open={!!projetoDetalhe} onClose={() => setDetalheId(null)} flush>
+      <TelaCheia open={!!projetoDetalhe}>
         {projetoDetalhe && (
-          <ProjetoDrawerConteudo
-            projeto={projetoDetalhe}
-            cliente={nomeExibicaoCliente(clientes.find((c) => c.id === projetoDetalhe.clienteId))}
-            coordenador={recursos.find((r) => r.id === projetoDetalhe.coordenadorId)}
-            consultores={recursos.filter((r) => projetoDetalhe.consultorIds?.includes(r.id))}
-            eventos={eventos}
-            recursos={recursos}
-            podeEditar={!!podeEditar}
-            podeVerFinanceiro={!!podeEditar}
-            onEditar={() => setEditando(projetoDetalhe)}
-            onExcluir={() => excluir(projetoDetalhe)}
-            onClose={() => setDetalheId(null)}
-            onRegistrarContato={() => setContatoProjeto(projetoDetalhe)}
-          />
+          <div className="px-6 py-8">
+            <ProjetoDrawerConteudo
+              projeto={projetoDetalhe}
+              cliente={nomeExibicaoCliente(clientes.find((c) => c.id === projetoDetalhe.clienteId))}
+              coordenador={recursos.find((r) => r.id === projetoDetalhe.coordenadorId)}
+              consultores={recursos.filter((r) => projetoDetalhe.consultorIds?.includes(r.id))}
+              eventos={eventos}
+              recursos={recursos}
+              podeEditar={!!podeEditar}
+              podeVerFinanceiro={!!podeEditar}
+              telaCheia
+              onEditar={() => setEditando(projetoDetalhe)}
+              onExcluir={() => excluir(projetoDetalhe)}
+              onClose={() => setDetalheId(null)}
+              onRegistrarContato={() => setContatoProjeto(projetoDetalhe)}
+            />
+          </div>
         )}
-      </Drawer>
+      </TelaCheia>
 
       <ContatoModal
         projeto={contatoProjeto}
