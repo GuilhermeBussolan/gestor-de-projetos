@@ -248,6 +248,19 @@ function CalendarioPageContent() {
           </div>
         )}
 
+        <div className="relative overflow-hidden rounded-2xl bg-brand-navy p-5 text-white shadow-navy">
+          <div
+            className="pointer-events-none absolute -top-[90px] -right-[70px] h-[220px] w-[220px] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(47,111,228,.5) 0%, rgba(47,111,228,0) 70%)" }}
+          />
+          <p className="relative mb-2 text-[11px] font-bold tracking-[.1em] text-white/55 uppercase">
+            Horas no mês
+          </p>
+          <p className="relative text-[32px] leading-none font-extrabold tracking-[-0.03em]">
+            {formatarHoras(horasNoMes)}
+          </p>
+        </div>
+
         <div className="rounded-2xl border border-brand-border bg-white p-4 shadow-card">
           <p className="mb-3 text-[11px] font-bold tracking-[.1em] text-brand-faint uppercase">
             Atalhos de hoje
@@ -273,25 +286,12 @@ function CalendarioPageContent() {
               <div key={s} className="flex items-center gap-2.5">
                 <span
                   className="h-3.5 w-3.5 shrink-0 rounded"
-                  style={{ backgroundColor: STATUS_HORA_CONFIG[s].bg }}
+                  style={{ backgroundColor: STATUS_HORA_CONFIG[s].text }}
                 />
                 {STATUS_HORA_CONFIG[s].label}
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl bg-brand-navy p-5 text-white shadow-navy">
-          <div
-            className="pointer-events-none absolute -top-[90px] -right-[70px] h-[220px] w-[220px] rounded-full"
-            style={{ background: "radial-gradient(circle, rgba(47,111,228,.5) 0%, rgba(47,111,228,0) 70%)" }}
-          />
-          <p className="relative mb-2 text-[11px] font-bold tracking-[.1em] text-white/55 uppercase">
-            Horas no mês
-          </p>
-          <p className="relative text-[32px] leading-none font-extrabold tracking-[-0.03em]">
-            {formatarHoras(horasNoMes)}
-          </p>
         </div>
       </aside>
 

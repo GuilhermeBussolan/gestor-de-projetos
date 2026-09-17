@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { KpiCard, PainelVazio } from "@/components/ui/KpiCard";
 import { Modal } from "@/components/ui/Modal";
-import { EventoModal } from "@/components/calendario/EventoModal";
 import { ImportarHorasRetroativasModal } from "@/components/importacao/ImportarHorasRetroativasModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatarHoras } from "@/lib/horas";
@@ -143,7 +142,6 @@ function AbaPrevistas({
   recursos: Recurso[];
 }) {
   const souConsultor = usuario.perfil === "consultor";
-  const [ajustando, setAjustando] = useState<EventoCalendario | null>(null);
   const [filtroProjetoId, setFiltroProjetoId] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<"" | StatusHora>("");
   const [filtroMes, setFiltroMes] = useState("");
@@ -254,7 +252,12 @@ function AbaPrevistas({
               mostrarRecurso={!souConsultor}
             >
               {souConsultor && souDono && statusEv === "previsto" && ev.origem === "avulso" && (
-                <Button onClick={() => confirmarRealizado(ev.id)}>Confirmar realizado</Button>
+                <>
+                  <Button onClick={() => confirmarRealizado(ev.id)}>Confirmar realizado</Button>
+                  <Link href="/calendario" className="text-sm font-semibold text-brand-accent hover:underline">
+                    Editar no calendário
+                  </Link>
+                </>
               )}
               {souConsultor &&
                 souDono &&
@@ -265,9 +268,9 @@ function AbaPrevistas({
                   </Link>
                 )}
               {souConsultor && souDono && statusEv === "rejeitado" && (
-                <Button variant="secondary" onClick={() => setAjustando(ev)}>
-                  Ajustar e reenviar
-                </Button>
+                <Link href="/calendario" className="text-sm font-semibold text-brand-accent hover:underline">
+                  Ajustar no calendário
+                </Link>
               )}
               {souConsultor && souDono && (
                 <Button
@@ -289,21 +292,6 @@ function AbaPrevistas({
           </p>
         )}
       </div>
-
-      {ajustando && (
-        <EventoModal
-          aberto
-          onClose={() => setAjustando(null)}
-          data={ajustando.data}
-          horaInicioPadrao={ajustando.horaInicio}
-          horaFimPadrao={ajustando.horaFim}
-          eventoEditando={ajustando}
-          projetos={projetos}
-          clientes={clientes}
-          recursos={recursos}
-          usuario={usuario}
-        />
-      )}
     </div>
   );
 }
