@@ -24,7 +24,10 @@ service cloud.firestore {
     }
 
     function meuRecursoId() {
-      return meuUsuario().recursoId;
+      // .get() com padrão evita erro em documentos antigos sem o campo
+      // recursoId (acessar direto por ".recursoId" derruba a regra inteira
+      // quando o campo não existe).
+      return meuUsuario().get('recursoId', null);
     }
 
     // Documento público que marca se o admin seed já foi criado.
@@ -99,9 +102,10 @@ service cloud.firestore {
         (isSignedIn() && resource.data.recursoId == meuRecursoId());
       // Consultor não pode criar apontamento em projeto com status "finalizado"
       // (admin/coordenador continuam podendo, mesmo com o projeto finalizado).
+      // .get() com padrão 'ativo' evita erro em projetos antigos sem o campo status.
       allow create: if isAdmin() || isCoordenador() ||
         (isSignedIn() && request.resource.data.recursoId == meuRecursoId() &&
-          get(/databases/$(database)/documents/projetos/$(request.resource.data.projetoId)).data.status != 'finalizado');
+          get(/databases/$(database)/documents/projetos/$(request.resource.data.projetoId)).data.get('status', 'ativo') != 'finalizado');
       allow update, delete: if isAdmin() || isCoordenador() ||
         (isSignedIn() && resource.data.recursoId == meuRecursoId());
     }

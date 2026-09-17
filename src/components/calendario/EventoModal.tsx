@@ -113,19 +113,8 @@ export function EventoModal({
       }
       onClose();
     } catch (err) {
-      console.error("Falha ao salvar apontamento:", err, {
-        recursoId,
-        meuRecursoId,
-        projetoId,
-        souConsultorEditandoMeuEvento,
-        projetoStatus: projetoSelecionado?.status,
-        projetoConsultorIds: projetoSelecionado?.consultorIds,
-      });
-      setErro(
-        err instanceof Error
-          ? `Não foi possível salvar. [${(err as { code?: string }).code ?? "erro"}] ${err.message}`
-          : "Não foi possível salvar."
-      );
+      console.error("Falha ao salvar apontamento:", err);
+      setErro("Não foi possível salvar. Tente novamente.");
     } finally {
       setSalvando(false);
     }
