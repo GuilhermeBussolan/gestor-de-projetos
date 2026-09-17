@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { deleteDoc, doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { FormRow, Select } from "@/components/ui/Field";
+import { FormRow, Input, Select } from "@/components/ui/Field";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
 import type { Perfil, Recurso, Usuario } from "@/types";
 
@@ -15,6 +15,15 @@ const PERFIL_LABEL: Record<Perfil, string> = {
   administrador: "Administrador",
   coordenador: "Coordenador",
   consultor: "Consultor",
+  financeiro: "Financeiro",
+};
+
+const NOVO_USUARIO_VAZIO = {
+  nomeCompleto: "",
+  email: "",
+  senha: "",
+  perfil: "consultor" as Perfil,
+  recursoId: "",
 };
 
 // Documentos da coleção "usuarios" são indexados pelo uid do Firebase Auth como
@@ -29,6 +38,11 @@ function UsuariosPageContent() {
   const [perfil, setPerfil] = useState<Perfil>("consultor");
   const [recursoId, setRecursoId] = useState<string>("");
   const [salvando, setSalvando] = useState(false);
+
+  const [criandoAberto, setCriandoAberto] = useState(false);
+  const [novoUsuario, setNovoUsuario] = useState(NOVO_USUARIO_VAZIO);
+  const [criandoErro, setCriandoErro] = useState("");
+  const [criandoSalvando, setCriandoSalvando] = useState(false);
 
   function abrirEdicao(u: Usuario) {
     setEditando(u);
@@ -61,15 +75,56 @@ function UsuariosPageContent() {
     await deleteDoc(doc(db, "usuarios", u.uid));
   }
 
+  function abrirCriacao() {
+    setNovoUsuario(NOVO_USUARIO_VAZIO);
+    setCriandoErro("");
+    setCriandoAberto(true);
+  }
+
+  async function criarUsuario(e: React.FormEvent) {
+    e.preventDefault();
+    setCriandoErro("");
+    if (novoUsuario.senha.length < 6) {
+      setCriandoErro("A senha deve ter ao menos 6 caracteres.");
+      return;
+    }
+    setCriandoSalvando(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/usuarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          nomeCompleto: novoUsuario.nomeCompleto,
+          email: novoUsuario.email,
+          senha: novoUsuario.senha,
+          perfil: novoUsuario.perfil,
+          recursoId: novoUsuario.recursoId || null,
+        }),
+      });
+      const dados = await res.json();
+      if (!res.ok) {
+        setCriandoErro(dados.erro ?? "Não foi possível criar o usuário.");
+        return;
+      }
+      setCriandoAberto(false);
+    } catch {
+      setCriandoErro("Não foi possível criar o usuário.");
+    } finally {
+      setCriandoSalvando(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-5 flex items-center justify-between">
         <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Usuários</h1>
+        <Button onClick={abrirCriacao}>+ Novo usuário</Button>
       </div>
       <p className="mb-4 text-sm text-brand-muted">
-        Novos usuários se cadastram pela tela de login. Aqui você ajusta o perfil e vincula o
-        usuário a um recurso (necessário para Coordenador/Consultor aparecerem no calendário e
-        apontamento).
+        Só um administrador pode criar contas novas — não existe mais cadastro público pela tela de
+        login. Defina a senha inicial abaixo e repasse pra pessoa; ela pode trocar depois em
+        &quot;Trocar senha&quot;.
       </p>
 
       <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
@@ -137,9 +192,10 @@ function UsuariosPageContent() {
               <option value="administrador">Administrador</option>
               <option value="coordenador">Coordenador</option>
               <option value="consultor">Consultor</option>
+              <option value="financeiro">Financeiro</option>
             </Select>
           </FormRow>
-          {perfil !== "administrador" && (
+          {(perfil === "coordenador" || perfil === "consultor") && (
             <FormRow label="Recurso vinculado">
               <Select value={recursoId} onChange={(e) => setRecursoId(e.target.value)}>
                 <option value="">Nenhum</option>
@@ -163,6 +219,77 @@ function UsuariosPageContent() {
             </Button>
             <Button type="submit" disabled={salvando}>
               {salvando ? "Salvando..." : "Salvar"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={criandoAberto} onClose={() => setCriandoAberto(false)} title="Novo usuário">
+        <form onSubmit={criarUsuario} className="space-y-4">
+          <FormRow label="Nome completo">
+            <Input
+              value={novoUsuario.nomeCompleto}
+              onChange={(e) => setNovoUsuario({ ...novoUsuario, nomeCompleto: e.target.value })}
+              required
+              autoFocus
+            />
+          </FormRow>
+          <FormRow label="E-mail">
+            <Input
+              type="email"
+              value={novoUsuario.email}
+              onChange={(e) => setNovoUsuario({ ...novoUsuario, email: e.target.value })}
+              required
+            />
+          </FormRow>
+          <FormRow label="Senha inicial">
+            <Input
+              type="text"
+              value={novoUsuario.senha}
+              onChange={(e) => setNovoUsuario({ ...novoUsuario, senha: e.target.value })}
+              placeholder="Mínimo 6 caracteres"
+              required
+            />
+          </FormRow>
+          <FormRow label="Perfil">
+            <Select
+              value={novoUsuario.perfil}
+              onChange={(e) => setNovoUsuario({ ...novoUsuario, perfil: e.target.value as Perfil })}
+            >
+              <option value="administrador">Administrador</option>
+              <option value="coordenador">Coordenador</option>
+              <option value="consultor">Consultor</option>
+              <option value="financeiro">Financeiro</option>
+            </Select>
+          </FormRow>
+          {(novoUsuario.perfil === "coordenador" || novoUsuario.perfil === "consultor") && (
+            <FormRow label="Recurso vinculado (opcional)">
+              <Select
+                value={novoUsuario.recursoId}
+                onChange={(e) => setNovoUsuario({ ...novoUsuario, recursoId: e.target.value })}
+              >
+                <option value="">Nenhum</option>
+                {recursos
+                  .filter((r) =>
+                    novoUsuario.perfil === "coordenador"
+                      ? r.tipo === "coordenador"
+                      : r.tipo !== "coordenador"
+                  )
+                  .map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nomeCompleto} ({TIPO_RECURSO_CONFIG[r.tipo].label})
+                    </option>
+                  ))}
+              </Select>
+            </FormRow>
+          )}
+          {criandoErro && <p className="text-sm font-medium text-red-600">{criandoErro}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setCriandoAberto(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={criandoSalvando}>
+              {criandoSalvando ? "Criando..." : "Criar usuário"}
             </Button>
           </div>
         </form>

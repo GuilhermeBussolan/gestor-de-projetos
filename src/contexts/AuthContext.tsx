@@ -11,29 +11,21 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
-  createUserWithEmailAndPassword,
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
   type User as FirebaseUser,
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { seedAdminIfNeeded } from "@/lib/seedAdmin";
-import type { Perfil, Usuario } from "@/types";
+import type { Usuario } from "@/types";
 
 interface AuthContextValue {
   firebaseUser: FirebaseUser | null;
   usuario: Usuario | null;
   loading: boolean;
   login: (email: string, senha: string) => Promise<void>;
-  registrar: (
-    nomeCompleto: string,
-    email: string,
-    senha: string,
-    perfil: Perfil,
-    recursoId?: string | null
-  ) => Promise<void>;
   logout: () => Promise<void>;
   trocarSenha: (senhaAtual: string, novaSenha: string) => Promise<void>;
 }
@@ -68,24 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email, senha);
   }
 
-  async function registrar(
-    nomeCompleto: string,
-    email: string,
-    senha: string,
-    perfil: Perfil,
-    recursoId: string | null = null
-  ) {
-    const cred = await createUserWithEmailAndPassword(auth, email, senha);
-    await setDoc(doc(db, "usuarios", cred.user.uid), {
-      nomeCompleto,
-      email,
-      perfil,
-      recursoId,
-      createdAt: Date.now(),
-    });
-    setUsuario({ uid: cred.user.uid, nomeCompleto, email, perfil, recursoId, createdAt: Date.now() });
-  }
-
   async function logout() {
     await firebaseSignOut(auth);
   }
@@ -101,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ firebaseUser, usuario, loading, login, registrar, logout, trocarSenha }}
+      value={{ firebaseUser, usuario, loading, login, logout, trocarSenha }}
     >
       {children}
     </AuthContext.Provider>

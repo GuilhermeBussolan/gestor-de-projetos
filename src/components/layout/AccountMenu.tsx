@@ -9,12 +9,14 @@ const PERFIL_LABEL: Record<string, string> = {
   administrador: "Administrador",
   coordenador: "Coordenador",
   consultor: "Consultor",
+  financeiro: "Financeiro",
 };
 
 const PERFIL_BADGE: Record<string, string> = {
   administrador: "bg-brand-accent-soft text-[#2456b8]",
   coordenador: "bg-[#fff2de] text-[#a4650d]",
   consultor: "bg-[#e3f5ea] text-[#15754c]",
+  financeiro: "bg-[#e8efff] text-[#2456b8]",
 };
 
 function iniciais(nomeCompleto: string): string {

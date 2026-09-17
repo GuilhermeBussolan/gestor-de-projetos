@@ -19,7 +19,9 @@ export default function Home() {
         ? "/calendario"
         : usuario.perfil === "coordenador"
           ? "/projetos"
-          : "/clientes";
+          : usuario.perfil === "financeiro"
+            ? "/financeiro"
+            : "/clientes";
     router.replace(destino);
   }, [usuario, loading, router]);
 

@@ -19,6 +19,10 @@ service cloud.firestore {
       return isSignedIn() && meuUsuario().perfil == 'coordenador';
     }
 
+    function isFinanceiro() {
+      return isSignedIn() && meuUsuario().perfil == 'financeiro';
+    }
+
     function meuRecursoId() {
       return meuUsuario().recursoId;
     }
@@ -32,13 +36,13 @@ service cloud.firestore {
     match /usuarios/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
-      // Autocadastro: só coordenador/consultor, exceto durante o bootstrap do admin seed.
-      allow create: if isSignedIn() && request.auth.uid == uid &&
-        (
-          request.resource.data.perfil in ['coordenador', 'consultor'] ||
-          (request.resource.data.perfil == 'administrador' &&
-            !exists(/databases/$(database)/documents/config/bootstrap))
-        );
+      // Sem autocadastro: só um admin cria usuários (via rota server-side com
+      // Admin SDK, que já ignora estas regras — isso aqui é reforço). A única
+      // exceção é o bootstrap do primeiro admin, antes de config/bootstrap existir.
+      allow create: if isAdmin() ||
+        (isSignedIn() && request.auth.uid == uid &&
+          request.resource.data.perfil == 'administrador' &&
+          !exists(/databases/$(database)/documents/config/bootstrap));
       allow update, delete: if isAdmin();
     }
 
@@ -66,11 +70,15 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, delete: if isAdmin() || isCoordenador();
       // Update normal é só admin/coordenador; um consultor alocado no projeto
-      // pode atualizar exclusivamente o campo ultimoContato (registrar contato).
+      // pode atualizar exclusivamente o campo ultimoContato (registrar contato);
+      // financeiro pode atualizar exclusivamente o campo financeiro (status de
+      // faturamento das parcelas, na Liberação de Faturamento).
       allow update: if isAdmin() || isCoordenador() ||
         (isSignedIn() &&
           meuRecursoId() in resource.data.consultorIds &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoContato']));
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoContato'])) ||
+        (isFinanceiro() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['financeiro']));
 
       // Contato pode ser registrado por admin/coordenador, ou pelo consultor
       // alocado naquele projeto (mas nunca editado/apagado depois).
@@ -87,7 +95,7 @@ service cloud.firestore {
     // próprios eventos (onde recursoId é o recurso vinculado a ele); admin e
     // coordenador enxergam e gerenciam o calendário de todo mundo.
     match /eventosCalendario/{id} {
-      allow read: if isAdmin() || isCoordenador() ||
+      allow read: if isAdmin() || isCoordenador() || isFinanceiro() ||
         (isSignedIn() && resource.data.recursoId == meuRecursoId());
       // Consultor não pode criar apontamento em projeto com status "finalizado"
       // (admin/coordenador continuam podendo, mesmo com o projeto finalizado).

@@ -18,12 +18,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import type { Perfil } from "@/types";
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  perfis: Array<"administrador" | "coordenador" | "consultor">;
+  perfis: Perfil[];
 }
 
 const CADASTROS: NavItem[] = [
@@ -61,7 +62,12 @@ const OPERACAO: NavItem[] = [
     icon: Clock,
     perfis: ["administrador", "coordenador", "consultor"],
   },
-  { href: "/financeiro", label: "Financeiro", icon: Wallet, perfis: ["administrador"] },
+  {
+    href: "/financeiro",
+    label: "Financeiro",
+    icon: Wallet,
+    perfis: ["administrador", "financeiro"],
+  },
 ];
 
 const SIDEBAR_COLAPSADA_KEY = "gp_sidebar_colapsada";

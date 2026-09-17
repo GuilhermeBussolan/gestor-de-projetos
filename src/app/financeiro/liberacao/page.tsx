@@ -254,7 +254,7 @@ function FinanceiroLiberacaoPageContent() {
 
 export default function FinanceiroLiberacaoPage() {
   return (
-    <ProtectedPage perfis={["administrador"]}>
+    <ProtectedPage perfis={["administrador", "financeiro"]}>
       <FinanceiroLiberacaoPageContent />
     </ProtectedPage>
   );
