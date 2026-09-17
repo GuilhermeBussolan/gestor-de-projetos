@@ -75,6 +75,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ erro: "Senha inválida (mínimo 6 caracteres)." }, { status: 400 });
     }
     console.error("Erro ao criar usuário:", err);
-    return NextResponse.json({ erro: "Não foi possível criar o usuário." }, { status: 500 });
+    const detalhe = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      { erro: `Não foi possível criar o usuário. [${code ?? "sem código"}] ${detalhe}` },
+      { status: 500 }
+    );
   }
 }
