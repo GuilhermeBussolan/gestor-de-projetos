@@ -48,6 +48,8 @@ function RecorrenciaForm({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
+  const hojeISO = new Date().toISOString().slice(0, 10);
+
   const projetosDisponiveis = souConsultor
     ? projetos.filter((p) => p.consultorIds?.includes(meuRecursoId) && p.status !== "finalizado")
     : projetos;
@@ -62,6 +64,10 @@ function RecorrenciaForm({
     if (!recursoId || !projetoId || diasSemana.length === 0 || !dataInicio || !dataFim) return;
     if (dataFim < dataInicio) {
       setErro("A data final precisa ser depois da data inicial.");
+      return;
+    }
+    if (souConsultor && dataFim > hojeISO) {
+      setErro("Você só pode lançar agenda fixa para dias que já passaram — nada no futuro.");
       return;
     }
 
@@ -178,18 +184,32 @@ function RecorrenciaForm({
             type="date"
             value={dataInicio}
             onChange={(e) => setDataInicio(e.target.value)}
+            max={souConsultor ? hojeISO : undefined}
             required
           />
         </FormRow>
         <FormRow label="Data fim">
-          <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} required />
+          <Input
+            type="date"
+            value={dataFim}
+            onChange={(e) => setDataFim(e.target.value)}
+            max={souConsultor ? hojeISO : undefined}
+            required
+          />
         </FormRow>
       </div>
 
-      <p className="text-xs text-brand-muted">
-        Cada ocorrência entra no calendário como <strong>pendente</strong> — quando chegar o dia, é só
-        confirmar se foi realizada ou cancelada.
-      </p>
+      {souConsultor ? (
+        <p className="text-xs text-brand-muted">
+          Só dá pra lançar dias que já passaram — depois de criar, confirme cada um como realizado em
+          &quot;Horas previstas&quot;.
+        </p>
+      ) : (
+        <p className="text-xs text-brand-muted">
+          Cada ocorrência entra no calendário como <strong>pendente</strong> — quando chegar o dia, é só
+          confirmar se foi realizada ou cancelada.
+        </p>
+      )}
 
       {erro && <p className="text-sm text-red-600">{erro}</p>}
 
