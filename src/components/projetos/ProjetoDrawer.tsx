@@ -120,9 +120,13 @@ export function ProjetoDrawerConteudo({
 
   return (
     <div
-      className={telaCheia ? "mx-auto max-w-4xl overflow-hidden rounded-2xl bg-white shadow-card-lg" : undefined}
+      className={
+        telaCheia
+          ? "mx-auto flex max-h-[calc(100vh-4rem)] max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-card-lg"
+          : undefined
+      }
     >
-      <div className="relative overflow-hidden bg-brand-navy px-6 pt-6 pb-6 text-white">
+      <div className={`relative overflow-hidden bg-brand-navy px-6 pt-6 pb-6 text-white ${telaCheia ? "shrink-0" : ""}`}>
         <div
           className="pointer-events-none absolute -top-[140px] -right-20 h-80 w-80 rounded-full"
           style={{ background: "radial-gradient(circle, rgba(47,111,228,.45) 0%, rgba(47,111,228,0) 70%)" }}
@@ -176,7 +180,7 @@ export function ProjetoDrawerConteudo({
         </div>
       </div>
 
-      <div className="px-6 pt-5.5 pb-8">
+      <div className={`px-6 pt-5.5 pb-8 ${telaCheia ? "min-h-0 flex-1 overflow-y-auto" : ""}`}>
         <p className="mb-5 text-sm text-brand-muted">
           Consultores:{" "}
           {consultores.length > 0
