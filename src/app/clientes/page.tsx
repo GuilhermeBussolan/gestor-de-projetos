@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormRow, Input } from "@/components/ui/Field";
 import { nomeExibicaoCliente } from "@/lib/cliente";
+import { ImportarClientesModal } from "@/components/importacao/ImportarClientesModal";
+import { Upload } from "lucide-react";
 import type { Cliente } from "@/types";
 
 const CLIENTE_VAZIO = {
@@ -31,6 +33,7 @@ function ClientesPageContent() {
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [form, setForm] = useState(CLIENTE_VAZIO);
   const [salvando, setSalvando] = useState(false);
+  const [importarAberto, setImportarAberto] = useState(false);
 
   function abrirNovo() {
     setEditando(null);
@@ -80,7 +83,12 @@ function ClientesPageContent() {
       <CadastrosTabs />
       <div className="mb-5 flex items-center justify-between">
         <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Clientes</h1>
-        <Button onClick={abrirNovo}>+ Novo cliente</Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setImportarAberto(true)}>
+            <Upload size={15} /> Importar
+          </Button>
+          <Button onClick={abrirNovo}>+ Novo cliente</Button>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
@@ -167,6 +175,12 @@ function ClientesPageContent() {
           </div>
         </form>
       </Modal>
+
+      <ImportarClientesModal
+        open={importarAberto}
+        onClose={() => setImportarAberto(false)}
+        clientesExistentes={clientes}
+      />
     </div>
   );
 }

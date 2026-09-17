@@ -57,6 +57,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /escopos/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     match /projetos/{projetoId} {
       allow read: if isSignedIn();
       allow create, delete: if isAdmin() || isCoordenador();
@@ -84,8 +89,11 @@ service cloud.firestore {
     match /eventosCalendario/{id} {
       allow read: if isAdmin() || isCoordenador() ||
         (isSignedIn() && resource.data.recursoId == meuRecursoId());
+      // Consultor não pode criar apontamento em projeto com status "finalizado"
+      // (admin/coordenador continuam podendo, mesmo com o projeto finalizado).
       allow create: if isAdmin() || isCoordenador() ||
-        (isSignedIn() && request.resource.data.recursoId == meuRecursoId());
+        (isSignedIn() && request.resource.data.recursoId == meuRecursoId() &&
+          get(/databases/$(database)/documents/projetos/$(request.resource.data.projetoId)).data.status != 'finalizado');
       allow update, delete: if isAdmin() || isCoordenador() ||
         (isSignedIn() && resource.data.recursoId == meuRecursoId());
     }

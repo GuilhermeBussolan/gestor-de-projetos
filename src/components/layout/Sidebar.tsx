@@ -11,6 +11,7 @@ import {
   FileText,
   FolderKanban,
   LayoutDashboard,
+  ListChecks,
   Menu,
   Users,
   Wallet,
@@ -29,6 +30,7 @@ const CADASTROS: NavItem[] = [
   { href: "/clientes", label: "Clientes", icon: Building2, perfis: ["administrador"] },
   { href: "/recursos", label: "Recursos", icon: Users, perfis: ["administrador"] },
   { href: "/documentos", label: "Documentos", icon: FileText, perfis: ["administrador"] },
+  { href: "/escopos", label: "Escopos", icon: ListChecks, perfis: ["administrador"] },
 ];
 
 const PRINCIPAIS: NavItem[] = [

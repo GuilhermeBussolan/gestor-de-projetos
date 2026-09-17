@@ -9,7 +9,10 @@ import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { calcularTotalHoras, formatarHoras } from "@/lib/horas";
 import { registrarContato } from "@/lib/contato";
-import type { Cliente, EventoCalendario, Projeto, Recurso, StatusOcorrencia, Usuario } from "@/types";
+import { statusAoConfirmar, statusEfetivo } from "@/lib/statusHora";
+import type { Cliente, EventoCalendario, Projeto, Recurso, Usuario } from "@/types";
+
+type Decisao = "realizada" | "cancelada" | "";
 
 function OcorrenciaForm({
   ocorrencia,
@@ -35,21 +38,33 @@ function OcorrenciaForm({
   const [horaFim, setHoraFim] = useState(ocorrencia.horaFim);
   const [horaDesconto, setHoraDesconto] = useState(ocorrencia.horaDesconto || "00:00");
   const [aplicarFuturas, setAplicarFuturas] = useState(false);
-  const [status, setStatus] = useState<StatusOcorrencia | "">("");
+  const [decisao, setDecisao] = useState<Decisao>("");
   const [memo, setMemo] = useState("");
+  const [atividadesMarcadas, setAtividadesMarcadas] = useState<string[]>(
+    ocorrencia.atividadesRealizadas ?? []
+  );
   const [salvando, setSalvando] = useState(false);
 
   const projetosDisponiveis = souConsultor
-    ? projetos.filter((p) => p.consultorIds?.includes(meuRecursoId))
+    ? projetos.filter((p) => p.consultorIds?.includes(meuRecursoId) && p.status !== "finalizado")
     : projetos;
+
+  const projetoSelecionado = projetos.find((p) => p.id === projetoId);
+  const atividadesEscopo = projetoSelecionado?.escopoAtividades ?? [];
+
+  function toggleAtividade(id: string) {
+    setAtividadesMarcadas((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
+  }
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
-    if (!status || !projetoId) return;
-    if (status === "realizada" && !memo.trim()) return;
+    if (!decisao || !projetoId) return;
+    if (decisao === "realizada" && !memo.trim()) return;
     setSalvando(true);
     try {
-      const totalHoras = status === "realizada" ? calcularTotalHoras(horaInicio, horaFim, horaDesconto) : 0;
+      const totalHoras = decisao === "realizada" ? calcularTotalHoras(horaInicio, horaFim, horaDesconto) : 0;
+      const novoStatus =
+        decisao === "realizada" ? statusAoConfirmar(recurso, usuario.perfil) : "cancelado";
 
       await updateDoc(doc(db, "eventosCalendario", ocorrencia.id), {
         projetoId,
@@ -57,11 +72,13 @@ function OcorrenciaForm({
         horaFim,
         horaDesconto,
         totalHoras,
-        status,
-        descricao: status === "realizada" ? memo.trim() : ocorrencia.descricao,
+        status: novoStatus,
+        motivoRejeicao: null,
+        descricao: decisao === "realizada" ? memo.trim() : ocorrencia.descricao,
+        atividadesRealizadas: decisao === "realizada" ? atividadesMarcadas : null,
       });
 
-      if (status === "realizada" && memo.trim()) {
+      if (decisao === "realizada" && memo.trim()) {
         await registrarContato(projetoId, memo.trim(), usuario);
       }
 
@@ -77,9 +94,9 @@ function OcorrenciaForm({
         for (const d of snap.docs) {
           const dados = d.data() as EventoCalendario;
           if (d.id === ocorrencia.id) continue;
-          if (dados.status !== "pendente" || dados.data <= ocorrencia.data) continue;
-          if (status === "cancelada") {
-            batch.update(d.ref, { status: "cancelada", totalHoras: 0 });
+          if (statusEfetivo(dados) !== "previsto" || dados.data <= ocorrencia.data) continue;
+          if (decisao === "cancelada") {
+            batch.update(d.ref, { status: "cancelado", totalHoras: 0 });
           } else {
             batch.update(d.ref, { projetoId, horaInicio, horaFim, horaDesconto });
           }
@@ -140,30 +157,57 @@ function OcorrenciaForm({
       )}
 
       <FormRow label="Esta agenda foi...">
-        <Select value={status} onChange={(e) => setStatus(e.target.value as StatusOcorrencia)} required>
+        <Select value={decisao} onChange={(e) => setDecisao(e.target.value as Decisao)} required>
           <option value="">Selecione...</option>
           <option value="realizada">Realizada</option>
           <option value="cancelada">Cancelada</option>
         </Select>
       </FormRow>
 
-      {status === "realizada" && (
-        <FormRow label="O que foi feito no atendimento?">
-          <Textarea
-            rows={3}
-            value={memo}
-            onChange={(e) => setMemo(e.target.value)}
-            placeholder="Esse texto também aparece no histórico de contato do projeto, no Dashboard."
-            required
-          />
-        </FormRow>
+      {decisao === "realizada" && (
+        <>
+          <FormRow label="O que foi feito no atendimento?">
+            <Textarea
+              rows={3}
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              placeholder="Esse texto também aparece no histórico de contato do projeto, no Dashboard."
+              required
+            />
+          </FormRow>
+          {statusAoConfirmar(recurso, usuario.perfil) === "aguardando_aprovacao" && (
+            <p className="text-xs text-brand-faint">
+              Ao confirmar, essas horas vão para a fila de aprovação do coordenador antes de contar
+              como realizadas de verdade.
+            </p>
+          )}
+          {atividadesEscopo.length > 0 && (
+            <div>
+              <p className="mb-1 text-sm font-medium text-brand-navy-2">
+                Atividades do escopo realizadas hoje (opcional)
+              </p>
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-brand-border p-2">
+                {atividadesEscopo.map((a) => (
+                  <label key={a.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={atividadesMarcadas.includes(a.id)}
+                      onChange={() => toggleAtividade(a.id)}
+                    />
+                    {a.descricao}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={salvando || !status}>
+        <Button type="submit" disabled={salvando || !decisao}>
           {salvando ? "Salvando..." : "Confirmar"}
         </Button>
       </div>

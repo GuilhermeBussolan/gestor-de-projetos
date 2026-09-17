@@ -49,7 +49,7 @@ function RecorrenciaForm({
   const [erro, setErro] = useState("");
 
   const projetosDisponiveis = souConsultor
-    ? projetos.filter((p) => p.consultorIds?.includes(meuRecursoId))
+    ? projetos.filter((p) => p.consultorIds?.includes(meuRecursoId) && p.status !== "finalizado")
     : projetos;
 
   function toggleDia(valor: number) {
@@ -100,7 +100,7 @@ function RecorrenciaForm({
           descricao: "",
           origem: "recorrencia",
           seriesId,
-          status: "pendente",
+          status: "previsto",
           createdAt: Date.now(),
         });
       }

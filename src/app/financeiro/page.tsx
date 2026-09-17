@@ -1,10 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import {
   STATUS_PARCELA_CONFIG,
@@ -13,6 +12,8 @@ import {
   TIPO_RECURSO_CONFIG,
 } from "@/lib/constants";
 import { nomeExibicaoCliente } from "@/lib/cliente";
+import { alterarStatusParcela } from "@/lib/parcela";
+import { statusEfetivo } from "@/lib/statusHora";
 import type { Cliente, EventoCalendario, Projeto, Recurso, StatusParcela, TipoRecurso } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -31,7 +32,7 @@ function FinanceiroPageContent() {
       totalContratado += p.financeiro?.valorTotal ?? 0;
       for (const parc of p.financeiro?.parcelas ?? []) {
         if (parc.status === "RECEBIDO") totalRecebido += parc.valor;
-        else totalAReceber += parc.valor;
+        else if (parc.status === "LIBERADO" || parc.status === "FATURADO") totalAReceber += parc.valor;
       }
     }
     return { totalContratado, totalRecebido, totalAReceber };
@@ -44,6 +45,7 @@ function FinanceiroPageContent() {
       consultor_tecnico: 0,
     };
     for (const ev of eventos) {
+      if (statusEfetivo(ev) !== "aprovado") continue;
       const recurso = recursos.find((r) => r.id === ev.recursoId);
       if (!recurso) continue;
       totais[recurso.tipo] += ev.totalHoras * recurso.valorHora;
@@ -53,19 +55,9 @@ function FinanceiroPageContent() {
 
   const totalPagoRecursos = Object.values(pagoPorTipoRecurso).reduce((a, b) => a + b, 0);
 
-  async function alterarStatusParcela(projeto: Projeto, numero: number, status: StatusParcela) {
-    const parcelas = projeto.financeiro.parcelas.map((p) =>
-      p.numero === numero ? { ...p, status } : p
-    );
-    await updateDoc(doc(db, "projetos", projeto.id), {
-      financeiro: { ...projeto.financeiro, parcelas },
-    });
-  }
-
-  const aReceber = resumoGeral.totalContratado - resumoGeral.totalRecebido;
-
   return (
     <div>
+      <FinanceiroTabs />
       <div className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="relative overflow-hidden rounded-2xl border border-brand-border bg-white p-5 shadow-card">
           <div
@@ -104,7 +96,7 @@ function FinanceiroPageContent() {
             A receber
           </p>
           <p className="relative text-[27px] leading-none font-extrabold tracking-[-0.03em]">
-            {moeda(aReceber)}
+            {moeda(resumoGeral.totalAReceber)}
           </p>
           <p className="relative mt-1.5 text-xs text-white/60">liberadas e faturadas</p>
         </div>

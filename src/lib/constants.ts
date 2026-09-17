@@ -20,12 +20,23 @@ export const STATUS_DOCUMENTO_ORDEM: StatusDocumento[] = [
 ];
 
 export const STATUS_PARCELA_CONFIG: Record<StatusParcela, { label: string; bg: string; text: string }> = {
+  AGUARDANDO: { label: "Aguardando", bg: "#fff2de", text: "#a4650d" },
   LIBERADO: { label: "Liberado", bg: "#eef1f8", text: "#6a7594" },
   FATURADO: { label: "Faturado", bg: "#e8efff", text: "#2456b8" },
   RECEBIDO: { label: "Recebido", bg: "#e3f5ea", text: "#15754c" },
+  CANCELADO: { label: "Cancelado", bg: "#fdeceb", text: "#b5392a" },
 };
 
-export const STATUS_PARCELA_ORDEM: StatusParcela[] = ["LIBERADO", "FATURADO", "RECEBIDO"];
+export const STATUS_PARCELA_ORDEM: StatusParcela[] = [
+  "AGUARDANDO",
+  "LIBERADO",
+  "FATURADO",
+  "RECEBIDO",
+  "CANCELADO",
+];
+
+/** As 4 situações que entram na rotina de Liberação de Faturamento (fora "Aguardando"). */
+export const STATUS_FATURAMENTO_ORDEM: StatusParcela[] = ["LIBERADO", "FATURADO", "RECEBIDO", "CANCELADO"];
 
 export const TIPO_FATURAMENTO_CONFIG: Record<TipoFaturamento, { label: string; descricao: string }> = {
   apontamento_horas: {
@@ -69,6 +80,8 @@ export const DOCUMENTOS_PADRAO: { codigo: string; descricao: string; pesoIndivid
   { codigo: "MIT005", descricao: "ACOMPANHAMENTO", pesoIndividual: 5 },
   { codigo: "MIT062", descricao: "TERMO DE ENCERRAMENTO", pesoIndividual: 5 },
 ];
+
+export const CODIGO_TERMO_ENCERRAMENTO = "MIT062";
 
 export const SEED_ADMIN = {
   nomeCompleto: "Administrador",

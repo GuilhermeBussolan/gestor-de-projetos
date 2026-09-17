@@ -4,13 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const ABAS = [
-  { href: "/clientes", label: "Clientes" },
-  { href: "/recursos", label: "Recursos" },
-  { href: "/documentos", label: "Documentos" },
-  { href: "/escopos", label: "Escopos" },
+  { href: "/financeiro", label: "Visão geral" },
+  { href: "/financeiro/liberacao", label: "Liberação de Faturamento" },
 ];
 
-export function CadastrosTabs() {
+export function FinanceiroTabs() {
   const pathname = usePathname();
   return (
     <div className="mb-5 inline-flex gap-1 rounded-[10px] bg-brand-accent-soft/60 p-[3px]">

@@ -1,16 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { updateDoc, doc, serverTimestamp } from "firebase/firestore";
+import { ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/Button";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import {
+  CODIGO_TERMO_ENCERRAMENTO,
   STATUS_DOCUMENTO_CONFIG,
   STATUS_DOCUMENTO_ORDEM,
   TIPO_FATURAMENTO_CONFIG,
   TIPO_RECURSO_CONFIG,
 } from "@/lib/constants";
-import { calcularHorasRealizadas, calcularPercentualProjeto } from "@/lib/dashboardCalc";
+import { calcularAtividadesConcluidas, calcularHorasRealizadas, calcularPercentualProjeto } from "@/lib/dashboardCalc";
 import type { EventoCalendario, Projeto, Recurso, StatusDocumento } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -65,16 +68,35 @@ export function ProjetoDrawerConteudo({
   onClose: () => void;
   onRegistrarContato: () => void;
 }) {
+  const [escopoAberto, setEscopoAberto] = useState(false);
+
   const percentual = calcularPercentualProjeto(projeto.documentos);
   const horas = calcularHorasRealizadas(projeto.id, eventos, recursos);
+  const atividadesConcluidas = calcularAtividadesConcluidas(projeto.id, eventos);
   const previstoConsultor = projeto.horasPrevistasConsultor ?? 0;
   const previstoCoordenador = projeto.horasPrevistasCoordenador ?? 0;
+  const finalizado = projeto.status === "finalizado";
+  const contatoFaturamento = projeto.contatoFaturamento;
+  const temContatoFaturamento =
+    !!contatoFaturamento &&
+    Object.values(contatoFaturamento).some((v) => (v ?? "").toString().trim() !== "");
 
   async function alterarStatus(tipoDocumentoId: string, status: StatusDocumento) {
+    const documentoAlterado = projeto.documentos.find((d) => d.tipoDocumentoId === tipoDocumentoId);
     const documentos = projeto.documentos.map((d) =>
       d.tipoDocumentoId === tipoDocumentoId ? { ...d, status } : d
     );
-    await updateDoc(doc(db, "projetos", projeto.id), { documentos, updatedAt: serverTimestamp() });
+    const encerraProjeto = documentoAlterado?.codigo === CODIGO_TERMO_ENCERRAMENTO && status === "ASSINADO";
+    await updateDoc(doc(db, "projetos", projeto.id), {
+      documentos,
+      ...(encerraProjeto ? { status: "finalizado" } : {}),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async function reabrirProjeto() {
+    if (!confirm("Reabrir este projeto? Ele volta a aceitar apontamentos normalmente.")) return;
+    await updateDoc(doc(db, "projetos", projeto.id), { status: "ativo", updatedAt: serverTimestamp() });
   }
 
   return (
@@ -96,7 +118,14 @@ export function ProjetoDrawerConteudo({
                 className="text-white/60"
               />
             </div>
-            <div className="text-[22px] font-extrabold tracking-[-0.02em]">{cliente}</div>
+            <div className="flex items-center gap-2">
+              <div className="text-[22px] font-extrabold tracking-[-0.02em]">{cliente}</div>
+              {finalizado && (
+                <span className="rounded-full bg-white/15 px-2.5 py-1 text-[10.5px] font-bold text-white">
+                  Finalizado
+                </span>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -207,6 +236,90 @@ export function ProjetoDrawerConteudo({
           </>
         )}
 
+        {podeVerFinanceiro && temContatoFaturamento && (
+          <div className="mb-5.5">
+            <p className="mb-2.5 text-sm font-extrabold text-brand-navy-2">Contato de faturamento</p>
+            <div className="rounded-xl border border-brand-border bg-white p-4 text-[13px] text-brand-muted shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
+              {contatoFaturamento?.nome && (
+                <p>
+                  <span className="text-brand-faint">Nome:</span>{" "}
+                  <span className="text-brand-navy-2">{contatoFaturamento.nome}</span>
+                </p>
+              )}
+              {contatoFaturamento?.cnpj && (
+                <p>
+                  <span className="text-brand-faint">CNPJ de faturamento:</span>{" "}
+                  <span className="text-brand-navy-2">{contatoFaturamento.cnpj}</span>
+                </p>
+              )}
+              {contatoFaturamento?.email && (
+                <p>
+                  <span className="text-brand-faint">E-mail:</span>{" "}
+                  <span className="text-brand-navy-2">{contatoFaturamento.email}</span>
+                </p>
+              )}
+              {contatoFaturamento?.telefone && (
+                <p>
+                  <span className="text-brand-faint">Telefone:</span>{" "}
+                  <span className="text-brand-navy-2">{contatoFaturamento.telefone}</span>
+                </p>
+              )}
+              {contatoFaturamento?.emailNF && (
+                <p>
+                  <span className="text-brand-faint">E-mail para NF:</span>{" "}
+                  <span className="text-brand-navy-2">{contatoFaturamento.emailNF}</span>
+                </p>
+              )}
+              {contatoFaturamento?.memo && (
+                <p className="mt-1.5 border-t border-brand-border-soft pt-1.5">{contatoFaturamento.memo}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {projeto.escopoAtividades && projeto.escopoAtividades.length > 0 && (
+          <div className="mb-5.5">
+            <button
+              type="button"
+              onClick={() => setEscopoAberto((v) => !v)}
+              className="mb-2 flex w-full items-center justify-between gap-3 text-left"
+            >
+              <span className="text-sm font-extrabold text-brand-navy-2">
+                Escopo do projeto — {projeto.escopoNome}
+              </span>
+              <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-bold text-brand-faint">
+                {atividadesConcluidas.size}/{projeto.escopoAtividades.length} concluídas
+                {escopoAberto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </span>
+            </button>
+            <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-brand-accent-soft">
+              <div
+                className="h-full rounded-full bg-[#1f9a63]"
+                style={{
+                  width: `${projeto.escopoAtividades.length > 0 ? (atividadesConcluidas.size / projeto.escopoAtividades.length) * 100 : 0}%`,
+                }}
+              />
+            </div>
+            {escopoAberto && (
+              <div className="max-h-72 overflow-y-auto rounded-xl border border-brand-border bg-white p-4 shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
+                <ol className="list-decimal space-y-1 pl-4 text-[12.5px]">
+                  {projeto.escopoAtividades.map((a) => {
+                    const feita = atividadesConcluidas.has(a.id);
+                    return (
+                      <li key={a.id} className={feita ? "text-[#15754c]" : "text-brand-muted"}>
+                        <span className={feita ? "line-through decoration-[#15754c]/50" : ""}>
+                          {a.descricao}
+                        </span>
+                        {feita && <CheckCircle2 size={12} className="ml-1 -mt-0.5 inline align-middle" />}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            )}
+          </div>
+        )}
+
         {projeto.observacoes && (
           <div className="mb-5.5">
             <p className="mb-1.5 text-sm font-extrabold text-brand-navy-2">Observações</p>
@@ -214,11 +327,16 @@ export function ProjetoDrawerConteudo({
           </div>
         )}
 
-        <div className="flex gap-2.5">
+        <div className="flex flex-wrap gap-2.5">
           {podeEditar && <Button onClick={onEditar}>Editar projeto</Button>}
           <Button variant="secondary" onClick={onRegistrarContato}>
             Registrar contato
           </Button>
+          {podeEditar && finalizado && (
+            <Button variant="secondary" onClick={reabrirProjeto}>
+              Reabrir projeto
+            </Button>
+          )}
           {podeEditar && (
             <Button variant="ghost" className="text-red-600 hover:bg-red-50" onClick={onExcluir}>
               Excluir

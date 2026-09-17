@@ -6,9 +6,10 @@ import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
+import { EscopoSelector } from "@/components/projetos/EscopoSelector";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import { MODULOS, TIPOS_ATENDIMENTO, type Financeiro, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type Escopo, type EscopoAtividade, type Financeiro, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function financeiroComStatusPreservado(anterior: Financeiro, novo: Financeiro): Financeiro {
   if (
@@ -28,11 +29,13 @@ function EditarProjetoForm({
   onClose,
   recursos,
   tiposDocumento,
+  escopos,
 }: {
   projeto: Projeto;
   onClose: () => void;
   recursos: Recurso[];
   tiposDocumento: TipoDocumento[];
+  escopos: Escopo[];
 }) {
   const [codigoProposta, setCodigoProposta] = useState(projeto.codigoProposta ?? "");
   const [modulo, setModulo] = useState<Modulo>(projeto.modulo ?? MODULOS[0]);
@@ -53,8 +56,43 @@ function EditarProjetoForm({
   );
   const [dataInicio, setDataInicio] = useState(projeto.dataInicio ?? "");
   const [dataFim, setDataFim] = useState(projeto.dataFim ?? "");
+  const [contatoNome, setContatoNome] = useState(projeto.contatoFaturamento?.nome ?? "");
+  const [contatoCnpj, setContatoCnpj] = useState(projeto.contatoFaturamento?.cnpj ?? "");
+  const [contatoEmail, setContatoEmail] = useState(projeto.contatoFaturamento?.email ?? "");
+  const [contatoTelefone, setContatoTelefone] = useState(projeto.contatoFaturamento?.telefone ?? "");
+  const [contatoEmailNF, setContatoEmailNF] = useState(projeto.contatoFaturamento?.emailNF ?? "");
+  const [contatoMemo, setContatoMemo] = useState(projeto.contatoFaturamento?.memo ?? "");
+  const [escopoId, setEscopoId] = useState<string | null>(projeto.escopoId ?? null);
+  const [escopoNome, setEscopoNome] = useState<string | null>(projeto.escopoNome ?? null);
+  const [escopoAtividades, setEscopoAtividades] = useState<EscopoAtividade[]>(
+    projeto.escopoAtividades ?? []
+  );
   const [salvando, setSalvando] = useState(false);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
+
+  async function selecionarEscopo(escopo: Escopo) {
+    await updateDoc(doc(db, "projetos", projeto.id), {
+      escopoId: escopo.id,
+      escopoNome: escopo.nome,
+      escopoAtividades: escopo.atividades,
+      updatedAt: serverTimestamp(),
+    });
+    setEscopoId(escopo.id);
+    setEscopoNome(escopo.nome);
+    setEscopoAtividades(escopo.atividades);
+  }
+
+  async function removerEscopo() {
+    await updateDoc(doc(db, "projetos", projeto.id), {
+      escopoId: null,
+      escopoNome: null,
+      escopoAtividades: null,
+      updatedAt: serverTimestamp(),
+    });
+    setEscopoId(null);
+    setEscopoNome(null);
+    setEscopoAtividades([]);
+  }
 
   const coordenadores = recursos.filter((r) => r.tipo === "coordenador");
   const consultoresDisponiveis = recursos.filter((r) => r.tipo !== "coordenador");
@@ -102,6 +140,17 @@ function EditarProjetoForm({
         horasPrevistasCoordenador: Number(horasPrevistasCoordenador) || 0,
         dataInicio: dataInicio || null,
         dataFim: dataFim || null,
+        escopoId,
+        escopoNome,
+        escopoAtividades: escopoAtividades.length > 0 ? escopoAtividades : null,
+        contatoFaturamento: {
+          nome: contatoNome,
+          cnpj: contatoCnpj,
+          email: contatoEmail,
+          telefone: contatoTelefone,
+          emailNF: contatoEmailNF,
+          memo: contatoMemo,
+        },
         financeiro,
         updatedAt: serverTimestamp(),
       });
@@ -189,6 +238,17 @@ function EditarProjetoForm({
         </div>
       </div>
 
+      <div>
+        <p className="mb-1 text-sm font-medium text-brand-navy-2">Escopo do projeto (opcional)</p>
+        <EscopoSelector
+          escopos={escopos}
+          escopoIdAtual={escopoId}
+          escopoNomeAtual={escopoNome}
+          onSelecionar={selecionarEscopo}
+          onRemover={removerEscopo}
+        />
+      </div>
+
       <FormRow label="Observações gerais">
         <Textarea rows={3} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
       </FormRow>
@@ -236,6 +296,38 @@ function EditarProjetoForm({
         tiposDocumento={tiposDocumento}
       />
 
+      <div>
+        <p className="mb-1 text-sm font-medium text-brand-navy-2">
+          Contato de faturamento (opcional)
+        </p>
+        <div className="grid grid-cols-2 gap-4 rounded-md border border-brand-border p-3">
+          <FormRow label="Contato (nome)">
+            <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} />
+          </FormRow>
+          <FormRow label="CNPJ de faturamento">
+            <Input value={contatoCnpj} onChange={(e) => setContatoCnpj(e.target.value)} />
+          </FormRow>
+          <FormRow label="E-mail">
+            <Input type="email" value={contatoEmail} onChange={(e) => setContatoEmail(e.target.value)} />
+          </FormRow>
+          <FormRow label="Telefone">
+            <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} />
+          </FormRow>
+          <FormRow label="E-mail para envio da NF">
+            <Input
+              type="email"
+              value={contatoEmailNF}
+              onChange={(e) => setContatoEmailNF(e.target.value)}
+            />
+          </FormRow>
+          <div className="col-span-2">
+            <FormRow label="Observações sobre faturamento">
+              <Textarea rows={2} value={contatoMemo} onChange={(e) => setContatoMemo(e.target.value)} />
+            </FormRow>
+          </div>
+        </div>
+      </div>
+
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>
           Cancelar
@@ -253,11 +345,13 @@ export function EditarProjetoModal({
   onClose,
   recursos,
   tiposDocumento,
+  escopos,
 }: {
   projeto: Projeto | null;
   onClose: () => void;
   recursos: Recurso[];
   tiposDocumento: TipoDocumento[];
+  escopos: Escopo[];
 }) {
   return (
     <Modal open={!!projeto} onClose={onClose} title="Editar projeto" wide>
@@ -268,6 +362,7 @@ export function EditarProjetoModal({
           onClose={onClose}
           recursos={recursos}
           tiposDocumento={tiposDocumento}
+          escopos={escopos}
         />
       )}
     </Modal>

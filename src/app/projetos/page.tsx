@@ -14,11 +14,13 @@ import { ProjetoDrawerConteudo } from "@/components/projetos/ProjetoDrawer";
 import { ProjetoFormModal } from "@/components/projetos/ProjetoFormModal";
 import { EditarProjetoModal } from "@/components/projetos/EditarProjetoModal";
 import { ContatoModal } from "@/components/dashboard/ContatoModal";
+import { ImportarProjetosModal } from "@/components/importacao/ImportarProjetosModal";
+import { Upload } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { calcularPercentualProjeto } from "@/lib/dashboardCalc";
 import { MODULOS, TIPOS_ATENDIMENTO } from "@/types";
-import type { Cliente, EventoCalendario, Projeto, Recurso, TipoDocumento } from "@/types";
+import type { Cliente, Escopo, EventoCalendario, Projeto, Recurso, TipoDocumento } from "@/types";
 
 function ProjetosPageContent() {
   const { usuario } = useAuth();
@@ -30,6 +32,7 @@ function ProjetosPageContent() {
   const { data: recursos } = useCollection<Recurso>("recursos");
   const { data: tiposDocumento } = useCollection<TipoDocumento>("tiposDocumento", []);
   const { data: eventos } = useCollection<EventoCalendario>("eventosCalendario", []);
+  const { data: escopos } = useCollection<Escopo>("escopos", []);
 
   const [modalNovoAberto, setModalNovoAberto] = useState(false);
   const [editando, setEditando] = useState<Projeto | null>(null);
@@ -38,6 +41,7 @@ function ProjetosPageContent() {
   const [busca, setBusca] = useState("");
   const [filtroModulo, setFiltroModulo] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
+  const [importarAberto, setImportarAberto] = useState(false);
 
   const podeEditar = usuario?.perfil === "administrador" || usuario?.perfil === "coordenador";
 
@@ -93,7 +97,14 @@ function ProjetosPageContent() {
             ))}
           </Select>
         </div>
-        {podeEditar && <Button onClick={() => setModalNovoAberto(true)}>+ Novo projeto</Button>}
+        {podeEditar && (
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setImportarAberto(true)}>
+              <Upload size={15} /> Importar
+            </Button>
+            <Button onClick={() => setModalNovoAberto(true)}>+ Novo projeto</Button>
+          </div>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
@@ -138,7 +149,14 @@ function ProjetosPageContent() {
                     }`}
                   >
                     <td className="px-[18px] py-[15px] font-bold text-brand-navy-2">
-                      {nomeExibicaoCliente(cliente)}
+                      <div className="flex items-center gap-1.5">
+                        {nomeExibicaoCliente(cliente)}
+                        {p.status === "finalizado" && (
+                          <span className="rounded-full bg-brand-hover px-1.5 py-[1px] text-[9px] font-bold text-brand-faint">
+                            Finalizado
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-[18px] py-[15px] text-brand-muted">{p.codigoProposta}</td>
                     <td className="px-[18px] py-[15px]">
@@ -216,11 +234,20 @@ function ProjetosPageContent() {
         clientes={clientes}
         recursos={recursos}
         tiposDocumento={tiposDocumento}
+        escopos={escopos}
       />
       <EditarProjetoModal
         projeto={editando}
         onClose={() => setEditando(null)}
         recursos={recursos}
+        tiposDocumento={tiposDocumento}
+        escopos={escopos}
+      />
+      <ImportarProjetosModal
+        open={importarAberto}
+        onClose={() => setImportarAberto(false)}
+        clientes={clientes}
+        projetosExistentes={projetos}
         tiposDocumento={tiposDocumento}
       />
     </div>

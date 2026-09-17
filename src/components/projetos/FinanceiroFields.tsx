@@ -88,7 +88,7 @@ export const FinanceiroFields = forwardRef<
         const parcelas = Array.from({ length: numeroParcelasNumero }, (_, i) => ({
           numero: i + 1,
           valor: valorParcela,
-          status: "LIBERADO" as const,
+          status: "AGUARDANDO" as const,
         }));
         return {
           tipoFaturamento,
@@ -104,7 +104,7 @@ export const FinanceiroFields = forwardRef<
         descricao: m.descricao,
         tipoDocumentoId: m.tipoDocumentoId || undefined,
         valor: Number(m.valor) || 0,
-        status: "LIBERADO" as const,
+        status: "AGUARDANDO" as const,
       }));
       return {
         tipoFaturamento,

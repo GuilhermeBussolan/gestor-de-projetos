@@ -53,7 +53,7 @@ export interface DocumentoProjeto {
   status: StatusDocumento;
 }
 
-export type StatusParcela = "LIBERADO" | "FATURADO" | "RECEBIDO";
+export type StatusParcela = "AGUARDANDO" | "LIBERADO" | "FATURADO" | "RECEBIDO" | "CANCELADO";
 
 export interface Parcela {
   numero: number;
@@ -61,6 +61,8 @@ export interface Parcela {
   tipoDocumentoId?: string;
   valor: number;
   status: StatusParcela;
+  /** Timestamp de quando o status virou LIBERADO (usado na tela de Liberação de Faturamento). */
+  dataLiberacao?: number | null;
 }
 
 export type TipoFaturamento = "apontamento_horas" | "parcelado" | "marco_faturamento";
@@ -80,6 +82,29 @@ export interface ContatoProjeto {
   criadoEm: number;
 }
 
+export interface ContatoFaturamento {
+  nome?: string;
+  cnpj?: string;
+  email?: string;
+  telefone?: string;
+  emailNF?: string;
+  memo?: string;
+}
+
+export type StatusProjeto = "ativo" | "finalizado";
+
+export interface EscopoAtividade {
+  id: string;
+  descricao: string;
+}
+
+export interface Escopo {
+  id: string;
+  nome: string;
+  atividades: EscopoAtividade[];
+  createdAt: number;
+}
+
 export interface Projeto {
   id: string;
   clienteId: string;
@@ -95,6 +120,11 @@ export interface Projeto {
   horasPrevistasCoordenador: number;
   dataInicio?: string | null;
   dataFim?: string | null;
+  status?: StatusProjeto | null;
+  contatoFaturamento?: ContatoFaturamento | null;
+  escopoId?: string | null;
+  escopoNome?: string | null;
+  escopoAtividades?: EscopoAtividade[] | null;
   ultimoContato?: {
     texto: string;
     usuarioNome: string;
@@ -105,7 +135,15 @@ export interface Projeto {
 }
 
 export type OrigemEvento = "avulso" | "recorrencia";
-export type StatusOcorrencia = "pendente" | "realizada" | "cancelada";
+
+/**
+ * previsto: lançado, aguardando o próprio consultor confirmar que foi realizado
+ * aguardando_aprovacao: consultor confirmou; aguardando decisão do coordenador
+ * aprovado: aprovado — única situação que conta para os cálculos "reais" do projeto
+ * rejeitado: coordenador rejeitou (motivoRejeicao preenchido); consultor pode ajustar e reenviar
+ * cancelado: ocorrência de agenda fixa que não aconteceu (sem horas)
+ */
+export type StatusHora = "previsto" | "aguardando_aprovacao" | "aprovado" | "rejeitado" | "cancelado";
 
 export interface EventoCalendario {
   id: string;
@@ -119,6 +157,13 @@ export interface EventoCalendario {
   descricao: string;
   origem: OrigemEvento;
   seriesId?: string | null;
-  status?: StatusOcorrencia | null; // só usado quando origem === "recorrencia"
+  status?: StatusHora | null;
+  motivoRejeicao?: string | null;
+  aprovadoPorNome?: string | null;
+  aprovadoEm?: number | null;
+  /** Hora retroativa importada em lote: aprovada direto, some do calendário. */
+  retroativo?: boolean;
+  /** IDs das EscopoAtividade do projeto marcadas como realizadas nesse apontamento. */
+  atividadesRealizadas?: string[] | null;
   createdAt: number;
 }

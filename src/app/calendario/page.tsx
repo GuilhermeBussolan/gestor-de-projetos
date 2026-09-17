@@ -24,19 +24,8 @@ import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthContext";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { formatarHoras } from "@/lib/horas";
+import { STATUS_HORA_CONFIG, statusEfetivo } from "@/lib/statusHora";
 import type { Cliente, EventoCalendario, Projeto, Recurso } from "@/types";
-
-function classeChip(ev: EventoCalendario): string {
-  if (ev.origem === "recorrencia") {
-    if (ev.status === "pendente") {
-      return "border border-dashed border-[#e0a94a] bg-[#fff2de] text-[#a4650d] hover:bg-[#ffe8c4]";
-    }
-    if (ev.status === "cancelada") {
-      return "bg-brand-hover text-brand-faint line-through hover:bg-brand-border";
-    }
-  }
-  return "bg-brand-accent-soft text-[#2456b8] hover:bg-[#dbe7ff]";
-}
 
 const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
@@ -80,12 +69,14 @@ function CalendarioPageContent() {
 
   function eventosDoDia(diaISO: string) {
     return eventos
-      .filter((e) => e.data === diaISO && recursosVisiveis.some((r) => r.id === e.recursoId))
-      .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+      .filter(
+        (e) => !e.retroativo && e.data === diaISO && recursosVisiveis.some((r) => r.id === e.recursoId)
+      )
+      .sort((a, b) => (a.horaInicio ?? "").localeCompare(b.horaInicio ?? ""));
   }
 
   function abrirEvento(ev: EventoCalendario, diaISO: string) {
-    if (ev.origem === "recorrencia" && ev.status === "pendente") {
+    if (ev.origem === "recorrencia" && statusEfetivo(ev) === "previsto") {
       setOcorrenciaSelecionada(ev);
       return;
     }
@@ -104,9 +95,10 @@ function CalendarioPageContent() {
     return eventos
       .filter(
         (e) =>
+          !e.retroativo &&
           e.data.startsWith(prefixo) &&
           recursosVisiveis.some((r) => r.id === e.recursoId) &&
-          !(e.origem === "recorrencia" && e.status !== "realizada")
+          statusEfetivo(e) === "aprovado"
       )
       .reduce((acc, e) => acc + e.totalHoras, 0);
   }, [eventos, mesBase, recursosVisiveis]);
@@ -203,12 +195,17 @@ function CalendarioPageContent() {
                       const recurso = recursos.find((r) => r.id === ev.recursoId);
                       const projeto = projetos.find((p) => p.id === ev.projetoId);
                       const cliente = clientes.find((c) => c.id === projeto?.clienteId);
+                      const statusEv = statusEfetivo(ev);
+                      const cfg = STATUS_HORA_CONFIG[statusEv];
                       return (
                         <button
                           key={ev.id}
                           onClick={() => abrirEvento(ev, diaISO)}
-                          className={`flex items-center gap-1 truncate rounded px-1.5 py-[3px] text-left text-[10.5px] leading-tight ${classeChip(ev)}`}
-                          title={ev.descricao}
+                          style={{ backgroundColor: cfg.bg, color: cfg.text }}
+                          className={`flex items-center gap-1 truncate rounded px-1.5 py-[3px] text-left text-[10.5px] leading-tight hover:brightness-95 ${
+                            statusEv === "cancelado" ? "line-through" : ""
+                          } ${statusEv === "previsto" ? "border border-dashed border-brand-border" : ""}`}
+                          title={`${ev.descricao ? ev.descricao + " · " : ""}${cfg.label}`}
                         >
                           {ev.origem === "recorrencia" && <Repeat size={9} className="shrink-0" />}
                           <span className="truncate">
@@ -272,18 +269,15 @@ function CalendarioPageContent() {
         <div className="rounded-2xl border border-brand-border bg-white p-4 shadow-card">
           <p className="mb-3 text-[11px] font-bold tracking-[.1em] text-brand-faint uppercase">Legenda</p>
           <div className="flex flex-col gap-2.5 text-[12.5px] text-brand-muted">
-            <div className="flex items-center gap-2.5">
-              <span className="h-3.5 w-3.5 shrink-0 rounded bg-brand-accent-soft" />
-              Avulso
-            </div>
-            <div className="flex items-center gap-2.5">
-              <span className="h-3.5 w-3.5 shrink-0 rounded border border-dashed border-[#e0a94a] bg-[#fff2de]" />
-              Recorrente · pendente
-            </div>
-            <div className="flex items-center gap-2.5">
-              <span className="h-3.5 w-3.5 shrink-0 rounded bg-brand-hover" />
-              Recorrente · cancelada
-            </div>
+            {(Object.keys(STATUS_HORA_CONFIG) as Array<keyof typeof STATUS_HORA_CONFIG>).map((s) => (
+              <div key={s} className="flex items-center gap-2.5">
+                <span
+                  className="h-3.5 w-3.5 shrink-0 rounded"
+                  style={{ backgroundColor: STATUS_HORA_CONFIG[s].bg }}
+                />
+                {STATUS_HORA_CONFIG[s].label}
+              </div>
+            ))}
           </div>
         </div>
 

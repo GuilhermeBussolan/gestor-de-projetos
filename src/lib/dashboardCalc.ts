@@ -1,4 +1,5 @@
 import { STATUS_DOCUMENTO_CONFIG } from "@/lib/constants";
+import { statusEfetivo } from "@/lib/statusHora";
 import type { DocumentoProjeto, EventoCalendario, Recurso } from "@/types";
 
 /**
@@ -35,8 +36,8 @@ export interface HorasRealizadas {
 
 /**
  * Soma as horas já efetivamente trabalhadas num projeto, separadas por papel.
- * Conta lançamentos avulsos (sempre) e ocorrências de recorrência já confirmadas
- * como "realizada" — ocorrências pendentes ou canceladas não contam.
+ * Só conta lançamentos com status "aprovado" — é a única situação que a
+ * spec considera "real" para os cálculos do projeto.
  */
 export function calcularHorasRealizadas(
   projetoId: string,
@@ -46,11 +47,28 @@ export function calcularHorasRealizadas(
   const resultado: HorasRealizadas = { consultor: 0, coordenador: 0 };
   for (const ev of eventos) {
     if (ev.projetoId !== projetoId) continue;
-    if (ev.origem === "recorrencia" && ev.status !== "realizada") continue;
+    if (statusEfetivo(ev) !== "aprovado") continue;
     const recurso = recursos.find((r) => r.id === ev.recursoId);
     if (!recurso) continue;
     if (recurso.tipo === "coordenador") resultado.coordenador += ev.totalHoras;
     else resultado.consultor += ev.totalHoras;
   }
   return resultado;
+}
+
+/**
+ * IDs das atividades do escopo já marcadas como feitas em algum apontamento
+ * aprovado do projeto — a mesma régua de "aprovado" usada nas horas.
+ */
+export function calcularAtividadesConcluidas(
+  projetoId: string,
+  eventos: EventoCalendario[]
+): Set<string> {
+  const concluidas = new Set<string>();
+  for (const ev of eventos) {
+    if (ev.projetoId !== projetoId) continue;
+    if (statusEfetivo(ev) !== "aprovado") continue;
+    (ev.atividadesRealizadas ?? []).forEach((id) => concluidas.add(id));
+  }
+  return concluidas;
 }

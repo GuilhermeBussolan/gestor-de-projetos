@@ -6,21 +6,24 @@ import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
+import { ClienteCombobox } from "@/components/projetos/ClienteCombobox";
+import { EscopoSelector } from "@/components/projetos/EscopoSelector";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import { nomeExibicaoCliente } from "@/lib/cliente";
-import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type Escopo, type EscopoAtividade, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function ProjetoForm({
   onClose,
   clientes,
   recursos,
   tiposDocumento,
+  escopos,
 }: {
   onClose: () => void;
   clientes: Cliente[];
   recursos: Recurso[];
   tiposDocumento: TipoDocumento[];
+  escopos: Escopo[];
 }) {
   const [clienteId, setClienteId] = useState("");
   const [codigoProposta, setCodigoProposta] = useState("");
@@ -34,8 +37,29 @@ function ProjetoForm({
   const [horasPrevistasCoordenador, setHorasPrevistasCoordenador] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
+  const [contatoNome, setContatoNome] = useState("");
+  const [contatoCnpj, setContatoCnpj] = useState("");
+  const [contatoEmail, setContatoEmail] = useState("");
+  const [contatoTelefone, setContatoTelefone] = useState("");
+  const [contatoEmailNF, setContatoEmailNF] = useState("");
+  const [contatoMemo, setContatoMemo] = useState("");
+  const [escopoId, setEscopoId] = useState<string | null>(null);
+  const [escopoNome, setEscopoNome] = useState<string | null>(null);
+  const [escopoAtividades, setEscopoAtividades] = useState<EscopoAtividade[]>([]);
   const [salvando, setSalvando] = useState(false);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
+
+  function selecionarEscopo(escopo: Escopo) {
+    setEscopoId(escopo.id);
+    setEscopoNome(escopo.nome);
+    setEscopoAtividades(escopo.atividades);
+  }
+
+  function removerEscopo() {
+    setEscopoId(null);
+    setEscopoNome(null);
+    setEscopoAtividades([]);
+  }
 
   const coordenadores = recursos.filter((r) => r.tipo === "coordenador");
   const consultoresDisponiveis = recursos.filter((r) => r.tipo !== "coordenador");
@@ -76,6 +100,18 @@ function ProjetoForm({
         horasPrevistasCoordenador: Number(horasPrevistasCoordenador) || 0,
         dataInicio: dataInicio || null,
         dataFim: dataFim || null,
+        status: "ativo",
+        escopoId,
+        escopoNome,
+        escopoAtividades: escopoAtividades.length > 0 ? escopoAtividades : null,
+        contatoFaturamento: {
+          nome: contatoNome,
+          cnpj: contatoCnpj,
+          email: contatoEmail,
+          telefone: contatoTelefone,
+          emailNF: contatoEmailNF,
+          memo: contatoMemo,
+        },
         financeiro: financeiroRef.current.obterFinanceiro(),
         ultimoContato: null,
         createdAt: serverTimestamp(),
@@ -90,15 +126,7 @@ function ProjetoForm({
   return (
     <form onSubmit={salvar} className="space-y-5">
       <FormRow label="Cliente">
-        <Select value={clienteId} onChange={(e) => setClienteId(e.target.value)} required>
-          <option value="">Selecione...</option>
-          {clientes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {nomeExibicaoCliente(c)}
-              {c.cnpj ? ` — ${c.cnpj}` : ""}
-            </option>
-          ))}
-        </Select>
+        <ClienteCombobox clientes={clientes} value={clienteId} onChange={setClienteId} required />
       </FormRow>
 
       <div className="grid grid-cols-3 gap-4">
@@ -178,6 +206,18 @@ function ProjetoForm({
         </div>
       </div>
 
+      <div>
+        <p className="mb-1 text-sm font-medium text-brand-navy-2">Escopo do projeto (opcional)</p>
+        <EscopoSelector
+          escopos={escopos}
+          escopoIdAtual={escopoId}
+          escopoNomeAtual={escopoNome}
+          onSelecionar={selecionarEscopo}
+          onRemover={removerEscopo}
+          persisteAoConfirmar={false}
+        />
+      </div>
+
       <FormRow label="Observações gerais">
         <Textarea rows={3} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
       </FormRow>
@@ -221,6 +261,38 @@ function ProjetoForm({
 
       <FinanceiroFields ref={financeiroRef} tiposDocumento={tiposDocumento} />
 
+      <div>
+        <p className="mb-1 text-sm font-medium text-brand-navy-2">
+          Contato de faturamento (opcional)
+        </p>
+        <div className="grid grid-cols-2 gap-4 rounded-md border border-brand-border p-3">
+          <FormRow label="Contato (nome)">
+            <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} />
+          </FormRow>
+          <FormRow label="CNPJ de faturamento">
+            <Input value={contatoCnpj} onChange={(e) => setContatoCnpj(e.target.value)} />
+          </FormRow>
+          <FormRow label="E-mail">
+            <Input type="email" value={contatoEmail} onChange={(e) => setContatoEmail(e.target.value)} />
+          </FormRow>
+          <FormRow label="Telefone">
+            <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} />
+          </FormRow>
+          <FormRow label="E-mail para envio da NF">
+            <Input
+              type="email"
+              value={contatoEmailNF}
+              onChange={(e) => setContatoEmailNF(e.target.value)}
+            />
+          </FormRow>
+          <div className="col-span-2">
+            <FormRow label="Observações sobre faturamento">
+              <Textarea rows={2} value={contatoMemo} onChange={(e) => setContatoMemo(e.target.value)} />
+            </FormRow>
+          </div>
+        </div>
+      </div>
+
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>
           Cancelar
@@ -239,17 +311,25 @@ export function ProjetoFormModal({
   clientes,
   recursos,
   tiposDocumento,
+  escopos,
 }: {
   open: boolean;
   onClose: () => void;
   clientes: Cliente[];
   recursos: Recurso[];
   tiposDocumento: TipoDocumento[];
+  escopos: Escopo[];
 }) {
   return (
     <Modal open={open} onClose={onClose} title="Novo projeto" wide>
       {open && (
-        <ProjetoForm onClose={onClose} clientes={clientes} recursos={recursos} tiposDocumento={tiposDocumento} />
+        <ProjetoForm
+          onClose={onClose}
+          clientes={clientes}
+          recursos={recursos}
+          tiposDocumento={tiposDocumento}
+          escopos={escopos}
+        />
       )}
     </Modal>
   );
