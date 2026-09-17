@@ -18,7 +18,7 @@ export function TelaCheia({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-brand-navy/45 px-6 py-8 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-brand-navy/45 px-6 py-8 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div onClick={(e) => e.stopPropagation()}>{children}</div>
