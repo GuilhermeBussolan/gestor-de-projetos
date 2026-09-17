@@ -11,6 +11,10 @@ import { calcularTotalHoras, formatarHoras } from "@/lib/horas";
 import { STATUS_HORA_CONFIG, statusAoConfirmar, statusEfetivo, statusNaCriacao } from "@/lib/statusHora";
 import type { Cliente, EventoCalendario, Projeto, Recurso, Usuario } from "@/types";
 
+function timestampAtual(): number {
+  return Date.now();
+}
+
 export function EventoModal({
   aberto,
   onClose,
@@ -104,7 +108,7 @@ export function EventoModal({
           ...dados,
           origem: "avulso",
           status: statusNaCriacao(recurso, usuario.perfil),
-          createdAt: Date.now(),
+          createdAt: timestampAtual(),
         });
       }
       onClose();
@@ -114,6 +118,8 @@ export function EventoModal({
         meuRecursoId,
         projetoId,
         souConsultorEditandoMeuEvento,
+        projetoStatus: projetoSelecionado?.status,
+        projetoConsultorIds: projetoSelecionado?.consultorIds,
       });
       setErro(
         err instanceof Error
