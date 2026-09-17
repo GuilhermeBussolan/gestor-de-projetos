@@ -203,25 +203,23 @@ function ProjetosPageContent() {
         </div>
       </div>
 
-      <TelaCheia open={!!projetoDetalhe}>
+      <TelaCheia open={!!projetoDetalhe} onClose={() => setDetalheId(null)}>
         {projetoDetalhe && (
-          <div className="px-6 py-8">
-            <ProjetoDrawerConteudo
-              projeto={projetoDetalhe}
-              cliente={nomeExibicaoCliente(clientes.find((c) => c.id === projetoDetalhe.clienteId))}
-              coordenador={recursos.find((r) => r.id === projetoDetalhe.coordenadorId)}
-              consultores={recursos.filter((r) => projetoDetalhe.consultorIds?.includes(r.id))}
-              eventos={eventos}
-              recursos={recursos}
-              podeEditar={!!podeEditar}
-              podeVerFinanceiro={!!podeEditar}
-              telaCheia
-              onEditar={() => setEditando(projetoDetalhe)}
-              onExcluir={() => excluir(projetoDetalhe)}
-              onClose={() => setDetalheId(null)}
-              onRegistrarContato={() => setContatoProjeto(projetoDetalhe)}
-            />
-          </div>
+          <ProjetoDrawerConteudo
+            projeto={projetoDetalhe}
+            cliente={nomeExibicaoCliente(clientes.find((c) => c.id === projetoDetalhe.clienteId))}
+            coordenador={recursos.find((r) => r.id === projetoDetalhe.coordenadorId)}
+            consultores={recursos.filter((r) => projetoDetalhe.consultorIds?.includes(r.id))}
+            eventos={eventos}
+            recursos={recursos}
+            podeEditar={!!podeEditar}
+            podeVerFinanceiro={!!podeEditar}
+            telaCheia
+            onEditar={() => setEditando(projetoDetalhe)}
+            onExcluir={() => excluir(projetoDetalhe)}
+            onClose={() => setDetalheId(null)}
+            onRegistrarContato={() => setContatoProjeto(projetoDetalhe)}
+          />
         )}
       </TelaCheia>
 

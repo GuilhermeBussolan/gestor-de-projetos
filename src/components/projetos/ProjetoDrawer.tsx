@@ -119,7 +119,9 @@ export function ProjetoDrawerConteudo({
   }
 
   return (
-    <div className={telaCheia ? "mx-auto max-w-4xl overflow-hidden rounded-2xl shadow-card-lg" : undefined}>
+    <div
+      className={telaCheia ? "mx-auto max-w-4xl overflow-hidden rounded-2xl bg-white shadow-card-lg" : undefined}
+    >
       <div className="relative overflow-hidden bg-brand-navy px-6 pt-6 pb-6 text-white">
         <div
           className="pointer-events-none absolute -top-[140px] -right-20 h-80 w-80 rounded-full"
