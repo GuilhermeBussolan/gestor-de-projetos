@@ -9,6 +9,7 @@ import { CadastrosTabs } from "@/components/layout/CadastrosTabs";
 import { Button } from "@/components/ui/Button";
 import { ImportarEscopoModal } from "@/components/importacao/ImportarEscopoModal";
 import { EscopoFormModal } from "@/components/escopos/EscopoFormModal";
+import { nivelAtividade, numerarAtividades, temFilhos } from "@/lib/escopo";
 import { Upload, ChevronDown, ChevronUp } from "lucide-react";
 import type { Escopo } from "@/types";
 
@@ -53,6 +54,7 @@ function EscoposPageContent() {
           <tbody>
             {escopos.map((e) => {
               const expandido = expandidoId === e.id;
+              const numeros = expandido ? numerarAtividades(e.atividades ?? []) : [];
               return (
                 <Fragment key={e.id}>
                   <tr className="border-t border-brand-border-soft hover:bg-brand-hover">
@@ -79,11 +81,18 @@ function EscoposPageContent() {
                   {expandido && (
                     <tr className="border-t border-brand-border-soft bg-brand-hover/40">
                       <td colSpan={3} className="px-[18px] py-3.5">
-                        <ol className="list-decimal space-y-1 pl-5 text-[12.5px] text-brand-muted">
-                          {(e.atividades ?? []).map((a) => (
-                            <li key={a.id}>{a.descricao}</li>
+                        <div className="space-y-1 text-[12.5px] text-brand-muted">
+                          {(e.atividades ?? []).map((a, i) => (
+                            <p key={a.id} style={{ paddingLeft: nivelAtividade(a) * 18 }}>
+                              <span className="mr-1.5 text-[11px] text-brand-faint">
+                                {numeros[i]}
+                              </span>
+                              <span className={temFilhos(e.atividades, i) ? "font-bold text-brand-navy-2" : ""}>
+                                {a.descricao}
+                              </span>
+                            </p>
                           ))}
-                        </ol>
+                        </div>
                       </td>
                     </tr>
                   )}

@@ -25,9 +25,7 @@ export function PeriodoBadge({
       {periodo.fim ? (
         periodo.fim
       ) : (
-        <span className="rounded-full bg-[#fff2de] px-1.5 py-[1px] font-bold text-[#a4650d]">
-          Em andamento
-        </span>
+        "A definir"
       )}
     </span>
   );

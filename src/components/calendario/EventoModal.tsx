@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
+import { AtividadesEscopoChecklist } from "@/components/projetos/AtividadesEscopoChecklist";
+import { calcularDatasAtividades } from "@/lib/dashboardCalc";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { nomeExibicaoCliente } from "@/lib/cliente";
@@ -58,6 +60,7 @@ export function EventoModal({
     eventoEditando?.atividadesRealizadas ?? []
   );
   const [salvando, setSalvando] = useState(false);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
   const [erro, setErro] = useState("");
 
   const recurso = recursos.find((r) => r.id === recursoId);
@@ -72,9 +75,10 @@ export function EventoModal({
   const projetoSelecionado = projetos.find((p) => p.id === projetoId);
   const atividadesEscopo = projetoSelecionado?.escopoAtividades ?? [];
 
-  function toggleAtividade(id: string) {
-    setAtividadesMarcadas((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
-  }
+  const datasAtividades = useMemo(
+    () => calcularDatasAtividades(projetoId, eventos),
+    [projetoId, eventos]
+  );
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
@@ -138,9 +142,14 @@ export function EventoModal({
 
   async function excluir() {
     if (!eventoEditando) return;
-    if (!confirm("Excluir este lançamento?")) return;
-    await deleteDoc(doc(db, "eventosCalendario", eventoEditando.id));
-    onClose();
+    try {
+      await deleteDoc(doc(db, "eventosCalendario", eventoEditando.id));
+      onClose();
+    } catch (err) {
+      console.error("Falha ao excluir apontamento:", err);
+      setConfirmandoExclusao(false);
+      setErro("Não foi possível excluir. Tente novamente.");
+    }
   }
 
   return (
@@ -263,18 +272,13 @@ export function EventoModal({
             <p className="mb-1 text-sm font-medium text-brand-navy-2">
               Atividades do escopo realizadas hoje (opcional)
             </p>
-            <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-brand-border p-2">
-              {atividadesEscopo.map((a) => (
-                <label key={a.id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={atividadesMarcadas.includes(a.id)}
-                    onChange={() => toggleAtividade(a.id)}
-                  />
-                  {a.descricao}
-                </label>
-              ))}
-            </div>
+            <AtividadesEscopoChecklist
+              atividades={atividadesEscopo}
+              marcadas={atividadesMarcadas}
+              onChange={setAtividadesMarcadas}
+              datas={datasAtividades}
+              className="max-h-56"
+            />
           </div>
         )}
 
@@ -282,11 +286,22 @@ export function EventoModal({
 
         <div className="flex items-center justify-between pt-2">
           <div>
-            {eventoEditando && (
-              <Button type="button" variant="danger" onClick={excluir}>
-                Excluir
-              </Button>
-            )}
+            {eventoEditando &&
+              (confirmandoExclusao ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-red-600">Excluir este lançamento?</span>
+                  <Button type="button" variant="danger" onClick={excluir}>
+                    Sim, excluir
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => setConfirmandoExclusao(false)}>
+                    Não
+                  </Button>
+                </div>
+              ) : (
+                <Button type="button" variant="danger" onClick={() => setConfirmandoExclusao(true)}>
+                  Excluir
+                </Button>
+              ))}
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>

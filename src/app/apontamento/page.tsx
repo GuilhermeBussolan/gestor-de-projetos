@@ -3,30 +3,37 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { deleteDoc, doc, where } from "firebase/firestore";
-import { ChevronDown, ChevronUp, Upload } from "lucide-react";
+import { format } from "date-fns";
+import { CheckCheck, ChevronDown, ChevronUp, Upload } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
-import { KpiCard, PainelVazio } from "@/components/ui/KpiCard";
+import { KpisHoras } from "@/components/apontamento/KpisHoras";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { ImportarHorasRetroativasModal } from "@/components/importacao/ImportarHorasRetroativasModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatarHoras } from "@/lib/horas";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { STATUS_HORA_CONFIG, statusEfetivo } from "@/lib/statusHora";
-import { aprovarHora, confirmarRealizado, rejeitarHora } from "@/lib/aprovacaoHoras";
+import { aprovarHora, confirmarRealizado, confirmarRealizadosEmLote, rejeitarHora } from "@/lib/aprovacaoHoras";
 import {
   montarRelatorio,
   exportarRelatorioWord,
   exportarRelatorioPdf,
 } from "@/lib/relatorioApontamento";
 import { TIPO_BOX_CONFIG } from "@/lib/constants";
+import { idsFolhas } from "@/lib/escopo";
 import type { Cliente, EventoCalendario, Projeto, Recurso, StatusHora, TipoBox, Usuario } from "@/types";
 
 function formatarDataBR(iso: string) {
   return iso.split("-").reverse().join("/");
+}
+
+function dataHojeISO() {
+  return format(new Date(), "yyyy-MM-dd");
 }
 
 function LinhaHora({
@@ -52,7 +59,9 @@ function LinhaHora({
   const recurso = recursos.find((r) => r.id === ev.recursoId);
   const statusEv = statusEfetivo(ev);
   const cfg = STATUS_HORA_CONFIG[statusEv];
+  const folhasEscopo = idsFolhas(projeto?.escopoAtividades ?? []);
   const atividadesFeitas = (ev.atividadesRealizadas ?? [])
+    .filter((id) => folhasEscopo.has(id))
     .map((id) => projeto?.escopoAtividades?.find((a) => a.id === id)?.descricao)
     .filter((d): d is string => !!d);
   const temMotivo = statusEv === "rejeitado" && !!ev.motivoRejeicao;
@@ -153,6 +162,12 @@ function AbaPrevistas({
     [eventos]
   );
 
+  // Só o que ainda tende a virar hora aprovada (rejeitadas ficam de fora dos totais).
+  const eventosParaKpis = useMemo(
+    () => eventosPendentes.filter((e) => statusEfetivo(e) !== "rejeitado"),
+    [eventosPendentes]
+  );
+
   const projetosComPendencia = useMemo(() => {
     const ids = new Set(eventosPendentes.map((e) => e.projetoId));
     return projetos.filter((p) => ids.has(p.id));
@@ -171,10 +186,25 @@ function AbaPrevistas({
     });
   }, [eventosPendentes, filtroProjetoId, filtroStatus, filtroMes, ordenacao]);
 
-  async function excluirPendente(ev: EventoCalendario) {
-    if (!confirm("Excluir este lançamento? Ele ainda não foi aprovado — essa ação não pode ser desfeita.")) return;
-    await deleteDoc(doc(db, "eventosCalendario", ev.id));
-  }
+  const [acao, setAcao] = useState<{ tipo: "excluir"; ev: EventoCalendario } | { tipo: "confirmarTodos" } | null>(
+    null
+  );
+
+  // Só entram os avulsos meus, ainda "previstos", de hoje ou de dias que já passaram,
+  // dentro dos filtros atuais da lista.
+  const confirmaveisEmLote = useMemo(() => {
+    if (!souConsultor) return [];
+    const hoje = dataHojeISO();
+    return previstas.filter(
+      (e) =>
+        e.recursoId === usuario.recursoId &&
+        e.origem === "avulso" &&
+        statusEfetivo(e) === "previsto" &&
+        e.data <= hoje
+    );
+  }, [previstas, souConsultor, usuario.recursoId]);
+
+  const totalEmLote = confirmaveisEmLote.length;
 
   return (
     <div>
@@ -183,6 +213,8 @@ function AbaPrevistas({
           ? "Horas que você lançou no Calendário, aguardando sua confirmação ou a aprovação do coordenador."
           : "Horas que os consultores lançaram, ainda não aprovadas — aprovação fica na aba \"Aprovação de horas\"."}
       </p>
+
+      <KpisHoras eventos={eventosParaKpis} projetos={projetos} clientes={clientes} tipo="previstas" />
 
       <div className="mb-4 flex flex-wrap items-end gap-2.5">
         <FormRow label="Cliente / projeto">
@@ -239,6 +271,17 @@ function AbaPrevistas({
         )}
       </div>
 
+      {confirmaveisEmLote.length > 0 && (
+        <div className="mb-3 flex justify-end">
+          <Button
+            onClick={() => setAcao({ tipo: "confirmarTodos" })}
+            title="Confirma de uma vez todos os lançamentos previstos até hoje"
+          >
+            <CheckCheck size={16} /> Confirmar todos os realizados ({confirmaveisEmLote.length})
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3">
         {previstas.map((ev) => {
           const souDono = ev.recursoId === usuario.recursoId;
@@ -251,6 +294,7 @@ function AbaPrevistas({
               clientes={clientes}
               recursos={recursos}
               mostrarRecurso={!souConsultor}
+              colapsavel
             >
               {souConsultor && souDono && statusEv === "previsto" && ev.origem === "avulso" && (
                 <>
@@ -277,7 +321,7 @@ function AbaPrevistas({
                 <Button
                   variant="ghost"
                   className="text-red-600 hover:bg-red-50"
-                  onClick={() => excluirPendente(ev)}
+                  onClick={() => setAcao({ tipo: "excluir", ev })}
                 >
                   Excluir
                 </Button>
@@ -293,6 +337,26 @@ function AbaPrevistas({
           </p>
         )}
       </div>
+
+      <ConfirmDialog
+        open={acao?.tipo === "excluir"}
+        titulo="Excluir lançamento"
+        mensagem="Este lançamento ainda não foi aprovado. Ao excluir, essa ação não pode ser desfeita."
+        confirmarLabel="Excluir"
+        perigo
+        onConfirmar={async () => {
+          if (acao?.tipo === "excluir") await deleteDoc(doc(db, "eventosCalendario", acao.ev.id));
+        }}
+        onCancelar={() => setAcao(null)}
+      />
+      <ConfirmDialog
+        open={acao?.tipo === "confirmarTodos"}
+        titulo="Confirmar todos os realizados"
+        mensagem={`Confirmar ${totalEmLote} lançamento${totalEmLote === 1 ? "" : "s"} como realizado${totalEmLote === 1 ? "" : "s"}? ${totalEmLote === 1 ? "Ele segue" : "Eles seguem"} para a aprovação do coordenador.`}
+        confirmarLabel="Confirmar todos"
+        onConfirmar={() => confirmarRealizadosEmLote(confirmaveisEmLote.map((e) => e.id))}
+        onCancelar={() => setAcao(null)}
+      />
     </div>
   );
 }
@@ -407,7 +471,6 @@ function AbaAprovadas({
   const [filtroProjetoId, setFiltroProjetoId] = useState("");
   const [filtroMes, setFiltroMes] = useState("");
   const [ordenacao, setOrdenacao] = useState<"desc" | "asc">("desc");
-  const [kpiAberto, setKpiAberto] = useState<"horas" | "dias" | "projetos" | null>(null);
 
   const aprovadasTodas = useMemo(
     () =>
@@ -434,32 +497,6 @@ function AbaAprovadas({
     });
   }, [aprovadasTodas, filtroProjetoId, filtroMes, ordenacao]);
 
-  const totalHoras = aprovadasTodas.reduce((acc, e) => acc + e.totalHoras, 0);
-  const diasLancados = new Set(aprovadasTodas.map((e) => e.data)).size;
-  const projetosAtendidos = new Set(aprovadasTodas.map((e) => e.projetoId)).size;
-
-  const horasPorCliente = useMemo(() => {
-    const mapa = new Map<string, number>();
-    aprovadasTodas.forEach((e) => {
-      const projeto = projetos.find((p) => p.id === e.projetoId);
-      if (!projeto) return;
-      mapa.set(projeto.clienteId, (mapa.get(projeto.clienteId) ?? 0) + e.totalHoras);
-    });
-    return [...mapa.entries()]
-      .map(([clienteId, horas]) => ({
-        clienteId,
-        nome: nomeExibicaoCliente(clientes.find((c) => c.id === clienteId)),
-        horas,
-      }))
-      .sort((a, b) => b.horas - a.horas);
-  }, [aprovadasTodas, projetos, clientes]);
-
-  const horasPorDia = useMemo(() => {
-    const mapa = new Map<string, number>();
-    aprovadasTodas.forEach((e) => mapa.set(e.data, (mapa.get(e.data) ?? 0) + e.totalHoras));
-    return [...mapa.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  }, [aprovadasTodas]);
-
   const relatorio = useMemo(
     () => montarRelatorio(aprovadasTodas, recursos, projetos, clientes, recursoFiltro || undefined),
     [aprovadasTodas, recursos, projetos, clientes, recursoFiltro]
@@ -472,82 +509,7 @@ function AbaAprovadas({
         projeto.
       </p>
 
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <KpiCard
-          label="Total de horas"
-          valor={formatarHoras(totalHoras)}
-          nota="todas as horas aprovadas"
-          aberto={kpiAberto === "horas"}
-          onToggle={() => setKpiAberto((v) => (v === "horas" ? null : "horas"))}
-        >
-          <p className="mb-2 px-1 text-[11px] font-bold tracking-[.08em] text-brand-faint uppercase">
-            Horas aprovadas por cliente
-          </p>
-          <div className="max-h-64 space-y-0.5 overflow-y-auto">
-            {horasPorCliente.map((h) => (
-              <div
-                key={h.clienteId}
-                className="flex items-center justify-between gap-2 px-2 py-1.5 text-[12.5px] text-brand-navy-2"
-              >
-                <span className="truncate">{h.nome}</span>
-                <span className="shrink-0 font-bold">{formatarHoras(h.horas)}</span>
-              </div>
-            ))}
-            {horasPorCliente.length === 0 && <PainelVazio />}
-          </div>
-        </KpiCard>
-
-        <KpiCard
-          label="Dias com lançamento"
-          valor={String(diasLancados)}
-          nota="dias distintos com horas aprovadas"
-          aberto={kpiAberto === "dias"}
-          onToggle={() => setKpiAberto((v) => (v === "dias" ? null : "dias"))}
-        >
-          <p className="mb-2 px-1 text-[11px] font-bold tracking-[.08em] text-brand-faint uppercase">
-            Horas aprovadas por dia
-          </p>
-          <div className="max-h-64 space-y-0.5 overflow-y-auto">
-            {horasPorDia.map(([data, horas]) => (
-              <div
-                key={data}
-                className="flex items-center justify-between gap-2 px-2 py-1.5 text-[12.5px] text-brand-navy-2"
-              >
-                <span className="truncate">{formatarDataBR(data)}</span>
-                <span className="shrink-0 font-bold">{formatarHoras(horas)}</span>
-              </div>
-            ))}
-            {horasPorDia.length === 0 && <PainelVazio />}
-          </div>
-        </KpiCard>
-
-        <KpiCard
-          label="Projetos atendidos"
-          valor={String(projetosAtendidos)}
-          nota="projetos com horas aprovadas"
-          aberto={kpiAberto === "projetos"}
-          onToggle={() => setKpiAberto((v) => (v === "projetos" ? null : "projetos"))}
-        >
-          <p className="mb-2 px-1 text-[11px] font-bold tracking-[.08em] text-brand-faint uppercase">
-            Projetos atendidos
-          </p>
-          <div className="max-h-64 space-y-0.5 overflow-y-auto">
-            {projetosComAprovadas.map((p) => {
-              const cliente = nomeExibicaoCliente(clientes.find((c) => c.id === p.clienteId));
-              return (
-                <div
-                  key={p.id}
-                  className="flex items-center justify-between gap-2 px-2 py-1.5 text-[12.5px] text-brand-navy-2"
-                >
-                  <span className="truncate">{cliente}</span>
-                  <span className="shrink-0 text-[11px] text-brand-faint">{p.codigoProposta}</span>
-                </div>
-              );
-            })}
-            {projetosComAprovadas.length === 0 && <PainelVazio />}
-          </div>
-        </KpiCard>
-      </div>
+      <KpisHoras eventos={aprovadasTodas} projetos={projetos} clientes={clientes} tipo="aprovadas" />
 
       <div className="mb-4 flex flex-wrap items-end gap-2.5">
         <FormRow label="Cliente / projeto">
@@ -703,7 +665,8 @@ function ApontamentoPageContent() {
   const { data: eventos } = useCollection<EventoCalendario>(
     "eventosCalendario",
     souConsultor ? [where("recursoId", "==", meuRecursoId ?? "")] : [],
-    !souConsultor || !!meuRecursoId
+    !souConsultor || !!meuRecursoId,
+    [souConsultor, meuRecursoId]
   );
   const { data: projetos } = useCollection<Projeto>("projetos");
   const { data: clientes } = useCollection<Cliente>("clientes");
@@ -740,19 +703,21 @@ function ApontamentoPageContent() {
           Apontamento de horas
         </h1>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="w-28 shrink-0">
-            <Select
-              value={filtroBox}
-              onChange={(e) => setFiltroBox(e.target.value as "" | TipoBox)}
-            >
-              <option value="">Todos</option>
-              {(Object.keys(TIPO_BOX_CONFIG) as TipoBox[]).map((v) => (
-                <option key={v} value={v}>
-                  {v === "proprio" ? "Próprios" : "Terceiros"}
-                </option>
-              ))}
-            </Select>
-          </div>
+          {usuario.perfil === "administrador" && (
+            <div className="w-28 shrink-0">
+              <Select
+                value={filtroBox}
+                onChange={(e) => setFiltroBox(e.target.value as "" | TipoBox)}
+              >
+                <option value="">Todos</option>
+                {(Object.keys(TIPO_BOX_CONFIG) as TipoBox[]).map((v) => (
+                  <option key={v} value={v}>
+                    {v === "proprio" ? "Próprios" : "Terceiros"}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           {podeAprovar && (
             <Button
               variant="secondary"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { format } from "date-fns";
 import { deleteDoc, doc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { MessageCircle, SlidersHorizontal, X } from "lucide-react";
@@ -54,7 +55,8 @@ function DashboardPageContent() {
   const { data: eventos } = useCollection<EventoCalendario>(
     "eventosCalendario",
     souConsultor ? [where("recursoId", "==", meuRecursoId ?? "")] : [],
-    !souConsultor || !!meuRecursoId
+    !souConsultor || !!meuRecursoId,
+    [souConsultor, meuRecursoId]
   );
   const { data: recursos } = useCollection<Recurso>("recursos");
   const { data: tiposDocumento } = useCollection<TipoDocumento>("tiposDocumento", []);
@@ -125,7 +127,7 @@ function DashboardPageContent() {
   const andamentoMedio =
     percentuais.length > 0 ? percentuais.reduce((a, b) => a + b, 0) / percentuais.length : 0;
 
-  const mesAtual = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const mesAtual = useMemo(() => format(new Date(), "yyyy-MM"), []);
 
   const eventosDoMes = useMemo(
     () =>
@@ -611,9 +613,10 @@ function DashboardPageContent() {
           const mostrarHorasCoordenador =
             !souConsultor && (previstoCoordenador > 0 || horas.coordenador > 0);
           const termometroCfg = TERMOMETRO_CONFIG[termometroEfetivo(p)];
-          const abaDoProjeto = statusAbaProjeto(p, percentual);
-          const corIndicador =
-            abaDoProjeto === "a_iniciar" ? "#2f6fe4" : abaDoProjeto === "cancelados" ? "#8b94ad" : termometroCfg.text;
+          const statusCfg = ABA_STATUS_PROJETO_CONFIG[statusAbaProjeto(p, percentual)];
+          // Borda e tag seguem o status; o ponto só muda de cor se o termômetro pedir atenção/crítico.
+          const corIndicador = statusCfg.cor;
+          const corPonto = termometroEfetivo(p) === "normal" ? statusCfg.cor : termometroCfg.text;
 
           return (
             <div
@@ -627,21 +630,11 @@ function DashboardPageContent() {
                   <span
                     title={p.termometroObservacao?.texto ?? termometroCfg.label}
                     className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: corIndicador }}
+                    style={{ backgroundColor: corPonto }}
                   />
                   <p className="truncate text-[14px] leading-tight font-extrabold tracking-[-0.01em] text-brand-navy-2">
                     {nomeExibicaoCliente(cliente)}
                   </p>
-                  {p.status === "finalizado" && (
-                    <span className="shrink-0 rounded-full bg-brand-hover px-1.5 py-[1px] text-[9px] font-bold text-brand-faint">
-                      Finalizado
-                    </span>
-                  )}
-                  {p.status === "cancelado" && (
-                    <span className="shrink-0 rounded-full bg-[#fdeceb] px-1.5 py-[1px] text-[9px] font-bold text-[#b5392a]">
-                      Cancelado
-                    </span>
-                  )}
                 </div>
                 <p className="truncate text-[11px] text-brand-faint">
                   {p.codigoProposta} · {p.modulo}
@@ -652,7 +645,9 @@ function DashboardPageContent() {
                   className="text-[10px] text-brand-faint"
                 />
                 {p.status === "cancelado" && p.cancelamento ? (
-                  <p className="mt-1 truncate text-[10.5px] text-[#b5392a]">{p.cancelamento.motivo}</p>
+                  <p className="mt-1 truncate text-[10.5px]" style={{ color: statusCfg.texto }}>
+                    {p.cancelamento.motivo}
+                  </p>
                 ) : (
                   p.termometroObservacao && (
                     <p className="mt-1 truncate text-[10.5px]" style={{ color: termometroCfg.text }}>

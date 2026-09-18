@@ -36,7 +36,8 @@ function CalendarioPageContent() {
   const { data: eventos } = useCollection<EventoCalendario>(
     "eventosCalendario",
     souConsultor ? [where("recursoId", "==", meuRecursoId ?? "")] : [],
-    !souConsultor || !!meuRecursoId
+    !souConsultor || !!meuRecursoId,
+    [souConsultor, meuRecursoId]
   );
   const { data: projetos } = useCollection<Projeto>("projetos");
   const { data: clientes } = useCollection<Cliente>("clientes");
@@ -177,13 +178,24 @@ function CalendarioPageContent() {
                     >
                       {format(d, "d")}
                     </span>
-                    <button
-                      onClick={() => abrirNovo(diaISO, "08:00", "12:00")}
-                      className="rounded p-0.5 text-brand-faint opacity-0 group-hover:opacity-100 hover:bg-brand-accent-soft hover:text-brand-accent"
-                      aria-label="Novo lançamento"
-                    >
-                      <Plus size={13} />
-                    </button>
+                    <div className="flex gap-0.5">
+                      <button
+                        onClick={() => abrirNovo(diaISO, "08:00", "12:00")}
+                        className="rounded px-1 text-[10px] font-bold text-brand-faint opacity-60 group-hover:opacity-100 hover:bg-brand-accent-soft hover:text-brand-accent"
+                        aria-label="Novo lançamento pela manhã (08h–12h)"
+                        title="Manhã · 08h–12h"
+                      >
+                        +M
+                      </button>
+                      <button
+                        onClick={() => abrirNovo(diaISO, "13:00", "17:00")}
+                        className="rounded px-1 text-[10px] font-bold text-brand-faint opacity-60 group-hover:opacity-100 hover:bg-brand-accent-soft hover:text-brand-accent"
+                        aria-label="Novo lançamento à tarde (13h–17h)"
+                        title="Tarde · 13h–17h"
+                      >
+                        +T
+                      </button>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-0.5 overflow-y-auto">
                     {eventosDia.map((ev) => {

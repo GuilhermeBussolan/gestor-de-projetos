@@ -144,6 +144,8 @@ export interface TermometroObservacao {
 export interface EscopoAtividade {
   id: string;
   descricao: string;
+  /** Profundidade na hierarquia pai/filho (0 = raiz). Ausente = 0. Os filhos de uma atividade são as seguintes com nível maior. */
+  nivel?: number;
 }
 
 export interface Escopo {

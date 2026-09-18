@@ -86,11 +86,12 @@ export const TERMOMETRO_CONFIG: Record<Termometro, { label: string; bg: string; 
 
 export const TERMOMETRO_ORDEM: Termometro[] = ["normal", "atencao", "critico"];
 
-export const ABA_STATUS_PROJETO_CONFIG: Record<AbaStatusProjeto, { label: string }> = {
-  a_iniciar: { label: "A iniciar" },
-  em_andamento: { label: "Em andamento" },
-  concluidos: { label: "Concluídos" },
-  cancelados: { label: "Cancelados" },
+/** cor = borda/ponto do card; texto = texto de apoio (ex.: motivo do cancelamento). */
+export const ABA_STATUS_PROJETO_CONFIG: Record<AbaStatusProjeto, { label: string; cor: string; texto: string }> = {
+  a_iniciar: { label: "A iniciar", cor: "#2f6fe4", texto: "#2456b8" },
+  em_andamento: { label: "Em andamento", cor: "#e08a1e", texto: "#a4650d" },
+  concluidos: { label: "Concluídos", cor: "#15754c", texto: "#15754c" },
+  cancelados: { label: "Cancelados", cor: "#8b94ad", texto: "#6a7594" },
 };
 
 export const ABA_STATUS_PROJETO_ORDEM: AbaStatusProjeto[] = [

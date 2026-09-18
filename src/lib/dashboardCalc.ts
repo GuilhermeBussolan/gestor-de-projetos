@@ -68,6 +68,26 @@ export function calcularHorasRealizadas(
 }
 
 /**
+ * Datas (YYYY-MM-DD, únicas e em ordem) em que cada atividade do escopo foi
+ * apontada em lançamentos aprovados do projeto.
+ */
+export function calcularDatasAtividades(
+  projetoId: string,
+  eventos: EventoCalendario[]
+): Map<string, string[]> {
+  const mapa = new Map<string, Set<string>>();
+  for (const ev of eventos) {
+    if (ev.projetoId !== projetoId) continue;
+    if (statusEfetivo(ev) !== "aprovado") continue;
+    for (const id of ev.atividadesRealizadas ?? []) {
+      if (!mapa.has(id)) mapa.set(id, new Set());
+      mapa.get(id)!.add(ev.data);
+    }
+  }
+  return new Map([...mapa.entries()].map(([id, datas]) => [id, [...datas].sort()]));
+}
+
+/**
  * IDs das atividades do escopo já marcadas como feitas em algum apontamento
  * aprovado do projeto — a mesma régua de "aprovado" usada nas horas.
  */

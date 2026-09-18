@@ -5,6 +5,7 @@ import { collection, doc, getDocs, query, updateDoc, where, writeBatch } from "f
 import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { AtividadesEscopoChecklist } from "@/components/projetos/AtividadesEscopoChecklist";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { calcularTotalHoras, formatarHoras } from "@/lib/horas";
@@ -51,10 +52,6 @@ function OcorrenciaForm({
 
   const projetoSelecionado = projetos.find((p) => p.id === projetoId);
   const atividadesEscopo = projetoSelecionado?.escopoAtividades ?? [];
-
-  function toggleAtividade(id: string) {
-    setAtividadesMarcadas((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
-  }
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
@@ -186,18 +183,11 @@ function OcorrenciaForm({
               <p className="mb-1 text-sm font-medium text-brand-navy-2">
                 Atividades do escopo realizadas hoje (opcional)
               </p>
-              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-brand-border p-2">
-                {atividadesEscopo.map((a) => (
-                  <label key={a.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={atividadesMarcadas.includes(a.id)}
-                      onChange={() => toggleAtividade(a.id)}
-                    />
-                    {a.descricao}
-                  </label>
-                ))}
-              </div>
+              <AtividadesEscopoChecklist
+                atividades={atividadesEscopo}
+                marcadas={atividadesMarcadas}
+                onChange={setAtividadesMarcadas}
+              />
             </div>
           )}
         </>

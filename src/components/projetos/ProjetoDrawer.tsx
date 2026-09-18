@@ -16,7 +16,13 @@ import {
   TIPO_FATURAMENTO_CONFIG,
   TIPO_RECURSO_CONFIG,
 } from "@/lib/constants";
-import { calcularAtividadesConcluidas, calcularHorasRealizadas, calcularPercentualProjeto } from "@/lib/dashboardCalc";
+import {
+  calcularAtividadesConcluidas,
+  calcularDatasAtividades,
+  calcularHorasRealizadas,
+  calcularPercentualProjeto,
+} from "@/lib/dashboardCalc";
+import { contarFolhas, formatarDataCurta, nivelAtividade, numerarAtividades, temFilhos } from "@/lib/escopo";
 import { termometroEfetivo } from "@/lib/termometro";
 import type { ContatoProjeto, EventoCalendario, Projeto, Recurso, StatusDocumento } from "@/types";
 
@@ -98,6 +104,9 @@ export function ProjetoDrawerConteudo({
   const percentual = calcularPercentualProjeto(projeto.documentos);
   const horas = calcularHorasRealizadas(projeto.id, eventos, recursos);
   const atividadesConcluidas = calcularAtividadesConcluidas(projeto.id, eventos);
+  const datasAtividades = calcularDatasAtividades(projeto.id, eventos);
+  const folhasEscopo = contarFolhas(projeto.escopoAtividades ?? [], atividadesConcluidas);
+  const numeracaoEscopo = numerarAtividades(projeto.escopoAtividades ?? []);
   const previstoConsultor = projeto.horasPrevistasConsultor ?? 0;
   const previstoCoordenador = projeto.horasPrevistasCoordenador ?? 0;
   const finalizado = projeto.status === "finalizado";
@@ -272,7 +281,7 @@ export function ProjetoDrawerConteudo({
                 Escopo do projeto — {projeto.escopoNome}
               </span>
               <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-bold text-brand-faint">
-                {atividadesConcluidas.size}/{projeto.escopoAtividades.length} concluídas
+                {folhasEscopo.feitas}/{folhasEscopo.total} concluídas
                 {escopoAberto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </span>
             </button>
@@ -280,25 +289,35 @@ export function ProjetoDrawerConteudo({
               <div
                 className="h-full rounded-full bg-[#1f9a63]"
                 style={{
-                  width: `${projeto.escopoAtividades.length > 0 ? (atividadesConcluidas.size / projeto.escopoAtividades.length) * 100 : 0}%`,
+                  width: `${folhasEscopo.total > 0 ? (folhasEscopo.feitas / folhasEscopo.total) * 100 : 0}%`,
                 }}
               />
             </div>
             {escopoAberto && (
-              <div className="max-h-72 overflow-y-auto rounded-xl border border-brand-border bg-white p-4 shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
-                <ol className="list-decimal space-y-1 pl-4 text-[12.5px]">
-                  {projeto.escopoAtividades.map((a) => {
-                    const feita = atividadesConcluidas.has(a.id);
-                    return (
-                      <li key={a.id} className={feita ? "text-[#15754c]" : "text-brand-muted"}>
-                        <span className={feita ? "line-through decoration-[#15754c]/50" : ""}>
+              <div className="max-h-72 space-y-1 overflow-y-auto rounded-xl border border-brand-border bg-white p-4 text-[12.5px] shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
+                {projeto.escopoAtividades.map((a, i) => {
+                  const feita = atividadesConcluidas.has(a.id);
+                  const pai = temFilhos(projeto.escopoAtividades!, i);
+                  const feitoEm = datasAtividades.get(a.id) ?? [];
+                  return (
+                    <div key={a.id} style={{ paddingLeft: nivelAtividade(a) * 18 }}>
+                      <p className={feita ? "text-[#15754c]" : "text-brand-muted"}>
+                        <span className="mr-1.5 text-[11px] text-brand-faint">{numeracaoEscopo[i]}</span>
+                        <span
+                          className={`${pai ? "font-bold" : ""} ${feita && !pai ? "line-through decoration-[#15754c]/50" : ""}`}
+                        >
                           {a.descricao}
                         </span>
                         {feita && <CheckCircle2 size={12} className="ml-1 -mt-0.5 inline align-middle" />}
-                      </li>
-                    );
-                  })}
-                </ol>
+                      </p>
+                      {feitoEm.length > 0 && (
+                        <p className="text-[11px] text-[#15754c]">
+                          Feito em: {feitoEm.map(formatarDataCurta).join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
