@@ -1,4 +1,4 @@
-import type { StatusDocumento, StatusParcela, TipoFaturamento, TipoRecurso } from "@/types";
+import type { StatusDocumento, StatusParcela, TipoBox, TipoFaturamento, TipoRecurso } from "@/types";
 
 export const STATUS_DOCUMENTO_CONFIG: Record<
   StatusDocumento,
@@ -63,6 +63,11 @@ export const TIPO_RECURSO_CONFIG: Record<TipoRecurso, { label: string }> = {
   coordenador: { label: "Coordenador" },
   consultor_funcional: { label: "Consultor Funcional" },
   consultor_tecnico: { label: "Consultor Técnico" },
+};
+
+export const TIPO_BOX_CONFIG: Record<TipoBox, { label: string }> = {
+  proprio: { label: "BOX – Próprio" },
+  terceiro: { label: "BOX – Terceiro" },
 };
 
 export const DOCUMENTOS_PADRAO: { codigo: string; descricao: string; pesoIndividual: number }[] = [

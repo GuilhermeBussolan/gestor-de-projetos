@@ -11,13 +11,36 @@ export interface Usuario {
 
 export type TipoRecurso = "coordenador" | "consultor_funcional" | "consultor_tecnico";
 
+export type TipoBox = "proprio" | "terceiro";
+
 export interface Recurso {
   id: string;
   tipo: TipoRecurso;
   nomeCompleto: string;
   codigo: string;
   valorHora: number;
+  /** BOX próprio (colaborador direto) ou terceiro (alocado via empresa parceira). Ausente = "proprio". */
+  tipoBox?: TipoBox;
+  /** Obrigatório quando tipoBox é "terceiro" — id da empresa parceira em /parceiras. */
+  parceiraId?: string | null;
   createdAt: number;
+}
+
+export interface ContatoParceira {
+  nome: string;
+  email?: string;
+  telefone?: string;
+}
+
+export interface EmpresaParceira {
+  id: string;
+  razaoSocial: string;
+  nomeFantasia: string;
+  cnpj: string;
+  /** Até 2 contatos. */
+  contatos: ContatoParceira[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export const MODULOS = ["QRH", "KPH", "MNH", "MNF", "MDH", "SGH"] as const;

@@ -10,6 +10,7 @@ import {
   Clock,
   FileText,
   FolderKanban,
+  Handshake,
   LayoutDashboard,
   ListChecks,
   Menu,
@@ -30,6 +31,7 @@ interface NavItem {
 const CADASTROS: NavItem[] = [
   { href: "/clientes", label: "Clientes", icon: Building2, perfis: ["administrador"] },
   { href: "/recursos", label: "Recursos", icon: Users, perfis: ["administrador"] },
+  { href: "/parceiras", label: "Parceiras", icon: Handshake, perfis: ["administrador"] },
   { href: "/documentos", label: "Documentos", icon: FileText, perfis: ["administrador"] },
   { href: "/escopos", label: "Escopos", icon: ListChecks, perfis: ["administrador"] },
 ];

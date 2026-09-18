@@ -22,7 +22,8 @@ import {
   exportarRelatorioWord,
   exportarRelatorioPdf,
 } from "@/lib/relatorioApontamento";
-import type { Cliente, EventoCalendario, Projeto, Recurso, StatusHora, Usuario } from "@/types";
+import { TIPO_BOX_CONFIG } from "@/lib/constants";
+import type { Cliente, EventoCalendario, Projeto, Recurso, StatusHora, TipoBox, Usuario } from "@/types";
 
 function formatarDataBR(iso: string) {
   return iso.split("-").reverse().join("/");
@@ -711,6 +712,15 @@ function ApontamentoPageContent() {
   const abas = ABAS_BASE.filter((a) => a.id !== "aprovacao" || podeAprovar);
   const [aba, setAba] = useState<AbaId>("previstas");
   const [importarAberto, setImportarAberto] = useState(false);
+  const [filtroBox, setFiltroBox] = useState<"" | TipoBox>("");
+
+  const eventosFiltrados = useMemo(() => {
+    if (!filtroBox) return eventos;
+    return eventos.filter((e) => {
+      const recurso = recursos.find((r) => r.id === e.recursoId);
+      return (recurso?.tipoBox ?? "proprio") === filtroBox;
+    });
+  }, [eventos, recursos, filtroBox]);
 
   if (souConsultor && !meuRecursoId) {
     return (
@@ -725,15 +735,34 @@ function ApontamentoPageContent() {
 
   return (
     <div>
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">
           Apontamento de horas
         </h1>
-        {podeAprovar && (
-          <Button variant="secondary" onClick={() => setImportarAberto(true)}>
-            <Upload size={15} /> Importar horas retroativas
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="w-28 shrink-0">
+            <Select
+              value={filtroBox}
+              onChange={(e) => setFiltroBox(e.target.value as "" | TipoBox)}
+            >
+              <option value="">Todos</option>
+              {(Object.keys(TIPO_BOX_CONFIG) as TipoBox[]).map((v) => (
+                <option key={v} value={v}>
+                  {v === "proprio" ? "Próprios" : "Terceiros"}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {podeAprovar && (
+            <Button
+              variant="secondary"
+              onClick={() => setImportarAberto(true)}
+              className="shrink-0 whitespace-nowrap"
+            >
+              <Upload size={15} /> Importar horas retroativas
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="mb-6 inline-flex gap-1 rounded-[10px] bg-brand-accent-soft/60 p-[3px]">
@@ -755,7 +784,7 @@ function ApontamentoPageContent() {
       {aba === "previstas" && (
         <AbaPrevistas
           usuario={usuario}
-          eventos={eventos}
+          eventos={eventosFiltrados}
           projetos={projetos}
           clientes={clientes}
           recursos={recursos}
@@ -764,7 +793,7 @@ function ApontamentoPageContent() {
       {aba === "aprovacao" && podeAprovar && (
         <AbaAprovacao
           usuario={usuario}
-          eventos={eventos}
+          eventos={eventosFiltrados}
           projetos={projetos}
           clientes={clientes}
           recursos={recursos}
@@ -773,7 +802,7 @@ function ApontamentoPageContent() {
       {aba === "aprovadas" && (
         <AbaAprovadas
           usuario={usuario}
-          eventos={eventos}
+          eventos={eventosFiltrados}
           projetos={projetos}
           clientes={clientes}
           recursos={recursos}

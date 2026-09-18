@@ -59,6 +59,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /parceiras/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     match /tiposDocumento/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();

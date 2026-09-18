@@ -9,26 +9,32 @@ import { CadastrosTabs } from "@/components/layout/CadastrosTabs";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormRow, Input, Select } from "@/components/ui/Field";
-import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import type { Recurso, TipoRecurso } from "@/types";
+import { TIPO_BOX_CONFIG, TIPO_RECURSO_CONFIG } from "@/lib/constants";
+import { nomeExibicaoParceira } from "@/lib/parceira";
+import type { EmpresaParceira, Recurso, TipoBox, TipoRecurso } from "@/types";
 
 const RECURSO_VAZIO = {
   tipo: "consultor_funcional" as TipoRecurso,
   nomeCompleto: "",
   codigo: "",
   valorHora: "",
+  tipoBox: "proprio" as TipoBox,
+  parceiraId: "",
 };
 
 function RecursosPageContent() {
   const { data: recursos, loading } = useCollection<Recurso>("recursos");
+  const { data: parceiras } = useCollection<EmpresaParceira>("parceiras");
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Recurso | null>(null);
   const [form, setForm] = useState(RECURSO_VAZIO);
+  const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
   function abrirNovo() {
     setEditando(null);
     setForm(RECURSO_VAZIO);
+    setErro("");
     setModalAberto(true);
   }
 
@@ -39,21 +45,39 @@ function RecursosPageContent() {
       nomeCompleto: r.nomeCompleto,
       codigo: r.codigo,
       valorHora: String(r.valorHora),
+      tipoBox: r.tipoBox ?? "proprio",
+      parceiraId: r.parceiraId ?? "",
     });
+    setErro("");
     setModalAberto(true);
   }
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
+    setErro("");
+    if (form.tipoBox === "terceiro" && !form.parceiraId) {
+      setErro("Selecione a empresa parceira para um recurso BOX Terceiro.");
+      return;
+    }
     setSalvando(true);
     try {
-      const dados = { ...form, valorHora: Number(form.valorHora) || 0 };
+      const dados = {
+        tipo: form.tipo,
+        nomeCompleto: form.nomeCompleto,
+        codigo: form.codigo,
+        valorHora: Number(form.valorHora) || 0,
+        tipoBox: form.tipoBox,
+        parceiraId: form.tipoBox === "terceiro" ? form.parceiraId : null,
+      };
       if (editando) {
         await updateDoc(doc(db, "recursos", editando.id), dados);
       } else {
         await addDoc(collection(db, "recursos"), { ...dados, createdAt: Date.now() });
       }
       setModalAberto(false);
+    } catch (err) {
+      console.error("Falha ao salvar recurso:", err);
+      setErro("Não foi possível salvar. Tente novamente.");
     } finally {
       setSalvando(false);
     }
@@ -80,6 +104,7 @@ function RecursosPageContent() {
               <th className="px-[18px] py-3.5">Nome completo</th>
               <th className="px-[18px] py-3.5">Código</th>
               <th className="px-[18px] py-3.5">Valor/hora</th>
+              <th className="px-[18px] py-3.5">BOX</th>
               <th className="px-[18px] py-3.5" />
             </tr>
           </thead>
@@ -91,6 +116,11 @@ function RecursosPageContent() {
                 <td className="px-[18px] py-[15px] text-brand-muted">{r.codigo}</td>
                 <td className="px-[18px] py-[15px] text-brand-navy-2">
                   {r.valorHora.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                </td>
+                <td className="px-[18px] py-[15px] text-brand-muted">
+                  {(r.tipoBox ?? "proprio") === "terceiro"
+                    ? `Terceiro — ${nomeExibicaoParceira(parceiras.find((p) => p.id === r.parceiraId))}`
+                    : "Próprio"}
                 </td>
                 <td className="px-[18px] py-[15px] text-right">
                   <button
@@ -107,7 +137,7 @@ function RecursosPageContent() {
             ))}
             {!loading && recursos.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-brand-faint">
+                <td colSpan={6} className="px-4 py-8 text-center text-brand-faint">
                   Nenhum recurso cadastrado.
                 </td>
               </tr>
@@ -159,6 +189,48 @@ function RecursosPageContent() {
               required
             />
           </FormRow>
+
+          <div>
+            <p className="mb-1.5 text-xs font-semibold text-brand-muted">BOX</p>
+            <div className="flex gap-4">
+              {(Object.keys(TIPO_BOX_CONFIG) as TipoBox[]).map((valor) => (
+                <label key={valor} className="flex items-center gap-2 text-[13.5px] text-brand-navy-2">
+                  <input
+                    type="radio"
+                    name="tipoBox"
+                    checked={form.tipoBox === valor}
+                    onChange={() => setForm({ ...form, tipoBox: valor })}
+                  />
+                  {TIPO_BOX_CONFIG[valor].label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {form.tipoBox === "terceiro" && (
+            <FormRow label="Empresa parceira">
+              <Select
+                value={form.parceiraId}
+                onChange={(e) => setForm({ ...form, parceiraId: e.target.value })}
+                required
+              >
+                <option value="">Selecione...</option>
+                {parceiras.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {nomeExibicaoParceira(p)}
+                  </option>
+                ))}
+              </Select>
+              {parceiras.length === 0 && (
+                <p className="mt-1 text-xs text-amber-600">
+                  Nenhuma empresa parceira cadastrada — cadastre em Cadastros → Parceiras.
+                </p>
+              )}
+            </FormRow>
+          )}
+
+          {erro && <p className="text-sm font-medium text-red-600">{erro}</p>}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setModalAberto(false)}>
               Cancelar
