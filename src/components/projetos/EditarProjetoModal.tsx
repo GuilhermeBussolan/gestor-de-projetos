@@ -9,8 +9,109 @@ import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { EnvolvidosFields } from "@/components/projetos/EnvolvidosFields";
 import { EscopoSelector } from "@/components/projetos/EscopoSelector";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
+import { useAuth } from "@/contexts/AuthContext";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
 import { MODULOS, TIPOS_ATENDIMENTO, type EnvolvidoChave, type Escopo, type EscopoAtividade, type Financeiro, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+
+function formatarDataHoraCurta(timestamp: number): string {
+  return new Date(timestamp).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function CancelarProjetoSecao({ projeto, onCancelado }: { projeto: Projeto; onCancelado: () => void }) {
+  const { usuario } = useAuth();
+  const [confirmando, setConfirmando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  if (projeto.status === "cancelado") {
+    return (
+      <div className="rounded-xl border border-[#f5c6bd] bg-[#fdeceb] p-4">
+        <p className="text-sm font-bold text-[#b5392a]">Projeto cancelado</p>
+        {projeto.cancelamento && (
+          <p className="mt-1 text-[12.5px] text-[#b5392a]">
+            <span className="opacity-75">
+              {formatarDataHoraCurta(projeto.cancelamento.criadoEm)} · {projeto.cancelamento.usuarioNome}:
+            </span>{" "}
+            {projeto.cancelamento.motivo}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  async function confirmarCancelamento() {
+    if (!usuario) return;
+    if (!motivo.trim()) {
+      setErro("Informe o motivo do cancelamento.");
+      return;
+    }
+    setSalvando(true);
+    try {
+      await updateDoc(doc(db, "projetos", projeto.id), {
+        status: "cancelado",
+        cancelamento: {
+          motivo: motivo.trim(),
+          usuarioNome: usuario.nomeCompleto,
+          criadoEm: Date.now(),
+        },
+        updatedAt: serverTimestamp(),
+      });
+      onCancelado();
+    } catch (err) {
+      console.error("Falha ao cancelar projeto:", err);
+      setErro("Não foi possível cancelar. Tente novamente.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50/40 p-4">
+      <p className="mb-2 text-sm font-bold text-[#b5392a]">Cancelar projeto</p>
+      {!confirmando ? (
+        <Button type="button" variant="danger" onClick={() => setConfirmando(true)}>
+          Cancelar projeto
+        </Button>
+      ) : (
+        <div className="space-y-3">
+          <FormRow label="Motivo do cancelamento (obrigatório)">
+            <Textarea
+              rows={3}
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              maxLength={500}
+              required
+              autoFocus
+            />
+          </FormRow>
+          {erro && <p className="text-sm font-medium text-red-600">{erro}</p>}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setConfirmando(false);
+                setMotivo("");
+                setErro("");
+              }}
+            >
+              Voltar
+            </Button>
+            <Button type="button" variant="danger" onClick={confirmarCancelamento} disabled={salvando}>
+              {salvando ? "Cancelando..." : "Confirmar cancelamento"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function financeiroComStatusPreservado(anterior: Financeiro, novo: Financeiro): Financeiro {
   if (
@@ -335,6 +436,8 @@ function EditarProjetoForm({
       </div>
 
       <EnvolvidosFields envolvidos={envolvidos} onChange={setEnvolvidos} />
+
+      <CancelarProjetoSecao projeto={projeto} onCancelado={onClose} />
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>

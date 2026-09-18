@@ -1,4 +1,12 @@
-import type { StatusDocumento, StatusParcela, TipoBox, TipoFaturamento, TipoRecurso } from "@/types";
+import type {
+  AbaStatusProjeto,
+  StatusDocumento,
+  StatusParcela,
+  Termometro,
+  TipoBox,
+  TipoFaturamento,
+  TipoRecurso,
+} from "@/types";
 
 export const STATUS_DOCUMENTO_CONFIG: Record<
   StatusDocumento,
@@ -69,6 +77,28 @@ export const TIPO_BOX_CONFIG: Record<TipoBox, { label: string }> = {
   proprio: { label: "BOX – Próprio" },
   terceiro: { label: "BOX – Terceiro" },
 };
+
+export const TERMOMETRO_CONFIG: Record<Termometro, { label: string; bg: string; text: string }> = {
+  normal: { label: "Normal", bg: "#e3f5ea", text: "#15754c" },
+  atencao: { label: "Atenção", bg: "#fff2de", text: "#a4650d" },
+  critico: { label: "Crítico", bg: "#fdeceb", text: "#b5392a" },
+};
+
+export const TERMOMETRO_ORDEM: Termometro[] = ["normal", "atencao", "critico"];
+
+export const ABA_STATUS_PROJETO_CONFIG: Record<AbaStatusProjeto, { label: string }> = {
+  a_iniciar: { label: "A iniciar" },
+  em_andamento: { label: "Em andamento" },
+  concluidos: { label: "Concluídos" },
+  cancelados: { label: "Cancelados" },
+};
+
+export const ABA_STATUS_PROJETO_ORDEM: AbaStatusProjeto[] = [
+  "a_iniciar",
+  "em_andamento",
+  "concluidos",
+  "cancelados",
+];
 
 export const DOCUMENTOS_PADRAO: { codigo: string; descricao: string; pesoIndividual: number }[] = [
   { codigo: "MIT024", descricao: "KICK-OFF", pesoIndividual: 5 },

@@ -8,6 +8,7 @@ import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { CadastrosTabs } from "@/components/layout/CadastrosTabs";
 import { Button } from "@/components/ui/Button";
 import { ImportarEscopoModal } from "@/components/importacao/ImportarEscopoModal";
+import { EscopoFormModal } from "@/components/escopos/EscopoFormModal";
 import { Upload, ChevronDown, ChevronUp } from "lucide-react";
 import type { Escopo } from "@/types";
 
@@ -15,6 +16,7 @@ function EscoposPageContent() {
   const { data: escopos, loading } = useCollection<Escopo>("escopos");
   const [importarAberto, setImportarAberto] = useState(false);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
+  const [editando, setEditando] = useState<Escopo | "novo" | null>(null);
 
   async function excluir(escopo: Escopo) {
     if (
@@ -31,9 +33,12 @@ function EscoposPageContent() {
       <CadastrosTabs />
       <div className="mb-5 flex items-center justify-between">
         <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Escopos</h1>
-        <Button variant="secondary" onClick={() => setImportarAberto(true)}>
-          <Upload size={15} /> Importar escopo
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setImportarAberto(true)}>
+            <Upload size={15} /> Importar escopo
+          </Button>
+          <Button onClick={() => setEditando("novo")}>+ Novo escopo</Button>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
@@ -62,6 +67,9 @@ function EscoposPageContent() {
                       >
                         {expandido ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                         {expandido ? "Ocultar" : "Ver atividades"}
+                      </button>
+                      <button onClick={() => setEditando(e)} className="mr-3 text-brand-accent hover:underline">
+                        Editar
                       </button>
                       <button onClick={() => excluir(e)} className="text-red-600 hover:underline">
                         Excluir
@@ -94,6 +102,12 @@ function EscoposPageContent() {
       </div>
 
       <ImportarEscopoModal open={importarAberto} onClose={() => setImportarAberto(false)} />
+
+      <EscopoFormModal
+        open={editando !== null}
+        escopo={editando === "novo" ? null : editando}
+        onClose={() => setEditando(null)}
+      />
     </div>
   );
 }

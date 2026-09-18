@@ -13,12 +13,15 @@ import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import { ProjetoDrawerConteudo } from "@/components/projetos/ProjetoDrawer";
 import { ProjetoFormModal } from "@/components/projetos/ProjetoFormModal";
 import { EditarProjetoModal } from "@/components/projetos/EditarProjetoModal";
+import { AlterarTermometroModal } from "@/components/projetos/AlterarTermometroModal";
 import { ContatoModal } from "@/components/dashboard/ContatoModal";
 import { ImportarProjetosModal } from "@/components/importacao/ImportarProjetosModal";
 import { Upload } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { calcularPercentualProjeto } from "@/lib/dashboardCalc";
+import { TERMOMETRO_CONFIG } from "@/lib/constants";
+import { termometroEfetivo } from "@/lib/termometro";
 import { MODULOS, TIPOS_ATENDIMENTO } from "@/types";
 import type { Cliente, Escopo, EventoCalendario, Projeto, Recurso, TipoDocumento } from "@/types";
 
@@ -38,6 +41,7 @@ function ProjetosPageContent() {
   const [editando, setEditando] = useState<Projeto | null>(null);
   const [detalheId, setDetalheId] = useState<string | null>(destaqueId);
   const [contatoProjeto, setContatoProjeto] = useState<Projeto | null>(null);
+  const [alterandoTermometro, setAlterandoTermometro] = useState<Projeto | null>(null);
   const [busca, setBusca] = useState("");
   const [filtroModulo, setFiltroModulo] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
@@ -113,6 +117,9 @@ function ProjetosPageContent() {
             <thead>
               <tr className="bg-brand-hover">
                 <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+                  Termômetro
+                </th>
+                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
                   Cliente
                 </th>
                 <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
@@ -140,6 +147,7 @@ function ProjetosPageContent() {
                 const cliente = clientes.find((c) => c.id === p.clienteId);
                 const coordenador = recursos.find((r) => r.id === p.coordenadorId);
                 const percentual = calcularPercentualProjeto(p.documentos);
+                const termometroCfg = TERMOMETRO_CONFIG[termometroEfetivo(p)];
                 return (
                   <tr
                     key={p.id}
@@ -148,6 +156,13 @@ function ProjetosPageContent() {
                       detalheId === p.id ? "bg-brand-accent-soft/40" : ""
                     }`}
                   >
+                    <td className="px-[18px] py-[15px]">
+                      <span
+                        title={termometroCfg.label}
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: termometroCfg.text }}
+                      />
+                    </td>
                     <td className="px-[18px] py-[15px] font-bold text-brand-navy-2">
                       <div className="flex items-center gap-1.5">
                         {nomeExibicaoCliente(cliente)}
@@ -193,7 +208,7 @@ function ProjetosPageContent() {
               })}
               {projetosFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-brand-faint">
+                  <td colSpan={8} className="px-4 py-10 text-center text-brand-faint">
                     Nenhum projeto encontrado.
                   </td>
                 </tr>
@@ -219,6 +234,7 @@ function ProjetosPageContent() {
             onExcluir={() => excluir(projetoDetalhe)}
             onClose={() => setDetalheId(null)}
             onRegistrarContato={() => setContatoProjeto(projetoDetalhe)}
+            onAlterarTermometro={() => setAlterandoTermometro(projetoDetalhe)}
           />
         )}
       </TelaCheia>
@@ -228,6 +244,15 @@ function ProjetosPageContent() {
         cliente={clientes.find((c) => c.id === contatoProjeto?.clienteId)}
         onClose={() => setContatoProjeto(null)}
       />
+
+      {usuario && (
+        <AlterarTermometroModal
+          key={alterandoTermometro?.id}
+          projeto={alterandoTermometro}
+          usuario={usuario}
+          onClose={() => setAlterandoTermometro(null)}
+        />
+      )}
 
       <ProjetoFormModal
         open={modalNovoAberto}

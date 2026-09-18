@@ -122,7 +122,24 @@ export interface ContatoFaturamento {
   memo?: string;
 }
 
-export type StatusProjeto = "ativo" | "finalizado";
+export type StatusProjeto = "ativo" | "finalizado" | "cancelado";
+
+/** Classificação por andamento, usada nas abas do dashboard. */
+export type AbaStatusProjeto = "a_iniciar" | "em_andamento" | "concluidos" | "cancelados";
+
+export interface CancelamentoProjeto {
+  motivo: string;
+  usuarioNome: string;
+  criadoEm: number;
+}
+
+export type Termometro = "normal" | "atencao" | "critico";
+
+export interface TermometroObservacao {
+  texto: string;
+  usuarioNome: string;
+  criadoEm: number;
+}
 
 export interface EscopoAtividade {
   id: string;
@@ -163,6 +180,10 @@ export interface Projeto {
   escopoNome?: string | null;
   escopoAtividades?: EscopoAtividade[] | null;
   principaisEnvolvidos?: EnvolvidoChave[] | null;
+  /** Ausente = "normal". Só admin/coordenador altera. */
+  termometro?: Termometro | null;
+  termometroObservacao?: TermometroObservacao | null;
+  cancelamento?: CancelamentoProjeto | null;
   ultimoContato?: {
     texto: string;
     usuarioNome: string;

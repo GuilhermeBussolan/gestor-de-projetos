@@ -12,10 +12,12 @@ import {
   STATUS_DOCUMENTO_CONFIG,
   STATUS_DOCUMENTO_ORDEM,
   STATUS_PARCELA_CONFIG,
+  TERMOMETRO_CONFIG,
   TIPO_FATURAMENTO_CONFIG,
   TIPO_RECURSO_CONFIG,
 } from "@/lib/constants";
 import { calcularAtividadesConcluidas, calcularHorasRealizadas, calcularPercentualProjeto } from "@/lib/dashboardCalc";
+import { termometroEfetivo } from "@/lib/termometro";
 import type { ContatoProjeto, EventoCalendario, Projeto, Recurso, StatusDocumento } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -65,6 +67,7 @@ export function ProjetoDrawerConteudo({
   onExcluir,
   onClose,
   onRegistrarContato,
+  onAlterarTermometro,
 }: {
   projeto: Projeto;
   cliente: string;
@@ -81,6 +84,7 @@ export function ProjetoDrawerConteudo({
   onExcluir: () => void;
   onClose: () => void;
   onRegistrarContato: () => void;
+  onAlterarTermometro: () => void;
 }) {
   const [escopoAberto, setEscopoAberto] = useState(false);
 
@@ -89,12 +93,15 @@ export function ProjetoDrawerConteudo({
     [orderBy("criadoEm", "desc"), limit(3)]
   );
 
+  const termometro = termometroEfetivo(projeto);
+  const termometroCfg = TERMOMETRO_CONFIG[termometro];
   const percentual = calcularPercentualProjeto(projeto.documentos);
   const horas = calcularHorasRealizadas(projeto.id, eventos, recursos);
   const atividadesConcluidas = calcularAtividadesConcluidas(projeto.id, eventos);
   const previstoConsultor = projeto.horasPrevistasConsultor ?? 0;
   const previstoCoordenador = projeto.horasPrevistasCoordenador ?? 0;
   const finalizado = projeto.status === "finalizado";
+  const cancelado = projeto.status === "cancelado";
   const contatoFaturamento = projeto.contatoFaturamento;
   const temContatoFaturamento =
     !!contatoFaturamento &&
@@ -115,7 +122,11 @@ export function ProjetoDrawerConteudo({
 
   async function reabrirProjeto() {
     if (!confirm("Reabrir este projeto? Ele volta a aceitar apontamentos normalmente.")) return;
-    await updateDoc(doc(db, "projetos", projeto.id), { status: "ativo", updatedAt: serverTimestamp() });
+    await updateDoc(doc(db, "projetos", projeto.id), {
+      status: "ativo",
+      cancelamento: null,
+      updatedAt: serverTimestamp(),
+    });
   }
 
   return (
@@ -150,6 +161,11 @@ export function ProjetoDrawerConteudo({
                   Finalizado
                 </span>
               )}
+              {cancelado && (
+                <span className="rounded-full bg-[#e0543c]/25 px-2.5 py-1 text-[10.5px] font-bold text-white">
+                  Cancelado
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -181,6 +197,48 @@ export function ProjetoDrawerConteudo({
       </div>
 
       <div className={`px-6 pt-5.5 pb-8 ${telaCheia ? "min-h-0 flex-1 overflow-y-auto" : ""}`}>
+        <div className="mb-5 flex items-start justify-between gap-3 rounded-xl border border-brand-border bg-white p-4 shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
+          <div className="min-w-0">
+            <div className="mb-1 flex items-center gap-2">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: termometroCfg.text }}
+              />
+              <span className="text-[12.5px] font-extrabold" style={{ color: termometroCfg.text }}>
+                Termômetro: {termometroCfg.label}
+              </span>
+            </div>
+            {projeto.termometroObservacao ? (
+              <p className="text-[12.5px] leading-relaxed text-brand-muted">
+                <span className="text-brand-faint">
+                  {formatarDataHoraCurta(projeto.termometroObservacao.criadoEm)} ·{" "}
+                  {projeto.termometroObservacao.usuarioNome}:
+                </span>{" "}
+                {projeto.termometroObservacao.texto}
+              </p>
+            ) : (
+              <p className="text-[12px] text-brand-faint">Nenhuma observação registrada.</p>
+            )}
+          </div>
+          {podeEditar && (
+            <Button variant="secondary" onClick={onAlterarTermometro} className="shrink-0">
+              Alterar
+            </Button>
+          )}
+        </div>
+
+        {cancelado && projeto.cancelamento && (
+          <div className="mb-5 rounded-xl border border-[#f5c6bd] bg-[#fdeceb] p-4">
+            <p className="mb-1 text-[12.5px] font-extrabold text-[#b5392a]">Projeto cancelado</p>
+            <p className="text-[12.5px] leading-relaxed text-[#b5392a]">
+              <span className="opacity-75">
+                {formatarDataHoraCurta(projeto.cancelamento.criadoEm)} · {projeto.cancelamento.usuarioNome}:
+              </span>{" "}
+              {projeto.cancelamento.motivo}
+            </p>
+          </div>
+        )}
+
         <p className="mb-5 text-sm text-brand-muted">
           Consultores:{" "}
           {consultores.length > 0
@@ -436,7 +494,7 @@ export function ProjetoDrawerConteudo({
           <Button variant="secondary" onClick={onRegistrarContato}>
             Registrar atualização
           </Button>
-          {podeEditar && finalizado && (
+          {podeEditar && (finalizado || cancelado) && (
             <Button variant="secondary" onClick={reabrirProjeto}>
               Reabrir projeto
             </Button>

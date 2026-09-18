@@ -13,14 +13,26 @@ import { KpiCard, PainelVazio } from "@/components/ui/KpiCard";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import { ProjetoDrawerConteudo } from "@/components/projetos/ProjetoDrawer";
 import { EditarProjetoModal } from "@/components/projetos/EditarProjetoModal";
+import { AlterarTermometroModal } from "@/components/projetos/AlterarTermometroModal";
+import { TermometroPieChart } from "@/components/dashboard/TermometroPieChart";
 import { useAuth } from "@/contexts/AuthContext";
-import { calcularHorasRealizadas, calcularPercentualProjeto } from "@/lib/dashboardCalc";
-import { STATUS_DOCUMENTO_CONFIG } from "@/lib/constants";
+import { calcularHorasRealizadas, calcularPercentualProjeto, statusAbaProjeto } from "@/lib/dashboardCalc";
+import { ABA_STATUS_PROJETO_CONFIG, ABA_STATUS_PROJETO_ORDEM, TERMOMETRO_CONFIG, TERMOMETRO_ORDEM } from "@/lib/constants";
 import { formatarHoras } from "@/lib/horas";
 import { statusEfetivo } from "@/lib/statusHora";
+import { termometroEfetivo } from "@/lib/termometro";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { TIPOS_ATENDIMENTO } from "@/types";
-import type { Cliente, Escopo, EventoCalendario, Projeto, Recurso, TipoDocumento } from "@/types";
+import type {
+  AbaStatusProjeto,
+  Cliente,
+  Escopo,
+  EventoCalendario,
+  Projeto,
+  Recurso,
+  Termometro,
+  TipoDocumento,
+} from "@/types";
 
 function formatarDataHora(timestamp: number): string {
   return new Date(timestamp).toLocaleString("pt-BR", {
@@ -51,13 +63,16 @@ function DashboardPageContent() {
   const [contatoProjeto, setContatoProjeto] = useState<Projeto | null>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [editando, setEditando] = useState<Projeto | null>(null);
+  const [alterandoTermometro, setAlterandoTermometro] = useState<Projeto | null>(null);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [filtroTipo, setFiltroTipo] = useState("");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
+  const [filtroTermometro, setFiltroTermometro] = useState<"" | Termometro>("");
+  const [abaProjetos, setAbaProjetos] = useState<"todos" | AbaStatusProjeto>("todos");
   const [filtroRecursoId, setFiltroRecursoId] = useState("");
   const [filtroProjetoId, setFiltroProjetoId] = useState("");
-  const [kpiAberto, setKpiAberto] = useState<"projetos" | "andamento" | "horas" | "documentos" | null>(
+  const [kpiAberto, setKpiAberto] = useState<"projetos" | "andamento" | "horas" | "termometro" | null>(
     null
   );
 
@@ -95,33 +110,41 @@ function DashboardPageContent() {
   const modoDetalheHoras: "cliente" | "consultor" | "projeto" =
     filtroProjetoId && !filtroRecursoId ? "consultor" : filtroRecursoId && !filtroProjetoId ? "projeto" : "cliente";
 
-  const percentuais = projetosVisao.map((p) => calcularPercentualProjeto(p.documentos));
+  // A aba de status (Todos/A iniciar/Em andamento/Concluídos/Cancelados)
+  // recorta o dashboard inteiro — os KPIs acima refletem só os projetos dela.
+  const projetosAba = useMemo(() => {
+    if (abaProjetos === "todos") return projetosVisao;
+    return projetosVisao.filter(
+      (p) => statusAbaProjeto(p, calcularPercentualProjeto(p.documentos)) === abaProjetos
+    );
+  }, [projetosVisao, abaProjetos]);
+
+  const idsProjetosAba = useMemo(() => new Set(projetosAba.map((p) => p.id)), [projetosAba]);
+
+  const percentuais = projetosAba.map((p) => calcularPercentualProjeto(p.documentos));
   const andamentoMedio =
     percentuais.length > 0 ? percentuais.reduce((a, b) => a + b, 0) / percentuais.length : 0;
 
   const mesAtual = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
   const eventosDoMes = useMemo(
-    () => eventosVisao.filter((e) => e.data.startsWith(mesAtual) && statusEfetivo(e) === "aprovado"),
-    [eventosVisao, mesAtual]
+    () =>
+      eventosVisao.filter(
+        (e) => e.data.startsWith(mesAtual) && statusEfetivo(e) === "aprovado" && idsProjetosAba.has(e.projetoId)
+      ),
+    [eventosVisao, mesAtual, idsProjetosAba]
   );
   const horasNoMes = eventosDoMes.reduce((acc, e) => acc + e.totalHoras, 0);
 
-  const documentosPendentesLista = useMemo(() => {
-    return projetosVisao.flatMap((p) => {
-      const cliente = nomeExibicaoCliente(clientes.find((c) => c.id === p.clienteId));
-      return p.documentos
-        .filter((d) => d.status !== "ASSINADO" && d.status !== "CANCELADO")
-        .map((d) => ({
-          projetoId: p.id,
-          cliente,
-          codigo: d.codigo,
-          descricao: d.descricao,
-          statusLabel: STATUS_DOCUMENTO_CONFIG[d.status].label,
-        }));
+  const projetosPorTermometro = useMemo(() => {
+    const grupos: Record<string, Projeto[]> = { normal: [], atencao: [], critico: [] };
+    projetosAba.forEach((p) => {
+      grupos[termometroEfetivo(p)].push(p);
     });
-  }, [projetosVisao, clientes]);
-  const documentosPendentes = documentosPendentesLista.length;
+    return grupos;
+  }, [projetosAba]);
+  const projetosEmAtencaoOuCritico =
+    projetosPorTermometro.atencao.length + projetosPorTermometro.critico.length;
 
   const horasPorClienteNoMes = useMemo(() => {
     const mapa = new Map<string, number>();
@@ -171,7 +194,7 @@ function DashboardPageContent() {
       .sort((a, b) => b.horas - a.horas);
   }, [eventosDoMes, projetosTodos, clientes]);
 
-  const filtroAtivo = !!filtroTipo || !!filtroDataInicio || !!filtroDataFim;
+  const filtroAtivo = !!filtroTipo || !!filtroDataInicio || !!filtroDataFim || !!filtroTermometro;
   const filtroVisaoAtivo = !!filtroRecursoId || !!filtroProjetoId;
 
   function abrirProjetoNoPainel(id: string) {
@@ -179,19 +202,41 @@ function DashboardPageContent() {
     setKpiAberto(null);
   }
 
-  const projetosFiltrados = useMemo(() => {
+  const projetosComFiltrosBase = useMemo(() => {
     return projetosVisao.filter((p) => {
       if (filtroTipo && p.tipoAtendimento !== filtroTipo) return false;
       if (filtroDataInicio && (!p.dataInicio || p.dataInicio < filtroDataInicio)) return false;
       if (filtroDataFim && (!p.dataInicio || p.dataInicio > filtroDataFim)) return false;
+      if (filtroTermometro && termometroEfetivo(p) !== filtroTermometro) return false;
       return true;
     });
-  }, [projetosVisao, filtroTipo, filtroDataInicio, filtroDataFim]);
+  }, [projetosVisao, filtroTipo, filtroDataInicio, filtroDataFim, filtroTermometro]);
+
+  const contagemAbas = useMemo(() => {
+    const contagem: Record<AbaStatusProjeto, number> = {
+      a_iniciar: 0,
+      em_andamento: 0,
+      concluidos: 0,
+      cancelados: 0,
+    };
+    projetosComFiltrosBase.forEach((p) => {
+      contagem[statusAbaProjeto(p, calcularPercentualProjeto(p.documentos))]++;
+    });
+    return contagem;
+  }, [projetosComFiltrosBase]);
+
+  const projetosFiltrados = useMemo(() => {
+    if (abaProjetos === "todos") return projetosComFiltrosBase;
+    return projetosComFiltrosBase.filter(
+      (p) => statusAbaProjeto(p, calcularPercentualProjeto(p.documentos)) === abaProjetos
+    );
+  }, [projetosComFiltrosBase, abaProjetos]);
 
   function limparFiltros() {
     setFiltroTipo("");
     setFiltroDataInicio("");
     setFiltroDataFim("");
+    setFiltroTermometro("");
   }
 
   function limparFiltroVisao() {
@@ -219,55 +264,69 @@ function DashboardPageContent() {
 
   return (
     <div>
-      {!souConsultor && (
-        <div className="mb-5 flex flex-wrap items-end gap-2.5">
-          <FormRow label="Ver por consultor/coordenador">
+      <div className="mb-5 flex flex-wrap items-end gap-2.5">
+        <FormRow label="Status dos projetos">
+          <div className="w-52 shrink-0">
             <Select
-              value={filtroRecursoId}
-              onChange={(e) => setFiltroRecursoId(e.target.value)}
-              className="w-56"
+              value={abaProjetos}
+              onChange={(e) => setAbaProjetos(e.target.value as "todos" | AbaStatusProjeto)}
             >
-              <option value="">Todos (visão geral)</option>
-              {recursos.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.nomeCompleto} ({r.codigo})
+              <option value="todos">Todos ({projetosComFiltrosBase.length})</option>
+              {ABA_STATUS_PROJETO_ORDEM.map((aba) => (
+                <option key={aba} value={aba}>
+                  {ABA_STATUS_PROJETO_CONFIG[aba].label} ({contagemAbas[aba]})
                 </option>
               ))}
             </Select>
-          </FormRow>
-          <FormRow label="Ver por projeto">
-            <Select
-              value={filtroProjetoId}
-              onChange={(e) => setFiltroProjetoId(e.target.value)}
-              className="w-56"
-            >
-              <option value="">Todos os projetos</option>
-              {projetosTodos.map((p) => {
-                const cliente = clientes.find((c) => c.id === p.clienteId);
-                return (
-                  <option key={p.id} value={p.id}>
-                    {nomeExibicaoCliente(cliente)} — {p.codigoProposta}
-                  </option>
-                );
-              })}
-            </Select>
-          </FormRow>
-          {filtroVisaoAtivo && (
-            <button
-              type="button"
-              onClick={limparFiltroVisao}
-              className="mb-2.5 text-[12.5px] font-semibold text-brand-accent hover:underline"
-            >
-              Limpar
-            </button>
-          )}
-        </div>
-      )}
+          </div>
+        </FormRow>
+
+        {!souConsultor && (
+          <>
+            <FormRow label="Consultores/Coordenadores">
+              <div className="w-52 shrink-0">
+                <Select value={filtroRecursoId} onChange={(e) => setFiltroRecursoId(e.target.value)}>
+                  <option value="">Todos (visão geral)</option>
+                  {recursos.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nomeCompleto} ({r.codigo})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </FormRow>
+            <FormRow label="Projetos">
+              <div className="w-52 shrink-0">
+                <Select value={filtroProjetoId} onChange={(e) => setFiltroProjetoId(e.target.value)}>
+                  <option value="">Todos os projetos</option>
+                  {projetosTodos.map((p) => {
+                    const cliente = clientes.find((c) => c.id === p.clienteId);
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {nomeExibicaoCliente(cliente)} — {p.codigoProposta}
+                      </option>
+                    );
+                  })}
+                </Select>
+              </div>
+            </FormRow>
+            {filtroVisaoAtivo && (
+              <button
+                type="button"
+                onClick={limparFiltroVisao}
+                className="mb-2.5 text-[12.5px] font-semibold text-brand-accent hover:underline"
+              >
+                Limpar
+              </button>
+            )}
+          </>
+        )}
+      </div>
 
       <div className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Projetos ativos"
-          valor={String(projetosVisao.length)}
+          valor={String(projetosAba.length)}
           nota={
             souConsultor
               ? "em que você participa"
@@ -282,7 +341,7 @@ function DashboardPageContent() {
             {souConsultor ? "Projetos em que você participa" : "Projetos nesta visão"}
           </p>
           <div className="max-h-64 space-y-0.5 overflow-y-auto">
-            {projetosVisao.map((p) => {
+            {projetosAba.map((p) => {
               const cliente = nomeExibicaoCliente(clientes.find((c) => c.id === p.clienteId));
               return (
                 <button
@@ -296,7 +355,7 @@ function DashboardPageContent() {
                 </button>
               );
             })}
-            {projetosVisao.length === 0 && <PainelVazio />}
+            {projetosAba.length === 0 && <PainelVazio />}
           </div>
         </KpiCard>
 
@@ -317,7 +376,7 @@ function DashboardPageContent() {
             Andamento por projeto
           </p>
           <div className="max-h-64 space-y-0.5 overflow-y-auto">
-            {projetosVisao.map((p) => {
+            {projetosAba.map((p) => {
               const cliente = nomeExibicaoCliente(clientes.find((c) => c.id === p.clienteId));
               const percentual = calcularPercentualProjeto(p.documentos);
               return (
@@ -337,7 +396,7 @@ function DashboardPageContent() {
                 </button>
               );
             })}
-            {projetosVisao.length === 0 && <PainelVazio />}
+            {projetosAba.length === 0 && <PainelVazio />}
           </div>
         </KpiCard>
 
@@ -403,46 +462,41 @@ function DashboardPageContent() {
         </KpiCard>
 
         <KpiCard
-          label="Documentos pendentes"
-          valor={String(documentosPendentes)}
+          label="Termômetro dos projetos"
+          valor={String(projetosEmAtencaoOuCritico)}
           nota={
             projetoFiltradoInfo
               ? "deste projeto"
               : recursoFiltrado
-                ? `de ${recursoFiltrado.nomeCompleto}`
-                : "aguardando conclusão"
+                ? `de ${recursoFiltrado.nomeCompleto} em atenção/crítico`
+                : "em atenção ou crítico"
           }
-          aberto={kpiAberto === "documentos"}
-          onToggle={() => setKpiAberto((v) => (v === "documentos" ? null : "documentos"))}
+          aberto={kpiAberto === "termometro"}
+          onToggle={() => setKpiAberto((v) => (v === "termometro" ? null : "termometro"))}
         >
-          <p className="mb-2 px-1 text-[11px] font-bold tracking-[.08em] text-brand-faint uppercase">
-            Documentos pendentes
+          <p className="mb-3 px-1 text-[11px] font-bold tracking-[.08em] text-brand-faint uppercase">
+            Projetos por termômetro — clique numa cor/rótulo para filtrar
           </p>
-          <div className="max-h-64 space-y-0.5 overflow-y-auto">
-            {documentosPendentesLista.map((d, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => abrirProjetoNoPainel(d.projetoId)}
-                className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-brand-hover"
-              >
-                <p className="truncate text-[12.5px] font-semibold text-brand-navy-2">
-                  {d.codigo} — {d.descricao}
-                </p>
-                <p className="truncate text-[11px] text-brand-faint">
-                  {d.cliente} · {d.statusLabel}
-                </p>
-              </button>
-            ))}
-            {documentosPendentesLista.length === 0 && <PainelVazio />}
-          </div>
+          {projetosAba.length > 0 ? (
+            <TermometroPieChart
+              contagem={{
+                normal: projetosPorTermometro.normal.length,
+                atencao: projetosPorTermometro.atencao.length,
+                critico: projetosPorTermometro.critico.length,
+              }}
+              selecionado={filtroTermometro || null}
+              onSelecionar={(t) => setFiltroTermometro(t ?? "")}
+            />
+          ) : (
+            <PainelVazio />
+          )}
         </KpiCard>
       </div>
 
       <div className="relative mb-4 flex items-baseline justify-between">
         <div className="flex items-center gap-2.5">
           <span className="text-[15px] font-extrabold tracking-[-0.01em] text-brand-navy-2">
-            {souConsultor ? "Meus projetos" : "Projetos em andamento"}
+            {souConsultor ? "Meus projetos" : "Projetos"}
           </span>
           <button
             onClick={() => setFiltrosAbertos((v) => !v)}
@@ -474,6 +528,28 @@ function DashboardPageContent() {
               </button>
             </div>
             <div className="space-y-3">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-brand-muted">Termômetro</label>
+                <div className="flex gap-2">
+                  {TERMOMETRO_ORDEM.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setFiltroTermometro((v) => (v === t ? "" : t))}
+                      style={{
+                        backgroundColor: filtroTermometro === t ? TERMOMETRO_CONFIG[t].bg : "transparent",
+                        color: TERMOMETRO_CONFIG[t].text,
+                        borderColor: TERMOMETRO_CONFIG[t].text,
+                      }}
+                      className={`flex-1 rounded-[10px] border px-2 py-1.5 text-[12px] font-bold transition-opacity ${
+                        filtroTermometro === t ? "" : "opacity-45 hover:opacity-75"
+                      }`}
+                    >
+                      {TERMOMETRO_CONFIG[t].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div>
                 <label className="mb-1.5 block text-xs font-semibold text-brand-muted">
                   Tipo de atendimento
@@ -534,21 +610,36 @@ function DashboardPageContent() {
           const mostrarHorasConsultor = previstoConsultor > 0 || horas.consultor > 0;
           const mostrarHorasCoordenador =
             !souConsultor && (previstoCoordenador > 0 || horas.coordenador > 0);
+          const termometroCfg = TERMOMETRO_CONFIG[termometroEfetivo(p)];
+          const abaDoProjeto = statusAbaProjeto(p, percentual);
+          const corIndicador =
+            abaDoProjeto === "a_iniciar" ? "#2f6fe4" : abaDoProjeto === "cancelados" ? "#8b94ad" : termometroCfg.text;
 
           return (
             <div
               key={p.id}
               onClick={() => setDetalheId(p.id)}
-              className="flex cursor-pointer flex-col gap-2.5 rounded-2xl border border-brand-border border-l-4 border-l-brand-accent bg-white p-4 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-card-hover"
+              style={{ borderLeftColor: corIndicador }}
+              className="flex cursor-pointer flex-col gap-2.5 rounded-2xl border border-brand-border border-l-4 bg-white p-4 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-card-hover"
             >
               <div>
                 <div className="flex items-center gap-1.5">
+                  <span
+                    title={p.termometroObservacao?.texto ?? termometroCfg.label}
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: corIndicador }}
+                  />
                   <p className="truncate text-[14px] leading-tight font-extrabold tracking-[-0.01em] text-brand-navy-2">
                     {nomeExibicaoCliente(cliente)}
                   </p>
                   {p.status === "finalizado" && (
                     <span className="shrink-0 rounded-full bg-brand-hover px-1.5 py-[1px] text-[9px] font-bold text-brand-faint">
                       Finalizado
+                    </span>
+                  )}
+                  {p.status === "cancelado" && (
+                    <span className="shrink-0 rounded-full bg-[#fdeceb] px-1.5 py-[1px] text-[9px] font-bold text-[#b5392a]">
+                      Cancelado
                     </span>
                   )}
                 </div>
@@ -560,6 +651,15 @@ function DashboardPageContent() {
                   dataFim={p.dataFim}
                   className="text-[10px] text-brand-faint"
                 />
+                {p.status === "cancelado" && p.cancelamento ? (
+                  <p className="mt-1 truncate text-[10.5px] text-[#b5392a]">{p.cancelamento.motivo}</p>
+                ) : (
+                  p.termometroObservacao && (
+                    <p className="mt-1 truncate text-[10.5px]" style={{ color: termometroCfg.text }}>
+                      {p.termometroObservacao.texto}
+                    </p>
+                  )
+                )}
               </div>
 
               <div>
@@ -646,6 +746,7 @@ function DashboardPageContent() {
             onExcluir={() => excluir(projetoDetalhe)}
             onClose={() => setDetalheId(null)}
             onRegistrarContato={() => setContatoProjeto(projetoDetalhe)}
+            onAlterarTermometro={() => setAlterandoTermometro(projetoDetalhe)}
           />
         )}
       </Drawer>
@@ -665,6 +766,15 @@ function DashboardPageContent() {
         cliente={clientes.find((c) => c.id === contatoProjeto?.clienteId)}
         onClose={() => setContatoProjeto(null)}
       />
+
+      {usuario && (
+        <AlterarTermometroModal
+          key={alterandoTermometro?.id}
+          projeto={alterandoTermometro}
+          usuario={usuario}
+          onClose={() => setAlterandoTermometro(null)}
+        />
+      )}
     </div>
   );
 }
