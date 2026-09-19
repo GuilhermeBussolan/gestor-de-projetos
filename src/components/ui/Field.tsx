@@ -1,6 +1,6 @@
 "use client";
 
-import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from "react";
+import { ComponentProps, InputHTMLAttributes, SelectHTMLAttributes, ReactNode } from "react";
 
 const baseField =
   "w-full rounded-[10px] border border-brand-border bg-white px-3.5 text-[13.5px] text-brand-navy-2 outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20 disabled:bg-brand-hover disabled:text-brand-faint";
@@ -14,7 +14,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${baseInput} ${props.className ?? ""}`} />;
 }
 
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea(props: ComponentProps<"textarea">) {
   return <textarea {...props} className={`${baseField} py-2.5 ${props.className ?? ""}`} />;
 }
 

@@ -24,6 +24,7 @@ import {
 } from "@/lib/dashboardCalc";
 import { contarFolhas, formatarDataCurta, nivelAtividade, numerarAtividades, temFilhos } from "@/lib/escopo";
 import { termometroEfetivo } from "@/lib/termometro";
+import { RegistroItem } from "@/components/timeline/RegistroItem";
 import type { ContatoProjeto, EventoCalendario, Projeto, Recurso, StatusDocumento } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -487,10 +488,7 @@ export function ProjetoDrawerConteudo({
             <div className="rounded-xl border border-brand-border bg-white p-4 shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
               {atualizacoesRecentes.map((c) => (
                 <div key={c.id} className="border-t border-brand-border-soft pt-2.5 pb-2.5 first:border-t-0 first:pt-0 last:pb-0">
-                  <p className="text-[11px] font-semibold text-brand-faint">
-                    {formatarDataHoraCurta(c.criadoEm)} · {c.usuarioNome}
-                  </p>
-                  <p className="text-[12.5px] leading-relaxed text-brand-navy-2">{c.texto}</p>
+                  <RegistroItem registro={c} compacto />
                 </div>
               ))}
             </div>

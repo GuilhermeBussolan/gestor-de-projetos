@@ -6,6 +6,7 @@ import type {
   TipoBox,
   TipoFaturamento,
   TipoRecurso,
+  TipoRegistro,
 } from "@/types";
 
 export const STATUS_DOCUMENTO_CONFIG: Record<
@@ -100,6 +101,16 @@ export const ABA_STATUS_PROJETO_ORDEM: AbaStatusProjeto[] = [
   "concluidos",
   "cancelados",
 ];
+
+export const TIPO_REGISTRO_CONFIG: Record<TipoRegistro, { label: string; bg: string; text: string }> = {
+  atualizacao: { label: "Atualização", bg: "#eef1f8", text: "#6a7594" },
+  problema: { label: "Problema", bg: "#fdeceb", text: "#b5392a" },
+  decisao: { label: "Decisão", bg: "#e8efff", text: "#2456b8" },
+  ciencia: { label: "Ciência", bg: "#e3f5ea", text: "#15754c" },
+};
+
+/** Tipos que o usuário escolhe ao registrar (ciência é gerada pelo botão "Dar ciência"). */
+export const TIPO_REGISTRO_ORDEM: TipoRegistro[] = ["atualizacao", "problema", "decisao"];
 
 export const DOCUMENTOS_PADRAO: { codigo: string; descricao: string; pesoIndividual: number }[] = [
   { codigo: "MIT024", descricao: "KICK-OFF", pesoIndividual: 5 },

@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Bell,
   Building2,
   CalendarDays,
   Clock,
@@ -33,7 +34,9 @@ export type PreviaId =
   | "rejeicao"
   | "kpis-financeiro"
   | "parcela-status"
-  | "fechamento";
+  | "fechamento"
+  | "marcacao"
+  | "sino";
 
 export interface Funcionalidade {
   titulo: string;
@@ -192,6 +195,35 @@ const MOD_APONTAMENTO_APROVACAO: ModuloGuia = {
   ],
 };
 
+const MOD_MARCACOES: ModuloGuia = {
+  id: "marcacoes",
+  titulo: "Marcações e notificações",
+  icone: Bell,
+  resumo: "Avise alguém do projeto e deixe o registro na linha do tempo.",
+  href: "/dashboard",
+  hrefLabel: "Abrir Dashboard",
+  funcionalidades: [
+    {
+      titulo: "Marcar alguém com @",
+      descricao:
+        "Na linha do tempo do projeto (no Dashboard, no card do projeto), escolha Atualização, Problema ou Decisão, digite @ e escolha a pessoa. Dá para marcar quem está no projeto e os administradores.",
+      previa: "marcacao",
+    },
+    {
+      titulo: "Sino de notificações",
+      descricao:
+        "No topo da tela, o sino mostra tudo em que você foi marcado. Clique para abrir a linha do tempo do projeto; a notificação fica como lida, mas o registro continua no histórico.",
+      previa: "sino",
+    },
+    {
+      titulo: "Dar ciência",
+      descricao:
+        "Quem foi marcado clica em Dar ciência. O nome e o horário ficam registrados na linha do tempo, e quem marcou é avisado.",
+      previa: "marcacao",
+    },
+  ],
+};
+
 const MOD_FINANCEIRO: ModuloGuia = {
   id: "financeiro",
   titulo: "Financeiro",
@@ -277,6 +309,7 @@ const ADMINISTRADOR: GuiaPerfil = {
     },
     MOD_PROJETOS,
     MOD_DASHBOARD,
+    MOD_MARCACOES,
     MOD_APONTAMENTO_APROVACAO,
     MOD_FINANCEIRO,
   ],
@@ -285,7 +318,7 @@ const ADMINISTRADOR: GuiaPerfil = {
 const COORDENADOR: GuiaPerfil = {
   boasVindas:
     "Você é coordenador: conduz os projetos e valida as horas da equipe. Veja como o trabalho flui entre os perfis e depois explore cada módulo.",
-  modulos: [MOD_PROJETOS, MOD_DASHBOARD, MOD_CALENDARIO, MOD_APONTAMENTO_APROVACAO],
+  modulos: [MOD_PROJETOS, MOD_DASHBOARD, MOD_MARCACOES, MOD_CALENDARIO, MOD_APONTAMENTO_APROVACAO],
 };
 
 const CONSULTOR: GuiaPerfil = {
@@ -325,6 +358,7 @@ const CONSULTOR: GuiaPerfil = {
         },
       ],
     },
+    MOD_MARCACOES,
     {
       ...MOD_DASHBOARD,
       resumo: "Os projetos em que você atua.",

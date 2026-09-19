@@ -105,12 +105,48 @@ export interface Financeiro {
   parcelas: Parcela[];
 }
 
+/** ciencia: registro automático de que alguém marcado leu e ficou ciente de outro registro. */
+export type TipoRegistro = "atualizacao" | "problema" | "decisao" | "ciencia";
+
+export interface Mencionado {
+  uid: string;
+  nome: string;
+}
+
 export interface ContatoProjeto {
   id: string;
   texto: string;
   usuarioId: string;
   usuarioNome: string;
   criadoEm: number;
+  /** Ausente em registros antigos = "atualizacao". */
+  tipo?: TipoRegistro;
+  mencionados?: Mencionado[];
+  /** Nas ciências: id do registro do qual se deu ciência. */
+  respondeAId?: string | null;
+}
+
+/** Aviso para quem foi marcado numa linha do tempo (coleção "notificacoes"). */
+export interface Notificacao {
+  id: string;
+  destinatarioUid: string;
+  projetoId: string;
+  projetoNome: string;
+  contatoId: string;
+  autorUid: string;
+  autorNome: string;
+  tipo: TipoRegistro;
+  texto: string;
+  criadoEm: number;
+  lida: boolean;
+}
+
+/** Espelho enxuto de "usuarios" (id = uid) que todos leem — serve à lista de @. */
+export interface PessoaDiretorio {
+  id: string;
+  nomeCompleto: string;
+  perfil: Perfil;
+  recursoId?: string | null;
 }
 
 export interface ContatoFaturamento {

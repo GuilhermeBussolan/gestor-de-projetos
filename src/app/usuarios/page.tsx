@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormRow, Input, Select } from "@/components/ui/Field";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
+import { useAuth } from "@/contexts/AuthContext";
+import { sincronizarDiretorio } from "@/lib/diretorio";
 import type { Perfil, Recurso, Usuario } from "@/types";
 
 const PERFIL_LABEL: Record<Perfil, string> = {
@@ -31,6 +33,7 @@ const NOVO_USUARIO_VAZIO = {
 type UsuarioDoc = Omit<Usuario, "uid"> & { id: string };
 
 function UsuariosPageContent() {
+  const { usuario: eu } = useAuth();
   const { data: usuariosDocs, loading } = useCollection<UsuarioDoc>("usuarios", []);
   const usuarios: Usuario[] = usuariosDocs.map(({ id, ...resto }) => ({ uid: id, ...resto }));
   const { data: recursos } = useCollection<Recurso>("recursos");
@@ -43,6 +46,12 @@ function UsuariosPageContent() {
   const [novoUsuario, setNovoUsuario] = useState(NOVO_USUARIO_VAZIO);
   const [criandoErro, setCriandoErro] = useState("");
   const [criandoSalvando, setCriandoSalvando] = useState(false);
+
+  // Espelha as mudanças de usuários na lista de @ da linha do tempo.
+  function atualizarDiretorio() {
+    if (!eu) return;
+    sincronizarDiretorio(eu).catch((err) => console.warn("Não foi possível sincronizar o diretório:", err));
+  }
 
   function abrirEdicao(u: Usuario) {
     setEditando(u);
@@ -59,6 +68,7 @@ function UsuariosPageContent() {
         perfil,
         recursoId: recursoId || null,
       });
+      atualizarDiretorio();
       setEditando(null);
     } finally {
       setSalvando(false);
@@ -73,6 +83,7 @@ function UsuariosPageContent() {
     )
       return;
     await deleteDoc(doc(db, "usuarios", u.uid));
+    atualizarDiretorio();
   }
 
   function abrirCriacao() {
@@ -107,6 +118,7 @@ function UsuariosPageContent() {
         setCriandoErro(dados.erro ?? "Não foi possível criar o usuário.");
         return;
       }
+      atualizarDiretorio();
       setCriandoAberto(false);
     } catch {
       setCriandoErro("Não foi possível criar o usuário.");

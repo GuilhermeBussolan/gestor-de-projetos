@@ -3,6 +3,8 @@
 import { ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CircleHelp } from "lucide-react";
+import { NotificacoesMenu } from "@/components/layout/NotificacoesMenu";
+import { LinhaDoTempoProjeto } from "@/components/timeline/LinhaDoTempoProjeto";
 import { GuiaSistema } from "@/components/layout/GuiaSistema";
 import { guiaJaVisto, marcarGuiaVisto } from "@/lib/guiaSistema";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -14,6 +16,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { usuario, logout } = useAuth();
   const router = useRouter();
   const [trocarSenhaAberto, setTrocarSenhaAberto] = useState(false);
+  const [projetoTempoId, setProjetoTempoId] = useState<string | null>(null);
   // Abre sozinho no primeiro acesso de cada usuário neste navegador.
   const [guiaAberto, setGuiaAberto] = useState(() => (usuario ? !guiaJaVisto(usuario.uid) : false));
 
@@ -34,6 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="flex h-[68px] shrink-0 items-center justify-end gap-2 border-b border-brand-border bg-white px-7">
           {usuario && (
             <>
+              <NotificacoesMenu usuario={usuario} onAbrirProjeto={setProjetoTempoId} />
               <button
                 type="button"
                 onClick={() => setGuiaAberto(true)}
@@ -55,6 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       <TrocarSenhaModal open={trocarSenhaAberto} onClose={() => setTrocarSenhaAberto(false)} />
       {usuario && <GuiaSistema open={guiaAberto} perfil={usuario.perfil} onClose={fecharGuia} />}
+      <LinhaDoTempoProjeto projetoId={projetoTempoId} onClose={() => setProjetoTempoId(null)} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowRight, Check, Minus, Upload } from "lucide-react";
+import { AlertTriangle, ArrowRight, Bell, Check, Minus, Upload } from "lucide-react";
 import { ABA_STATUS_PROJETO_CONFIG, ABA_STATUS_PROJETO_ORDEM, STATUS_PARCELA_CONFIG, TERMOMETRO_CONFIG, TERMOMETRO_ORDEM, TIPO_BOX_CONFIG } from "@/lib/constants";
 import { STATUS_HORA_CONFIG } from "@/lib/statusHora";
 import type { StatusHora, Termometro } from "@/types";
@@ -612,7 +612,69 @@ function Fechamento() {
   );
 }
 
+// ---------- Marcações e notificações ----------
+
+function Marcacao() {
+  const [ciente, setCiente] = useState(false);
+  return (
+    <Moldura dica="Clique em Dar ciência para testar">
+      <div className="mb-2.5 flex gap-1.5">
+        <Pilula bg="#eef1f8" cor="#6a7594">Atualização</Pilula>
+        <Pilula bg="#fdeceb" cor="#b5392a">Problema</Pilula>
+        <Pilula bg="#e8efff" cor="#2456b8">Decisão</Pilula>
+      </div>
+      <p className="text-[12.5px] leading-relaxed text-brand-navy-2">
+        Erro na integração do pedido.{" "}
+        <span className="rounded bg-brand-accent-soft px-1 font-semibold text-brand-accent">@Ana Souza</span> pode validar
+        o ajuste?
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {ciente ? (
+          <span className="rounded-full bg-[#e3f5ea] px-2 py-0.5 text-[10.5px] font-semibold text-[#15754c]">
+            ✓ Ana Souza ciente
+          </span>
+        ) : (
+          <>
+            <span className="rounded-full bg-[#fff2de] px-2 py-0.5 text-[10.5px] font-semibold text-[#a4650d]">
+              Ana Souza · aguardando ciência
+            </span>
+            <button type="button" onClick={() => setCiente(true)}>
+              <BotaoFalso>
+                <Check size={13} /> Dar ciência
+              </BotaoFalso>
+            </button>
+          </>
+        )}
+      </div>
+    </Moldura>
+  );
+}
+
+function Sino() {
+  return (
+    <Moldura>
+      <div className="mb-3 flex justify-end">
+        <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-brand-hover text-brand-muted">
+          <Bell size={18} />
+          <span className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+            2
+          </span>
+        </span>
+      </div>
+      <div className="rounded-lg border border-brand-border-soft bg-brand-accent-soft/40 p-3">
+        <p className="text-[12px] text-brand-navy-2">
+          <strong>Carlos Lima</strong> marcou você em <strong>Cliente X — 004646</strong>{" "}
+          <Pilula bg="#fdeceb" cor="#b5392a">Problema</Pilula>
+        </p>
+        <p className="mt-1 text-[11.5px] text-brand-muted">Erro na integração do pedido...</p>
+      </div>
+    </Moldura>
+  );
+}
+
 const PREVIAS: Record<PreviaId, () => ReactNode> = {
+  marcacao: Marcacao,
+  sino: Sino,
   cadastros: Cadastros,
   box: Box,
   perfis: Perfis,

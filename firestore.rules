@@ -74,6 +74,32 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Espelho enxuto de "usuarios" (nome, perfil, recurso) que todo usuário logado
+    // lê — alimenta a lista de @ da linha do tempo, já que "usuarios" só é listável
+    // por administradores. Cada pessoa mantém a própria entrada (sem poder mudar o
+    // perfil dela); o administrador mantém todas.
+    match /diretorio/{uid} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() ||
+        (isSignedIn() && request.auth.uid == uid &&
+          request.resource.data.perfil == meuUsuario().get('perfil', ''));
+      allow delete: if isAdmin();
+    }
+
+    // Avisos de quem foi marcado (@) na linha do tempo dos projetos. Só o
+    // destinatário lê, marca como lida (único campo que pode mudar) ou apaga;
+    // qualquer usuário logado cria, desde que se identifique como autor.
+    match /notificacoes/{id} {
+      allow read: if isSignedIn() && resource.data.destinatarioUid == request.auth.uid;
+      allow create: if isSignedIn() &&
+        request.resource.data.autorUid == request.auth.uid &&
+        request.resource.data.lida == false;
+      allow update: if isSignedIn() &&
+        resource.data.destinatarioUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lida']);
+      allow delete: if isSignedIn() && resource.data.destinatarioUid == request.auth.uid;
+    }
+
     match /projetos/{projetoId} {
       allow read: if isSignedIn();
       allow create, delete: if isAdmin() || isCoordenador();

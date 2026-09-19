@@ -19,6 +19,7 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { seedAdminIfNeeded } from "@/lib/seedAdmin";
+import { sincronizarDiretorio } from "@/lib/diretorio";
 import type { Usuario } from "@/types";
 
 interface AuthContextValue {
@@ -45,7 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (fbUser) {
           const snap = await getDoc(doc(db, "usuarios", fbUser.uid));
           if (snap.exists()) {
-            setUsuario({ uid: fbUser.uid, ...(snap.data() as Omit<Usuario, "uid">) });
+            const perfilUsuario = { uid: fbUser.uid, ...(snap.data() as Omit<Usuario, "uid">) };
+            setUsuario(perfilUsuario);
+            // Mantém a lista de @ (diretório) em dia; falha aqui não pode travar o login.
+            sincronizarDiretorio(perfilUsuario).catch((err) =>
+              console.warn("Não foi possível sincronizar o diretório de pessoas:", err)
+            );
           } else {
             setUsuario(null);
           }
