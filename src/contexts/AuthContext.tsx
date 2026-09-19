@@ -41,23 +41,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     seedAdminIfNeeded();
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
-      if (fbUser) {
-        const snap = await getDoc(doc(db, "usuarios", fbUser.uid));
-        if (snap.exists()) {
-          setUsuario({ uid: fbUser.uid, ...(snap.data() as Omit<Usuario, "uid">) });
+      try {
+        if (fbUser) {
+          const snap = await getDoc(doc(db, "usuarios", fbUser.uid));
+          if (snap.exists()) {
+            setUsuario({ uid: fbUser.uid, ...(snap.data() as Omit<Usuario, "uid">) });
+          } else {
+            setUsuario(null);
+          }
         } else {
           setUsuario(null);
         }
-      } else {
+      } catch (err) {
+        console.error("Falha ao carregar o perfil do usuário:", err);
         setUsuario(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsub();
   }, []);
 
   async function login(email: string, senha: string) {
-    await signInWithEmailAndPassword(auth, email, senha);
+    const cred = await signInWithEmailAndPassword(auth, email, senha);
+    // Conta no Auth sem perfil em "usuarios": não adianta manter a sessão aberta.
+    const perfil = await getDoc(doc(db, "usuarios", cred.user.uid));
+    if (!perfil.exists()) {
+      await firebaseSignOut(auth);
+      throw Object.assign(new Error("Conta sem perfil cadastrado."), { code: "perfil-ausente" });
+    }
   }
 
   async function logout() {

@@ -162,12 +162,6 @@ function AbaPrevistas({
     [eventos]
   );
 
-  // Só o que ainda tende a virar hora aprovada (rejeitadas ficam de fora dos totais).
-  const eventosParaKpis = useMemo(
-    () => eventosPendentes.filter((e) => statusEfetivo(e) !== "rejeitado"),
-    [eventosPendentes]
-  );
-
   const projetosComPendencia = useMemo(() => {
     const ids = new Set(eventosPendentes.map((e) => e.projetoId));
     return projetos.filter((p) => ids.has(p.id));
@@ -185,6 +179,12 @@ function AbaPrevistas({
       return ordenacao === "asc" ? cmp : -cmp;
     });
   }, [eventosPendentes, filtroProjetoId, filtroStatus, filtroMes, ordenacao]);
+
+  // Os totais seguem os filtros da lista. Rejeitadas só entram se o filtro de status pedir por elas.
+  const eventosParaKpis = useMemo(
+    () => previstas.filter((e) => filtroStatus === "rejeitado" || statusEfetivo(e) !== "rejeitado"),
+    [previstas, filtroStatus]
+  );
 
   const [acao, setAcao] = useState<{ tipo: "excluir"; ev: EventoCalendario } | { tipo: "confirmarTodos" } | null>(
     null
@@ -509,7 +509,7 @@ function AbaAprovadas({
         projeto.
       </p>
 
-      <KpisHoras eventos={aprovadasTodas} projetos={projetos} clientes={clientes} tipo="aprovadas" />
+      <KpisHoras eventos={aprovadas}projetos={projetos} clientes={clientes} tipo="aprovadas" />
 
       <div className="mb-4 flex flex-wrap items-end gap-2.5">
         <FormRow label="Cliente / projeto">

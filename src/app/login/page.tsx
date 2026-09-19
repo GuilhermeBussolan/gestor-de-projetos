@@ -6,6 +6,29 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Input, FormRow } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 
+function mensagemErroLogin(err: unknown) {
+  const code = (err as { code?: string } | null)?.code ?? "";
+  switch (code) {
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+    case "auth/invalid-email":
+      return "E-mail ou senha inválidos.";
+    case "auth/user-disabled":
+      return "Este usuário está desativado no Firebase Authentication.";
+    case "auth/too-many-requests":
+      return "Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.";
+    case "auth/network-request-failed":
+      return "Sem conexão com o servidor. Verifique a internet e tente de novo.";
+    case "perfil-ausente":
+      return "Login válido, mas este usuário não tem perfil cadastrado no sistema. Peça a um administrador para conferir o cadastro.";
+    case "permission-denied":
+      return "Login válido, mas sem permissão para ler o perfil (regras do Firestore).";
+    default:
+      return `Não foi possível entrar${code ? ` (${code})` : ""}.`;
+  }
+}
+
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
@@ -22,8 +45,8 @@ export default function LoginPage() {
     try {
       await login(email, senha);
       router.push("/");
-    } catch {
-      setErro("E-mail ou senha inválidos.");
+    } catch (err) {
+      setErro(mensagemErroLogin(err));
     } finally {
       setLoading(false);
     }

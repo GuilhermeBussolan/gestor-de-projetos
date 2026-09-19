@@ -8,18 +8,20 @@ export function Modal({
   title,
   children,
   wide = false,
+  extraWide = false,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   wide?: boolean;
+  extraWide?: boolean;
 }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-brand-navy/45 backdrop-blur-[2px] p-4 pt-10">
       <div
-        className={`w-full ${wide ? "max-w-2xl" : "max-w-md"} rounded-2xl bg-white shadow-card-lg`}
+        className={`w-full ${extraWide ? "max-w-4xl" : wide ? "max-w-2xl" : "max-w-md"} rounded-2xl bg-white shadow-card-lg`}
       >
         <div className="flex items-center justify-between border-b border-brand-border-soft px-5 py-4">
           <h2 className="text-[15px] font-bold tracking-[-0.01em] text-brand-navy-2">{title}</h2>
