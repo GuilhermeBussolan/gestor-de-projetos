@@ -2,7 +2,15 @@
 
 import { useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Bell, Check, Minus, Upload } from "lucide-react";
-import { ABA_STATUS_PROJETO_CONFIG, ABA_STATUS_PROJETO_ORDEM, STATUS_PARCELA_CONFIG, TERMOMETRO_CONFIG, TERMOMETRO_ORDEM, TIPO_BOX_CONFIG } from "@/lib/constants";
+import {
+  ABA_STATUS_PROJETO_CONFIG,
+  ABA_STATUS_PROJETO_ORDEM,
+  STATUS_DOCUMENTO_CONFIG,
+  STATUS_PARCELA_CONFIG,
+  TERMOMETRO_CONFIG,
+  TERMOMETRO_ORDEM,
+  TIPO_BOX_CONFIG,
+} from "@/lib/constants";
 import { STATUS_HORA_CONFIG } from "@/lib/statusHora";
 import type { StatusHora, Termometro } from "@/types";
 import type { PreviaId } from "@/lib/guiaSistema";
@@ -672,7 +680,100 @@ function Sino() {
   );
 }
 
+// ---------- Meus projetos ----------
+
+function CardProjeto() {
+  return (
+    <Moldura dica="Clique no card para abrir o painel do projeto">
+      <div
+        className="rounded-xl border border-brand-border-soft bg-white p-3.5"
+        style={{ borderLeft: `4px solid ${ABA_STATUS_PROJETO_CONFIG.em_andamento.cor}` }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[13px] font-bold text-brand-navy-2">Cliente X</p>
+            <p className="text-[11px] text-brand-faint">004646 · 01/08/2026 – A definir</p>
+          </div>
+          <span className="flex items-center gap-1.5 text-[11px] font-bold text-brand-muted">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TERMOMETRO_CONFIG.atencao.text }} />
+            Atenção
+          </span>
+        </div>
+        <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-brand-border">
+          <div className="h-full w-[62%] rounded-full bg-brand-accent" />
+        </div>
+        <div className="mt-1.5 flex justify-between text-[11px] text-brand-muted">
+          <span>62% concluído</span>
+          <span>
+            Horas <strong className="text-brand-navy-2">24h</strong>/40h
+          </span>
+        </div>
+        <p className="mt-2.5 truncate rounded-lg bg-brand-hover px-2.5 py-1.5 text-[10.5px] text-brand-muted">
+          💬 18/09/2026 16:20 · Integração validada com o cliente
+        </p>
+      </div>
+    </Moldura>
+  );
+}
+
+function DocumentosMit() {
+  const docs: { codigo: string; nome: string; status: keyof typeof STATUS_DOCUMENTO_CONFIG }[] = [
+    { codigo: "MIT024", nome: "KICK-OFF", status: "ASSINADO" },
+    { codigo: "MIT041", nome: "DIAGRAMA DE PROCESSOS", status: "ASSINADO" },
+    { codigo: "MIT010A", nome: "VALIDAÇÃO DAS CONFIGURAÇÕES", status: "VALIDACAO" },
+    { codigo: "MIT010B", nome: "VALIDAÇÃO DAS CAPACITAÇÕES", status: "ANDAMENTO" },
+    { codigo: "MIT045", nome: "SIMULAÇÃO DE PROCESSOS", status: "A_INICIAR" },
+  ];
+  return (
+    <Moldura>
+      <div className="overflow-hidden rounded-lg border border-brand-border-soft">
+        {docs.map((d) => (
+          <div
+            key={d.codigo}
+            className="flex items-center gap-2.5 border-t border-brand-border-soft px-3 py-2 first:border-t-0"
+          >
+            <span className="w-[54px] shrink-0 text-[10.5px] font-bold text-brand-faint">{d.codigo}</span>
+            <span className="flex-1 truncate text-[12px] text-brand-navy-2">{d.nome}</span>
+            <Pilula bg={STATUS_DOCUMENTO_CONFIG[d.status].bg} cor={STATUS_DOCUMENTO_CONFIG[d.status].text}>
+              {STATUS_DOCUMENTO_CONFIG[d.status].label}
+            </Pilula>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[11.5px] text-brand-muted">O progresso do projeto vem do status destes documentos.</p>
+    </Moldura>
+  );
+}
+
+function ContatosCliente() {
+  const envolvidos = [
+    { nome: "Marina Alves", email: "marina.alves@clientex.com.br", tel: "(11) 91234-5678" },
+    { nome: "Paulo Ribeiro", email: "paulo.ribeiro@clientex.com.br", tel: "(11) 99876-5432" },
+    { nome: "Renata Costa", email: "renata.costa@clientex.com.br", tel: "(11) 93456-7890" },
+  ];
+  return (
+    <Moldura>
+      <p className="mb-2 text-[12px] font-bold text-brand-navy-2">Principais envolvidos</p>
+      <div className="overflow-hidden rounded-lg border border-brand-border-soft">
+        {envolvidos.map((e) => (
+          <div
+            key={e.nome}
+            className="flex flex-wrap items-baseline gap-x-3 border-t border-brand-border-soft px-3 py-2 first:border-t-0"
+          >
+            <span className="text-[12px] font-semibold text-brand-navy-2">{e.nome}</span>
+            <span className="text-[11px] text-brand-muted">{e.email}</span>
+            <span className="text-[11px] text-brand-muted">{e.tel}</span>
+          </div>
+        ))}
+      </div>
+    </Moldura>
+  );
+}
+
 const PREVIAS: Record<PreviaId, () => ReactNode> = {
+  "card-projeto": CardProjeto,
+  "documentos-mit": DocumentosMit,
+  "contatos-cliente": ContatosCliente,
   marcacao: Marcacao,
   sino: Sino,
   cadastros: Cadastros,

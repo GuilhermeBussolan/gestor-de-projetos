@@ -36,7 +36,10 @@ export type PreviaId =
   | "parcela-status"
   | "fechamento"
   | "marcacao"
-  | "sino";
+  | "sino"
+  | "card-projeto"
+  | "documentos-mit"
+  | "contatos-cliente";
 
 export interface Funcionalidade {
   titulo: string;
@@ -122,6 +125,18 @@ const MOD_PROJETOS: ModuloGuia = {
       descricao:
         "No painel do projeto, cada atividade mostra em quais datas foi feita (só horas aprovadas), e o contador conta apenas as atividades finais.",
       previa: "atividades-datas",
+    },
+    {
+      titulo: "Documentos (MIT) e progresso",
+      descricao:
+        "Cada documento tem um status (A iniciar, Andamento, Validação, Assinado ou Cancelado), e é dele que vem o progresso do projeto. Você altera o status direto no painel do projeto.",
+      previa: "documentos-mit",
+    },
+    {
+      titulo: "Contatos principais do cliente",
+      descricao:
+        "Os principais envolvidos (nome, e-mail e telefone) ficam no projeto, em Editar projeto, e aparecem no painel para toda a equipe consultar.",
+      previa: "contatos-cliente",
     },
     {
       titulo: "Cancelar e reabrir",
@@ -360,14 +375,42 @@ const CONSULTOR: GuiaPerfil = {
     },
     MOD_MARCACOES,
     {
-      ...MOD_DASHBOARD,
-      resumo: "Os projetos em que você atua.",
+      id: "meus-projetos",
+      titulo: "Meus projetos",
+      icone: FolderKanban,
+      resumo: "Tudo sobre os projetos em que você atua, em um só lugar.",
+      href: "/dashboard",
+      hrefLabel: "Abrir Dashboard",
       funcionalidades: [
-        MOD_DASHBOARD.funcionalidades[1],
         {
-          titulo: "Atividades e datas",
-          descricao: "Veja em cada atividade do escopo em quais datas ela foi feita.",
+          titulo: "Seus projetos no Dashboard",
+          descricao:
+            "Aparecem só os projetos em que você está alocado. A borda do card mostra o status, o ponto colorido mostra o termômetro (Atenção ou Crítico) e as horas mostram o realizado em relação ao previsto. Clique no card para abrir o painel completo.",
+          previa: "card-projeto",
+        },
+        {
+          titulo: "Escopo atual e atividades feitas",
+          descricao:
+            "No painel do projeto, veja o escopo com a hierarquia de atividades, quantas já foram concluídas e em quais datas cada uma foi feita.",
           previa: "atividades-datas",
+        },
+        {
+          titulo: "Documentos (MIT) do projeto",
+          descricao:
+            "Consulte quais documentos já foram entregues e em que situação está cada um: Kick-off, Diagrama de processos, Validações e os demais. O coordenador mantém o status atualizado.",
+          previa: "documentos-mit",
+        },
+        {
+          titulo: "Contatos principais do cliente",
+          descricao:
+            "Veja nome, e-mail e telefone dos principais envolvidos do cliente, direto no painel do projeto, sem procurar em outro lugar.",
+          previa: "contatos-cliente",
+        },
+        {
+          titulo: "Linha do tempo do projeto",
+          descricao:
+            "Registre atualizações, problemas e decisões, e marque com @ o coordenador ou o administrador. O último registro aparece no card: clique nele para registrar um novo.",
+          previa: "marcacao",
         },
       ],
     },
