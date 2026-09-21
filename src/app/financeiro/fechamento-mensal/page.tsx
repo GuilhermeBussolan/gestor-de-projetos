@@ -18,6 +18,7 @@ import {
   exportarFechamentoPdf,
   montarFechamentoMensal,
   parceirasComRecursos,
+  recursosDoFiltro,
 } from "@/lib/relatorioFechamento";
 import type { Cliente, EmpresaParceira, EventoCalendario, Projeto, Recurso, TipoBox } from "@/types";
 
@@ -34,15 +35,23 @@ function FechamentoMensalPageContent() {
   const [mesAno, setMesAno] = useState(() => format(new Date(), "yyyy-MM"));
   const [tipo, setTipo] = useState<"" | TipoBox>("");
   const [parceiraId, setParceiraId] = useState("");
+  const [recursoId, setRecursoId] = useState("");
   const [logoUrl, setLogoUrl] = useState("/logo-navy.png");
   const [exportando, setExportando] = useState<"pdf" | "excel" | null>(null);
   const [erroExportar, setErroExportar] = useState("");
 
   // O filtro de parceira só oferece quem tem recurso terceiro; próprios não têm parceira.
   const parceirasDoFiltro = useMemo(() => parceirasComRecursos(parceiras, recursos), [parceiras, recursos]);
+  // O filtro de recurso oferece só quem passa nos filtros de tipo e parceiro.
+  const recursosDoFiltroLista = useMemo(() => recursosDoFiltro(recursos, { tipo, parceiraId }), [recursos, tipo, parceiraId]);
+  const recurso = recursoId ? (recursosDoFiltroLista.find((r) => r.id === recursoId) ?? null) : null;
+  const filtros = useMemo(() => ({ tipo, parceiraId, recursoId: recurso ? recurso.id : "" }), [tipo, parceiraId, recurso]);
   const parceira = parceiraId ? (parceiras.find((p) => p.id === parceiraId) ?? null) : null;
-  const filtros = useMemo(() => ({ tipo, parceiraId }), [tipo, parceiraId]);
-  const escopo = useMemo(() => descreverEscopo(filtros, parceira), [filtros, parceira]);
+  const parceiraDoRecurso = recurso?.parceiraId ? (parceiras.find((p) => p.id === recurso.parceiraId) ?? null) : null;
+  const escopo = useMemo(
+    () => descreverEscopo(filtros, recurso ? parceiraDoRecurso : parceira, recurso),
+    [filtros, parceira, parceiraDoRecurso, recurso]
+  );
 
   const linhas = useMemo(
     () => montarFechamentoMensal(eventos, recursos, projetos, clientes, parceiras, filtros, mesAno),
@@ -56,7 +65,13 @@ function FechamentoMensalPageContent() {
 
   function alterarTipo(novo: "" | TipoBox) {
     setTipo(novo);
+    setRecursoId("");
     if (novo === "proprio") setParceiraId("");
+  }
+
+  function alterarParceira(novo: string) {
+    setParceiraId(novo);
+    setRecursoId("");
   }
 
   async function exportar(formato: "pdf" | "excel") {
@@ -97,7 +112,7 @@ function FechamentoMensalPageContent() {
           <FormRow label="Parceiro">
             <Select
               value={parceiraId}
-              onChange={(e) => setParceiraId(e.target.value)}
+              onChange={(e) => alterarParceira(e.target.value)}
               disabled={tipo === "proprio"}
             >
               {tipo === "proprio" ? (
@@ -112,6 +127,18 @@ function FechamentoMensalPageContent() {
                   ))}
                 </>
               )}
+            </Select>
+          </FormRow>
+        </div>
+        <div className="w-64 shrink-0">
+          <FormRow label="Recurso (consultor)">
+            <Select value={recurso ? recurso.id : ""} onChange={(e) => setRecursoId(e.target.value)}>
+              <option value="">Todos</option>
+              {recursosDoFiltroLista.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.nomeCompleto}
+                </option>
+              ))}
             </Select>
           </FormRow>
         </div>

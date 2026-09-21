@@ -34,6 +34,8 @@ export interface FiltrosFechamento {
   tipo: "" | TipoBox;
   /** "" = todos. Só faz sentido para terceiros (recursos próprios não têm parceira). */
   parceiraId: string;
+  /** "" = todos os recursos que passam nos filtros acima. */
+  recursoId: string;
 }
 
 /** Quem o relatório cobre — vai no cabeçalho do PDF/Excel e da tela. */
@@ -54,7 +56,36 @@ export function parceirasComRecursos(parceiras: EmpresaParceira[], recursos: Rec
   return parceiras.filter((p) => ids.has(p.id));
 }
 
-export function descreverEscopo(filtros: FiltrosFechamento, parceira: EmpresaParceira | null): EscopoFechamento {
+/** Recursos que passam nos filtros de tipo e parceira — alimenta o filtro de recurso e o relatório. */
+export function recursosDoFiltro(
+  recursos: Recurso[],
+  filtros: Pick<FiltrosFechamento, "tipo" | "parceiraId">
+): Recurso[] {
+  return recursos
+    .filter((r) => {
+      const tipo = tipoBoxEfetivo(r);
+      if (filtros.tipo && tipo !== filtros.tipo) return false;
+      if (filtros.parceiraId) return tipo === "terceiro" && r.parceiraId === filtros.parceiraId;
+      return true;
+    })
+    .sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto, "pt-BR"));
+}
+
+export function descreverEscopo(
+  filtros: FiltrosFechamento,
+  parceira: EmpresaParceira | null,
+  recurso: Recurso | null = null
+): EscopoFechamento {
+  if (recurso) {
+    // Aqui "parceira" é a do próprio recurso (a tela passa a parceira dele, mesmo sem filtro de parceiro).
+    const terceiro = tipoBoxEfetivo(recurso) === "terceiro";
+    const vinculo = terceiro ? (parceira ? nomeExibicaoParceira(parceira) : "terceiro") : "próprio";
+    return {
+      rotulo: `${recurso.nomeCompleto} (${vinculo})`,
+      cnpj: terceiro ? parceira?.cnpj : undefined,
+      incluirVinculo: false,
+    };
+  }
   if (parceira) {
     return {
       rotulo: nomeExibicaoParceira(parceira),
@@ -85,13 +116,8 @@ export function montarFechamentoMensal(
   mesAno: string
 ): LinhaFechamento[] {
   const recursosIncluidos = new Set(
-    recursos
-      .filter((r) => {
-        const tipo = tipoBoxEfetivo(r);
-        if (filtros.tipo && tipo !== filtros.tipo) return false;
-        if (filtros.parceiraId) return tipo === "terceiro" && r.parceiraId === filtros.parceiraId;
-        return true;
-      })
+    recursosDoFiltro(recursos, filtros)
+      .filter((r) => !filtros.recursoId || r.id === filtros.recursoId)
       .map((r) => r.id)
   );
   if (recursosIncluidos.size === 0) return [];
