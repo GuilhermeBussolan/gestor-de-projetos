@@ -261,7 +261,7 @@ const MOD_FINANCEIRO: ModuloGuia = {
     {
       titulo: "Fechamento mensal",
       descricao:
-        "Relatório de repasse às parceiras por mês, em PDF ou Excel. O vencimento é no dia 28 do mês seguinte, ajustado ao próximo dia útil.",
+        "Relatório do mês em PDF ou Excel. Filtre por tipo de recurso (Todos, Próprios ou Terceiros) e, para terceiros, por parceiro. O vencimento é no dia 28 do mês seguinte, ajustado ao próximo dia útil.",
       previa: "fechamento",
     },
   ],

@@ -13,11 +13,13 @@ import { nomeExibicaoParceira } from "@/lib/parceira";
 import {
   NG_INFORMATICA,
   OBSERVACAO_FECHAMENTO,
+  descreverEscopo,
   exportarFechamentoExcel,
   exportarFechamentoPdf,
   montarFechamentoMensal,
+  parceirasComRecursos,
 } from "@/lib/relatorioFechamento";
-import type { Cliente, EmpresaParceira, EventoCalendario, Projeto, Recurso } from "@/types";
+import type { Cliente, EmpresaParceira, EventoCalendario, Projeto, Recurso, TipoBox } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dataBR = (iso: string) => iso.split("-").reverse().join("/");
@@ -30,36 +32,42 @@ function FechamentoMensalPageContent() {
   const { data: parceiras } = useCollection<EmpresaParceira>("parceiras");
 
   const [mesAno, setMesAno] = useState(() => format(new Date(), "yyyy-MM"));
+  const [tipo, setTipo] = useState<"" | TipoBox>("");
   const [parceiraId, setParceiraId] = useState("");
   const [logoUrl, setLogoUrl] = useState("/logo-navy.png");
   const [exportando, setExportando] = useState<"pdf" | "excel" | null>(null);
+  const [erroExportar, setErroExportar] = useState("");
 
-  const parceira = parceiras.find((p) => p.id === parceiraId) ?? null;
+  // O filtro de parceira só oferece quem tem recurso terceiro; próprios não têm parceira.
+  const parceirasDoFiltro = useMemo(() => parceirasComRecursos(parceiras, recursos), [parceiras, recursos]);
+  const parceira = parceiraId ? (parceiras.find((p) => p.id === parceiraId) ?? null) : null;
+  const filtros = useMemo(() => ({ tipo, parceiraId }), [tipo, parceiraId]);
+  const escopo = useMemo(() => descreverEscopo(filtros, parceira), [filtros, parceira]);
 
-  const linhas = useMemo(() => {
-    if (!parceiraId) return [];
-    return montarFechamentoMensal(eventos, recursos, projetos, clientes, parceiraId, mesAno);
-  }, [eventos, recursos, projetos, clientes, parceiraId, mesAno]);
+  const linhas = useMemo(
+    () => montarFechamentoMensal(eventos, recursos, projetos, clientes, parceiras, filtros, mesAno),
+    [eventos, recursos, projetos, clientes, parceiras, filtros, mesAno]
+  );
 
   const totalHoras = linhas.reduce((acc, l) => acc + l.totalHoras, 0);
   const totalRepasse = linhas.reduce((acc, l) => acc + l.valorRepasse, 0);
   const vencimento = mesAno ? calcularVencimentoFechamento(mesAno) : null;
+  const colunas = escopo.incluirVinculo ? 7 : 6;
 
-  async function exportarPdf() {
-    if (!parceira) return;
-    setExportando("pdf");
-    try {
-      await exportarFechamentoPdf(linhas, parceira, mesAno, logoUrl);
-    } finally {
-      setExportando(null);
-    }
+  function alterarTipo(novo: "" | TipoBox) {
+    setTipo(novo);
+    if (novo === "proprio") setParceiraId("");
   }
 
-  async function exportarExcel() {
-    if (!parceira) return;
-    setExportando("excel");
+  async function exportar(formato: "pdf" | "excel") {
+    setErroExportar("");
+    setExportando(formato);
     try {
-      await exportarFechamentoExcel(linhas, parceira, mesAno, logoUrl);
+      if (formato === "pdf") await exportarFechamentoPdf(linhas, escopo, mesAno, logoUrl);
+      else await exportarFechamentoExcel(linhas, escopo, mesAno, logoUrl);
+    } catch (err) {
+      console.error("Erro ao exportar o fechamento:", err);
+      setErroExportar("Não foi possível gerar o arquivo. Tente de novo.");
     } finally {
       setExportando(null);
     }
@@ -76,50 +84,65 @@ function FechamentoMensalPageContent() {
         <FormRow label="Mês/ano">
           <Input type="month" value={mesAno} onChange={(e) => setMesAno(e.target.value)} className="w-40" />
         </FormRow>
-        <FormRow label="Parceiro">
-          <Select value={parceiraId} onChange={(e) => setParceiraId(e.target.value)} className="w-64">
-            <option value="">Selecione...</option>
-            {parceiras.map((p) => (
-              <option key={p.id} value={p.id}>
-                {nomeExibicaoParceira(p)}
-              </option>
-            ))}
-          </Select>
-        </FormRow>
+        <div className="w-40 shrink-0">
+          <FormRow label="Tipo de recurso">
+            <Select value={tipo} onChange={(e) => alterarTipo(e.target.value as "" | TipoBox)}>
+              <option value="">Todos</option>
+              <option value="proprio">Próprios</option>
+              <option value="terceiro">Terceiros</option>
+            </Select>
+          </FormRow>
+        </div>
+        <div className="w-64 shrink-0">
+          <FormRow label="Parceiro">
+            <Select
+              value={parceiraId}
+              onChange={(e) => setParceiraId(e.target.value)}
+              disabled={tipo === "proprio"}
+            >
+              {tipo === "proprio" ? (
+                <option value="">Não se aplica (recursos próprios)</option>
+              ) : (
+                <>
+                  <option value="">Todos</option>
+                  {parceirasDoFiltro.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {nomeExibicaoParceira(p)}
+                    </option>
+                  ))}
+                </>
+              )}
+            </Select>
+          </FormRow>
+        </div>
         <FormRow label="Logo (URL, opcional)">
           <Input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} className="w-64" />
         </FormRow>
         <Button
           variant="secondary"
-          disabled={!parceira || linhas.length === 0 || !!exportando}
-          onClick={exportarPdf}
+          disabled={linhas.length === 0 || !!exportando}
+          onClick={() => exportar("pdf")}
         >
           {exportando === "pdf" ? "Gerando..." : "Exportar PDF"}
         </Button>
         <Button
           variant="secondary"
-          disabled={!parceira || linhas.length === 0 || !!exportando}
-          onClick={exportarExcel}
+          disabled={linhas.length === 0 || !!exportando}
+          onClick={() => exportar("excel")}
         >
           {exportando === "excel" ? "Gerando..." : "Exportar Excel"}
         </Button>
       </div>
+      {erroExportar && <p className="mb-3 text-sm font-medium text-red-600">{erroExportar}</p>}
 
-      {!parceiraId && (
-        <p className="rounded-2xl border border-dashed border-brand-border bg-white p-8 text-center text-brand-faint">
-          Selecione um parceiro e o mês/ano para gerar o fechamento.
-        </p>
-      )}
-
-      {parceiraId && (
-        <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
+      <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
           <div className="border-b border-brand-border-soft p-5">
             <p className="text-[15px] font-extrabold tracking-[-0.01em] text-brand-navy-2">
               Relatório de Fechamento Mensal
             </p>
             <p className="mt-1 text-[12.5px] text-brand-muted">
-              Parceiro: <strong className="text-brand-navy-2">{nomeExibicaoParceira(parceira ?? undefined)}</strong>
-              {parceira ? ` — CNPJ: ${parceira.cnpj}` : ""}
+              Recursos: <strong className="text-brand-navy-2">{escopo.rotulo}</strong>
+              {escopo.cnpj ? ` — CNPJ: ${escopo.cnpj}` : ""}
             </p>
             <p className="text-[12.5px] text-brand-muted">
               {NG_INFORMATICA.razaoSocial} — CNPJ: {NG_INFORMATICA.cnpj}
@@ -136,6 +159,7 @@ function FechamentoMensalPageContent() {
               <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
                 <th className="px-[18px] py-3.5">Data</th>
                 <th className="px-[18px] py-3.5">Nome do recurso</th>
+                {escopo.incluirVinculo && <th className="px-[18px] py-3.5">Vínculo</th>}
                 <th className="px-[18px] py-3.5">Cliente</th>
                 <th className="px-[18px] py-3.5">Projeto</th>
                 <th className="px-[18px] py-3.5">Total de horas</th>
@@ -147,6 +171,7 @@ function FechamentoMensalPageContent() {
                 <tr key={i} className="border-t border-brand-border-soft">
                   <td className="px-[18px] py-[13px] text-brand-muted">{dataBR(l.data)}</td>
                   <td className="px-[18px] py-[13px] font-bold text-brand-navy-2">{l.recursoNome}</td>
+                  {escopo.incluirVinculo && <td className="px-[18px] py-[13px] text-brand-muted">{l.vinculo}</td>}
                   <td className="px-[18px] py-[13px] text-brand-muted">{l.cliente}</td>
                   <td className="px-[18px] py-[13px] text-brand-muted">{l.projeto}</td>
                   <td className="px-[18px] py-[13px] text-brand-navy-2">{formatarHoras(l.totalHoras)}</td>
@@ -155,8 +180,8 @@ function FechamentoMensalPageContent() {
               ))}
               {linhas.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-brand-faint">
-                    Nenhuma hora aprovada desse parceiro no período selecionado.
+                  <td colSpan={colunas} className="px-4 py-8 text-center text-brand-faint">
+                    Nenhuma hora aprovada para esses filtros no período selecionado.
                   </td>
                 </tr>
               )}
@@ -164,7 +189,7 @@ function FechamentoMensalPageContent() {
             {linhas.length > 0 && (
               <tfoot>
                 <tr className="border-t border-brand-border bg-brand-hover font-bold text-brand-navy-2">
-                  <td className="px-[18px] py-3.5" colSpan={4}>
+                  <td className="px-[18px] py-3.5" colSpan={colunas - 2}>
                     Total
                   </td>
                   <td className="px-[18px] py-3.5">{formatarHoras(totalHoras)}</td>
@@ -173,8 +198,7 @@ function FechamentoMensalPageContent() {
               </tfoot>
             )}
           </table>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

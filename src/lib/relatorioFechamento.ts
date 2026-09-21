@@ -8,7 +8,7 @@ import { formatarHoras } from "@/lib/horas";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { nomeExibicaoParceira } from "@/lib/parceira";
 import { statusEfetivo } from "@/lib/statusHora";
-import type { Cliente, EmpresaParceira, EventoCalendario, Projeto, Recurso } from "@/types";
+import type { Cliente, EmpresaParceira, EventoCalendario, Projeto, Recurso, TipoBox } from "@/types";
 
 export const NG_INFORMATICA = {
   razaoSocial: "NG INFORMÁTICA LTDA",
@@ -21,28 +21,83 @@ export const OBSERVACAO_FECHAMENTO =
 export interface LinhaFechamento {
   data: string;
   recursoNome: string;
+  /** "Próprio" ou "Terceiro – Parceira". */
+  vinculo: string;
   cliente: string;
   projeto: string;
   totalHoras: number;
   valorRepasse: number;
 }
 
-/** Monta as linhas do fechamento mensal de uma parceira: só horas aprovadas dos recursos BOX Terceiro dela, no mês/ano informado. */
+export interface FiltrosFechamento {
+  /** "" = próprios e terceiros. */
+  tipo: "" | TipoBox;
+  /** "" = todos. Só faz sentido para terceiros (recursos próprios não têm parceira). */
+  parceiraId: string;
+}
+
+/** Quem o relatório cobre — vai no cabeçalho do PDF/Excel e da tela. */
+export interface EscopoFechamento {
+  rotulo: string;
+  cnpj?: string | null;
+  /** Mostra a coluna "Vínculo" (quando o relatório mistura próprios e terceiros ou várias parceiras). */
+  incluirVinculo: boolean;
+}
+
+export const tipoBoxEfetivo = (r: Pick<Recurso, "tipoBox">): TipoBox => r.tipoBox ?? "proprio";
+
+/** Parceiras que têm ao menos um recurso terceiro — as únicas que fazem sentido no filtro. */
+export function parceirasComRecursos(parceiras: EmpresaParceira[], recursos: Recurso[]): EmpresaParceira[] {
+  const ids = new Set(
+    recursos.filter((r) => tipoBoxEfetivo(r) === "terceiro" && r.parceiraId).map((r) => r.parceiraId as string)
+  );
+  return parceiras.filter((p) => ids.has(p.id));
+}
+
+export function descreverEscopo(filtros: FiltrosFechamento, parceira: EmpresaParceira | null): EscopoFechamento {
+  if (parceira) {
+    return {
+      rotulo: nomeExibicaoParceira(parceira),
+      cnpj: parceira.cnpj,
+      incluirVinculo: false,
+    };
+  }
+  if (filtros.tipo === "proprio") {
+    return { rotulo: "Recursos próprios", incluirVinculo: false };
+  }
+  if (filtros.tipo === "terceiro") {
+    return { rotulo: "Recursos terceiros (todas as parceiras)", incluirVinculo: true };
+  }
+  return { rotulo: "Todos os recursos (próprios e terceiros)", incluirVinculo: true };
+}
+
+/**
+ * Monta as linhas do fechamento mensal: só horas aprovadas do mês/ano informado, dos recursos
+ * que passam nos filtros (tipo próprio/terceiro e, para terceiros, a parceira).
+ */
 export function montarFechamentoMensal(
   eventos: EventoCalendario[],
   recursos: Recurso[],
   projetos: Projeto[],
   clientes: Cliente[],
-  parceiraId: string,
+  parceiras: EmpresaParceira[],
+  filtros: FiltrosFechamento,
   mesAno: string
 ): LinhaFechamento[] {
-  const recursosDaParceira = new Set(
-    recursos.filter((r) => r.tipoBox === "terceiro" && r.parceiraId === parceiraId).map((r) => r.id)
+  const recursosIncluidos = new Set(
+    recursos
+      .filter((r) => {
+        const tipo = tipoBoxEfetivo(r);
+        if (filtros.tipo && tipo !== filtros.tipo) return false;
+        if (filtros.parceiraId) return tipo === "terceiro" && r.parceiraId === filtros.parceiraId;
+        return true;
+      })
+      .map((r) => r.id)
   );
-  if (recursosDaParceira.size === 0) return [];
+  if (recursosIncluidos.size === 0) return [];
 
   const elegiveis = eventos.filter(
-    (e) => recursosDaParceira.has(e.recursoId) && e.data.startsWith(mesAno) && statusEfetivo(e) === "aprovado"
+    (e) => recursosIncluidos.has(e.recursoId) && e.data.startsWith(mesAno) && statusEfetivo(e) === "aprovado"
   );
 
   const grupos = new Map<string, LinhaFechamento>();
@@ -57,9 +112,14 @@ export function montarFechamentoMensal(
       existente.totalHoras += ev.totalHoras;
       existente.valorRepasse = Math.round(existente.totalHoras * recurso.valorHora * 100) / 100;
     } else {
+      const parceiraDoRecurso = parceiras.find((p) => p.id === recurso.parceiraId);
       grupos.set(chave, {
         data: ev.data,
         recursoNome: recurso.nomeCompleto,
+        vinculo:
+          tipoBoxEfetivo(recurso) === "terceiro"
+            ? `Terceiro – ${nomeExibicaoParceira(parceiraDoRecurso)}`
+            : "Próprio",
         cliente: nomeExibicaoCliente(cliente),
         projeto: projeto?.codigoProposta ?? "—",
         totalHoras: ev.totalHoras,
@@ -74,6 +134,43 @@ export function montarFechamentoMensal(
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dataBR = (iso: string) => iso.split("-").reverse().join("/");
+const nomeArquivoSeguro = (s: string) => s.replace(/[\\/:*?"<>|]/g, "-");
+
+function cabecalhoColunas(incluirVinculo: boolean): string[] {
+  return [
+    "Data",
+    "Nome do recurso",
+    ...(incluirVinculo ? ["Vínculo"] : []),
+    "Cliente",
+    "Projeto",
+    "Total de horas",
+    "Valor de repasse",
+  ];
+}
+
+function celulasLinha(l: LinhaFechamento, incluirVinculo: boolean): string[] {
+  return [
+    dataBR(l.data),
+    l.recursoNome,
+    ...(incluirVinculo ? [l.vinculo] : []),
+    l.cliente,
+    l.projeto,
+    formatarHoras(l.totalHoras),
+    moeda(l.valorRepasse),
+  ];
+}
+
+function linhaTotal(totalHoras: number, totalRepasse: number, incluirVinculo: boolean): string[] {
+  return [
+    "",
+    "",
+    ...(incluirVinculo ? [""] : []),
+    "",
+    "Total",
+    formatarHoras(totalHoras),
+    moeda(totalRepasse),
+  ];
+}
 
 async function carregarImagemDataUrl(url: string): Promise<string | null> {
   if (!url.trim()) return null;
@@ -96,9 +193,13 @@ function formatoImagem(dataUrl: string): "PNG" | "JPEG" {
   return dataUrl.startsWith("data:image/jpeg") || dataUrl.startsWith("data:image/jpg") ? "JPEG" : "PNG";
 }
 
+function linhaEscopo(escopo: EscopoFechamento): string {
+  return `${escopo.rotulo}${escopo.cnpj ? ` — CNPJ: ${escopo.cnpj}` : ""}`;
+}
+
 export async function exportarFechamentoPdf(
   linhas: LinhaFechamento[],
-  parceira: EmpresaParceira,
+  escopo: EscopoFechamento,
   mesAno: string,
   logoUrl: string
 ) {
@@ -122,7 +223,7 @@ export async function exportarFechamentoPdf(
   const [ano, mes] = mesAno.split("-");
   pdf.text(`Competência: ${mes}/${ano}`, 14, y);
   y += 5;
-  pdf.text(`Parceiro: ${nomeExibicaoParceira(parceira)} — CNPJ: ${parceira.cnpj}`, 14, y);
+  pdf.text(`Recursos: ${linhaEscopo(escopo)}`, 14, y);
   y += 5;
   pdf.text(`${NG_INFORMATICA.razaoSocial} — CNPJ: ${NG_INFORMATICA.cnpj}`, 14, y);
   y += 5;
@@ -139,27 +240,20 @@ export async function exportarFechamentoPdf(
 
   autoTable(pdf, {
     startY: y,
-    head: [["Data", "Nome do recurso", "Cliente", "Projeto", "Total de horas", "Valor de repasse"]],
-    body: linhas.map((l) => [
-      dataBR(l.data),
-      l.recursoNome,
-      l.cliente,
-      l.projeto,
-      formatarHoras(l.totalHoras),
-      moeda(l.valorRepasse),
-    ]),
-    foot: [["", "", "", "Total", formatarHoras(totalHoras), moeda(totalRepasse)]],
+    head: [cabecalhoColunas(escopo.incluirVinculo)],
+    body: linhas.map((l) => celulasLinha(l, escopo.incluirVinculo)),
+    foot: [linhaTotal(totalHoras, totalRepasse, escopo.incluirVinculo)],
     styles: { fontSize: 8 },
     footStyles: { fontStyle: "bold", fillColor: [238, 241, 248], textColor: [21, 40, 73] },
     margin: { left: 14, right: 14 },
   });
 
-  pdf.save(`fechamento-mensal-${nomeExibicaoParceira(parceira)}-${mesAno}.pdf`);
+  pdf.save(`fechamento-mensal-${nomeArquivoSeguro(escopo.rotulo)}-${mesAno}.pdf`);
 }
 
 export async function exportarFechamentoExcel(
   linhas: LinhaFechamento[],
-  parceira: EmpresaParceira,
+  escopo: EscopoFechamento,
   mesAno: string,
   logoUrl: string
 ) {
@@ -168,16 +262,18 @@ export async function exportarFechamentoExcel(
 
   const [ano, mes] = mesAno.split("-");
   const vencimento = format(calcularVencimentoFechamento(mesAno), "dd/MM/yyyy");
+  const colunas = cabecalhoColunas(escopo.incluirVinculo);
+  const ultimaColuna = String.fromCharCode("A".charCodeAt(0) + colunas.length - 1);
 
-  planilha.mergeCells("A1:F1");
+  planilha.mergeCells(`A1:${ultimaColuna}1`);
   planilha.getCell("A1").value = "Relatório de Fechamento Mensal";
   planilha.getCell("A1").font = { bold: true, size: 14 };
 
   planilha.getCell("A2").value = `Competência: ${mes}/${ano}`;
-  planilha.getCell("A3").value = `Parceiro: ${nomeExibicaoParceira(parceira)} — CNPJ: ${parceira.cnpj}`;
+  planilha.getCell("A3").value = `Recursos: ${linhaEscopo(escopo)}`;
   planilha.getCell("A4").value = `${NG_INFORMATICA.razaoSocial} — CNPJ: ${NG_INFORMATICA.cnpj}`;
   planilha.getCell("A5").value = `Vencimento: ${vencimento}`;
-  planilha.mergeCells("A6:F6");
+  planilha.mergeCells(`A6:${ultimaColuna}6`);
   planilha.getCell("A6").value = OBSERVACAO_FECHAMENTO;
   planilha.getCell("A6").font = { italic: true, size: 9 };
   planilha.getCell("A6").alignment = { wrapText: true };
@@ -189,40 +285,35 @@ export async function exportarFechamentoExcel(
         base64: logo,
         extension: formatoImagem(logo) === "JPEG" ? "jpeg" : "png",
       });
-      planilha.addImage(imageId, { tl: { col: 5, row: 0 }, ext: { width: 90, height: 45 } });
+      planilha.addImage(imageId, { tl: { col: colunas.length - 1, row: 0 }, ext: { width: 90, height: 45 } });
     } catch {
       // logo inválida — segue sem ela
     }
   }
 
   const linhaCabecalho = 8;
-  planilha.getRow(linhaCabecalho).values = [
-    "Data",
-    "Nome do recurso",
-    "Cliente",
-    "Projeto",
-    "Total de horas",
-    "Valor de repasse",
-  ];
+  planilha.getRow(linhaCabecalho).values = colunas;
   planilha.getRow(linhaCabecalho).font = { bold: true };
-  planilha.columns = [
-    { key: "data", width: 12 },
-    { key: "recurso", width: 28 },
-    { key: "cliente", width: 24 },
-    { key: "projeto", width: 18 },
-    { key: "horas", width: 14 },
-    { key: "valor", width: 18 },
-  ];
+  const larguras: Record<string, number> = {
+    Data: 12,
+    "Nome do recurso": 28,
+    Vínculo: 26,
+    Cliente: 24,
+    Projeto: 18,
+    "Total de horas": 14,
+    "Valor de repasse": 18,
+  };
+  planilha.columns = colunas.map((c) => ({ width: larguras[c] ?? 16 }));
 
   linhas.forEach((l) => {
-    planilha.addRow([dataBR(l.data), l.recursoNome, l.cliente, l.projeto, formatarHoras(l.totalHoras), moeda(l.valorRepasse)]);
+    planilha.addRow(celulasLinha(l, escopo.incluirVinculo));
   });
 
   const totalHoras = linhas.reduce((acc, l) => acc + l.totalHoras, 0);
   const totalRepasse = linhas.reduce((acc, l) => acc + l.valorRepasse, 0);
-  const linhaTotal = planilha.addRow(["", "", "", "Total", formatarHoras(totalHoras), moeda(totalRepasse)]);
-  linhaTotal.font = { bold: true };
+  const total = planilha.addRow(linhaTotal(totalHoras, totalRepasse, escopo.incluirVinculo));
+  total.font = { bold: true };
 
   const buffer = await workbook.xlsx.writeBuffer();
-  saveAs(new Blob([buffer]), `fechamento-mensal-${nomeExibicaoParceira(parceira)}-${mesAno}.xlsx`);
+  saveAs(new Blob([buffer]), `fechamento-mensal-${nomeArquivoSeguro(escopo.rotulo)}-${mesAno}.xlsx`);
 }
