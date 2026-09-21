@@ -593,11 +593,11 @@ function ParcelaStatus() {
 }
 
 function Fechamento() {
-  const cab = ["Data", "Recurso", "Cliente", "Projeto", "Horas", "Repasse"];
+  const cab = ["Data", "Recurso", "Cliente", "Projeto", "Início", "Fim", "Horas", "Repasse"];
   return (
     <Moldura>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[420px] text-[11px]">
+        <table className="w-full min-w-[480px] text-[11px]">
           <thead>
             <tr className="border-b border-brand-border-soft text-left text-[9.5px] font-bold tracking-[.06em] text-brand-faint uppercase">
               {cab.map((c) => (
@@ -607,10 +607,10 @@ function Fechamento() {
           </thead>
           <tbody className="text-brand-navy-2">
             <tr className="border-b border-brand-border-soft">
-              <td className="px-1 py-1.5">03/09</td><td className="px-1">Ana Souza</td><td className="px-1">Cliente X</td><td className="px-1">Alfa</td><td className="px-1">08:00</td><td className="px-1">R$ 400</td>
+              <td className="px-1 py-1.5">03/09</td><td className="px-1">Ana Souza</td><td className="px-1">Cliente X</td><td className="px-1">Alfa</td><td className="px-1">08:00</td><td className="px-1">16:00</td><td className="px-1">08:00</td><td className="px-1">R$ 400</td>
             </tr>
             <tr>
-              <td className="px-1 py-1.5">04/09</td><td className="px-1">Ana Souza</td><td className="px-1">Cliente Y</td><td className="px-1">Beta</td><td className="px-1">04:00</td><td className="px-1">R$ 200</td>
+              <td className="px-1 py-1.5">04/09</td><td className="px-1">Ana Souza</td><td className="px-1">Cliente Y</td><td className="px-1">Beta</td><td className="px-1">08:00</td><td className="px-1">12:00</td><td className="px-1">04:00</td><td className="px-1">R$ 200</td>
             </tr>
           </tbody>
         </table>

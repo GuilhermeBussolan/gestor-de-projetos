@@ -19,6 +19,7 @@ import {
   montarFechamentoMensal,
   parceirasComRecursos,
   recursosDoFiltro,
+  temDesconto,
 } from "@/lib/relatorioFechamento";
 import type { Cliente, EmpresaParceira, EventoCalendario, Projeto, Recurso, TipoBox } from "@/types";
 
@@ -48,7 +49,7 @@ function FechamentoMensalPageContent() {
   const filtros = useMemo(() => ({ tipo, parceiraId, recursoId: recurso ? recurso.id : "" }), [tipo, parceiraId, recurso]);
   const parceira = parceiraId ? (parceiras.find((p) => p.id === parceiraId) ?? null) : null;
   const parceiraDoRecurso = recurso?.parceiraId ? (parceiras.find((p) => p.id === recurso.parceiraId) ?? null) : null;
-  const escopo = useMemo(
+  const escopoBase = useMemo(
     () => descreverEscopo(filtros, recurso ? parceiraDoRecurso : parceira, recurso),
     [filtros, parceira, parceiraDoRecurso, recurso]
   );
@@ -57,11 +58,14 @@ function FechamentoMensalPageContent() {
     () => montarFechamentoMensal(eventos, recursos, projetos, clientes, parceiras, filtros, mesAno),
     [eventos, recursos, projetos, clientes, parceiras, filtros, mesAno]
   );
+  // A coluna Desconto só aparece quando algum lançamento do período tem desconto.
+  const escopo = useMemo(() => ({ ...escopoBase, incluirDesconto: temDesconto(linhas) }), [escopoBase, linhas]);
 
   const totalHoras = linhas.reduce((acc, l) => acc + l.totalHoras, 0);
   const totalRepasse = linhas.reduce((acc, l) => acc + l.valorRepasse, 0);
   const vencimento = mesAno ? calcularVencimentoFechamento(mesAno) : null;
-  const colunas = escopo.incluirVinculo ? 7 : 6;
+  const colunas = 8 + (escopo.incluirVinculo ? 1 : 0) + (escopo.incluirDesconto ? 1 : 0);
+  const sobrepostos = linhas.filter((l) => l.sobreposto).length;
 
   function alterarTipo(novo: "" | TipoBox) {
     setTipo(novo);
@@ -181,6 +185,14 @@ function FechamentoMensalPageContent() {
             <p className="mt-2 text-[11.5px] text-brand-faint italic">{OBSERVACAO_FECHAMENTO}</p>
           </div>
 
+          {sobrepostos > 0 && (
+            <p className="border-b border-brand-border-soft bg-[#fff2de] px-5 py-2.5 text-[12.5px] font-medium text-[#a4650d]">
+              ⚠ {sobrepostos} lançamento{sobrepostos === 1 ? "" : "s"} com horário sobreposto (mesmo recurso, mesmo
+              dia). Estão destacados abaixo para conferência.
+            </p>
+          )}
+
+          <div className="overflow-x-auto">
           <table className="w-full text-[13.5px]">
             <thead>
               <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
@@ -189,18 +201,40 @@ function FechamentoMensalPageContent() {
                 {escopo.incluirVinculo && <th className="px-[18px] py-3.5">Vínculo</th>}
                 <th className="px-[18px] py-3.5">Cliente</th>
                 <th className="px-[18px] py-3.5">Projeto</th>
+                <th className="px-[18px] py-3.5">Hora início</th>
+                <th className="px-[18px] py-3.5">Hora fim</th>
+                {escopo.incluirDesconto && <th className="px-[18px] py-3.5">Desconto</th>}
                 <th className="px-[18px] py-3.5">Total de horas</th>
                 <th className="px-[18px] py-3.5">Valor de repasse</th>
               </tr>
             </thead>
             <tbody>
               {linhas.map((l, i) => (
-                <tr key={i} className="border-t border-brand-border-soft">
+                <tr
+                  key={i}
+                  className={`border-t border-brand-border-soft ${l.sobreposto ? "bg-[#fff8eb]" : ""}`}
+                >
                   <td className="px-[18px] py-[13px] text-brand-muted">{dataBR(l.data)}</td>
                   <td className="px-[18px] py-[13px] font-bold text-brand-navy-2">{l.recursoNome}</td>
                   {escopo.incluirVinculo && <td className="px-[18px] py-[13px] text-brand-muted">{l.vinculo}</td>}
                   <td className="px-[18px] py-[13px] text-brand-muted">{l.cliente}</td>
                   <td className="px-[18px] py-[13px] text-brand-muted">{l.projeto}</td>
+                  <td className="px-[18px] py-[13px] font-semibold whitespace-nowrap text-brand-navy-2">
+                    {l.horaInicio || "—"}
+                    {l.sobreposto && (
+                      <span className="ml-2 rounded-full bg-[#fff2de] px-1.5 py-0.5 text-[9.5px] font-bold text-[#a4650d]">
+                        sobreposto
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-[18px] py-[13px] font-semibold whitespace-nowrap text-brand-navy-2">
+                    {l.horaFim || "—"}
+                  </td>
+                  {escopo.incluirDesconto && (
+                    <td className="px-[18px] py-[13px] text-brand-muted">
+                      {l.horaDesconto && l.horaDesconto !== "00:00" ? l.horaDesconto : "—"}
+                    </td>
+                  )}
                   <td className="px-[18px] py-[13px] text-brand-navy-2">{formatarHoras(l.totalHoras)}</td>
                   <td className="px-[18px] py-[13px] font-bold text-brand-navy-2">{moeda(l.valorRepasse)}</td>
                 </tr>
@@ -225,6 +259,7 @@ function FechamentoMensalPageContent() {
               </tfoot>
             )}
           </table>
+          </div>
       </div>
     </div>
   );
