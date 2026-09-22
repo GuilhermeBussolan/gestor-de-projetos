@@ -11,7 +11,7 @@ import { EscopoSelector } from "@/components/projetos/EscopoSelector";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { useAuth } from "@/contexts/AuthContext";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import { MODULOS, TIPOS_ATENDIMENTO, type EnvolvidoChave, type Escopo, type EscopoAtividade, type Financeiro, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type EnvolvidoChave, type Escopo, type EscopoAtividade, type ExclusaoEscopo, type Financeiro, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function formatarDataHoraCurta(timestamp: number): string {
   return new Date(timestamp).toLocaleString("pt-BR", {
@@ -113,6 +113,11 @@ function CancelarProjetoSecao({ projeto, onCancelado }: { projeto: Projeto; onCa
   );
 }
 
+/**
+ * Reeditar valor/descrição não pode apagar o que já aconteceu com a parcela (status, nota
+ * fiscal, datas de liberação/recebimento/previsão etc.) — só quando o número de parcelas muda
+ * é que a lista é mesmo recriada do zero.
+ */
 function financeiroComStatusPreservado(anterior: Financeiro, novo: Financeiro): Financeiro {
   if (
     anterior.tipoFaturamento === novo.tipoFaturamento &&
@@ -120,7 +125,7 @@ function financeiroComStatusPreservado(anterior: Financeiro, novo: Financeiro): 
   ) {
     return {
       ...novo,
-      parcelas: novo.parcelas.map((p, i) => ({ ...p, status: anterior.parcelas[i].status })),
+      parcelas: novo.parcelas.map((p, i) => ({ ...anterior.parcelas[i], valor: p.valor, descricao: p.descricao, tipoDocumentoId: p.tipoDocumentoId })),
     };
   }
   return novo;
@@ -170,19 +175,24 @@ function EditarProjetoForm({
   const [escopoAtividades, setEscopoAtividades] = useState<EscopoAtividade[]>(
     projeto.escopoAtividades ?? []
   );
+  const [escopoExclusoes, setEscopoExclusoes] = useState<ExclusaoEscopo[]>(
+    projeto.escopoExclusoes ?? []
+  );
   const [salvando, setSalvando] = useState(false);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
 
-  async function selecionarEscopo(escopo: Escopo) {
+  async function selecionarEscopo(escopo: Escopo, atividades: EscopoAtividade[], exclusoes: ExclusaoEscopo[]) {
     await updateDoc(doc(db, "projetos", projeto.id), {
       escopoId: escopo.id,
       escopoNome: escopo.nome,
-      escopoAtividades: escopo.atividades,
+      escopoAtividades: atividades,
+      escopoExclusoes: exclusoes.length > 0 ? exclusoes : null,
       updatedAt: serverTimestamp(),
     });
     setEscopoId(escopo.id);
     setEscopoNome(escopo.nome);
-    setEscopoAtividades(escopo.atividades);
+    setEscopoAtividades(atividades);
+    setEscopoExclusoes(exclusoes);
   }
 
   async function removerEscopo() {
@@ -190,11 +200,13 @@ function EditarProjetoForm({
       escopoId: null,
       escopoNome: null,
       escopoAtividades: null,
+      escopoExclusoes: null,
       updatedAt: serverTimestamp(),
     });
     setEscopoId(null);
     setEscopoNome(null);
     setEscopoAtividades([]);
+    setEscopoExclusoes([]);
   }
 
   const coordenadores = recursos.filter((r) => r.tipo === "coordenador");
@@ -246,6 +258,7 @@ function EditarProjetoForm({
         escopoId,
         escopoNome,
         escopoAtividades: escopoAtividades.length > 0 ? escopoAtividades : null,
+        escopoExclusoes: escopoExclusoes.length > 0 ? escopoExclusoes : null,
         principaisEnvolvidos:
           envolvidos.filter((e) => e.nome.trim()).length > 0
             ? envolvidos.filter((e) => e.nome.trim())
@@ -351,6 +364,7 @@ function EditarProjetoForm({
           escopos={escopos}
           escopoIdAtual={escopoId}
           escopoNomeAtual={escopoNome}
+          exclusoesAtuais={escopoExclusoes}
           onSelecionar={selecionarEscopo}
           onRemover={removerEscopo}
         />

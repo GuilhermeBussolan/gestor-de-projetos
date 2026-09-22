@@ -3,6 +3,7 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { FormRow, Input, Select } from "@/components/ui/Field";
 import { TIPO_FATURAMENTO_CONFIG, TIPO_FATURAMENTO_ORDEM } from "@/lib/constants";
+import { somarDias } from "@/lib/parcela";
 import type { Financeiro, TipoDocumento, TipoFaturamento } from "@/types";
 
 export interface FinanceiroFieldsHandle {
@@ -36,6 +37,19 @@ export const FinanceiroFields = forwardRef<
       ? String(financeiroInicial.numeroParcelas)
       : ""
   );
+  // Base do cálculo automático de datas (1.1): opcional — sem isso as parcelas ficam sem data
+  // prevista, como sempre foi. Preenchidas, alimentam a previsão de todas as parcelas futuras.
+  const [dataPrimeiraParcela, setDataPrimeiraParcela] = useState(
+    tipoInicial === "parcelado" ? (financeiroInicial?.parcelas.find((p) => p.numero === 1)?.dataPrevistaOriginal ?? "") : ""
+  );
+  const [intervaloDias, setIntervaloDias] = useState(() => {
+    if (tipoInicial !== "parcelado") return "30";
+    const p1 = financeiroInicial?.parcelas.find((p) => p.numero === 1)?.dataPrevistaOriginal;
+    const p2 = financeiroInicial?.parcelas.find((p) => p.numero === 2)?.dataPrevistaOriginal;
+    if (!p1 || !p2) return "30";
+    const dias = Math.round((new Date(p2).getTime() - new Date(p1).getTime()) / 86_400_000);
+    return String(dias);
+  });
   const [marcos, setMarcos] = useState<MarcoLinha[]>(
     tipoInicial === "marco_faturamento" && (financeiroInicial?.parcelas.length ?? 0) > 0
       ? financeiroInicial!.parcelas.map((p) => ({
@@ -85,11 +99,17 @@ export const FinanceiroFields = forwardRef<
 
       if (tipoFaturamento === "parcelado") {
         const valorParcela = Math.round((valorTotalNumero / numeroParcelasNumero) * 100) / 100;
-        const parcelas = Array.from({ length: numeroParcelasNumero }, (_, i) => ({
-          numero: i + 1,
-          valor: valorParcela,
-          status: "AGUARDANDO" as const,
-        }));
+        const intervalo = Math.max(1, Number(intervaloDias) || 30);
+        const parcelas = Array.from({ length: numeroParcelasNumero }, (_, i) => {
+          const dataPrevista = dataPrimeiraParcela ? somarDias(dataPrimeiraParcela, intervalo * i) : null;
+          return {
+            numero: i + 1,
+            valor: valorParcela,
+            status: "AGUARDANDO" as const,
+            dataPrevista,
+            dataPrevistaOriginal: dataPrevista,
+          };
+        });
         return {
           tipoFaturamento,
           valorTotal: valorTotalNumero,
@@ -161,6 +181,28 @@ export const FinanceiroFields = forwardRef<
           <p className="col-span-2 text-xs text-brand-muted">
             {numeroParcelasNumero}x de {moeda(valorTotalNumero / numeroParcelasNumero)}
           </p>
+          <FormRow label="Data prevista da 1ª parcela (opcional)">
+            <Input
+              type="date"
+              value={dataPrimeiraParcela}
+              onChange={(e) => setDataPrimeiraParcela(e.target.value)}
+            />
+          </FormRow>
+          <FormRow label="Intervalo entre parcelas (dias)">
+            <Input
+              type="number"
+              min="1"
+              value={intervaloDias}
+              onChange={(e) => setIntervaloDias(e.target.value)}
+              disabled={!dataPrimeiraParcela}
+            />
+          </FormRow>
+          {dataPrimeiraParcela && (
+            <p className="col-span-2 text-xs text-brand-muted">
+              Ao preencher a data da 1ª parcela, as demais recebem uma previsão automática (base
+              para o recálculo quando uma parcela for liberada).
+            </p>
+          )}
         </div>
       )}
 

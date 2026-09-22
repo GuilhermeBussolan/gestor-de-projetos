@@ -121,10 +121,22 @@ const MOD_PROJETOS: ModuloGuia = {
       previa: "termometro",
     },
     {
+      titulo: "Incluir escopo: completo ou personalizado",
+      descricao:
+        "Ao vincular um escopo, escolha \"Incluir completo\" ou \"Personalizar exclusões\": nesta, desmarque uma tarefa para excluir ela (e os filhos dela) do projeto. As exclusões ficam registradas e podem ser revistas depois.",
+      previa: "escopo-hierarquia",
+    },
+    {
       titulo: "Atividades do escopo e datas",
       descricao:
         "No painel do projeto, cada atividade mostra em quais datas foi feita (só horas aprovadas), e o contador conta apenas as atividades finais.",
       previa: "atividades-datas",
+    },
+    {
+      titulo: "Previsão de faturamento dos marcos",
+      descricao:
+        "Em projetos por marco de faturamento vinculados a um documento MIT, defina a previsão de faturamento de cada marco ainda não liberado — ela alimenta o Faturamento Previsto.",
+      previa: "documentos-mit",
     },
     {
       titulo: "Documentos (MIT) e progresso",
@@ -255,8 +267,14 @@ const MOD_FINANCEIRO: ModuloGuia = {
     {
       titulo: "Liberação de faturamento",
       descricao:
-        "Acompanhe cada parcela: Liberado, Faturado, Recebido ou Cancelado. Cada mudança pede o dado obrigatório, como nota fiscal, data ou motivo.",
+        "Acompanhe cada parcela: Liberado, Faturado, Recebido ou Cancelado. Cada mudança pede o dado obrigatório, como nota fiscal, data ou motivo. Ao liberar, você não pode pular a ordem das parcelas, e as datas previstas das parcelas futuras são recalculadas automaticamente, com prévia antes de confirmar.",
       previa: "parcela-status",
+    },
+    {
+      titulo: "Faturamento previsto",
+      descricao:
+        "Gráfico do ano com o que já foi liberado (verde) e o que ainda está previsto (azul). Clique num mês para ver o detalhe por cliente, com valor vendido, faturado e saldo, exportável em CSV, PDF ou Excel.",
+      previa: "kpis-financeiro",
     },
     {
       titulo: "Fechamento mensal",
@@ -319,6 +337,12 @@ const ADMINISTRADOR: GuiaPerfil = {
           descricao:
             "Use o recuo para tornar uma atividade filha da linha de cima. Só as atividades finais contam no progresso.",
           previa: "escopo-hierarquia",
+        },
+        {
+          titulo: "Importar com duração obrigatória",
+          descricao:
+            "No arquivo .csv/.xlsx, use \"Atividade\" (ou \"Tarefa Pai\"/\"Tarefa Filha\" para já importar com hierarquia) e uma coluna \"Duração\". Faltando duração em alguma linha, a importação para numa tela para você completar antes de seguir.",
+          previa: "escopo-editor",
         },
       ],
     },

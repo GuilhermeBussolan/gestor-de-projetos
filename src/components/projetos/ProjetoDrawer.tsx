@@ -25,6 +25,7 @@ import {
 import { contarFolhas, formatarDataCurta, nivelAtividade, numerarAtividades, temFilhos } from "@/lib/escopo";
 import { termometroEfetivo } from "@/lib/termometro";
 import { RegistroItem } from "@/components/timeline/RegistroItem";
+import { PrevisaoFaturamentoInline } from "@/components/financeiro/PrevisaoFaturamentoInline";
 import type { ContatoProjeto, EventoCalendario, Projeto, Recurso, StatusDocumento } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -384,6 +385,9 @@ export function ProjetoDrawerConteudo({
                   <div className="mt-3.5 flex flex-wrap gap-2.5 border-t border-brand-border-soft pt-3.5">
                     {projeto.financeiro!.parcelas.map((parc) => {
                       const cfgParcela = STATUS_PARCELA_CONFIG[parc.status];
+                      const documentoDoMarco = parc.tipoDocumentoId
+                        ? projeto.documentos.find((d) => d.tipoDocumentoId === parc.tipoDocumentoId)
+                        : undefined;
                       return (
                         <div
                           key={parc.numero}
@@ -403,6 +407,24 @@ export function ProjetoDrawerConteudo({
                               {cfgParcela.label}
                             </span>
                           </div>
+                          {documentoDoMarco && (
+                            <span
+                              style={{
+                                backgroundColor: STATUS_DOCUMENTO_CONFIG[documentoDoMarco.status].bg,
+                                color: STATUS_DOCUMENTO_CONFIG[documentoDoMarco.status].text,
+                              }}
+                              className="w-fit rounded-full px-2 py-0.5 text-[10px] font-bold"
+                            >
+                              MIT: {STATUS_DOCUMENTO_CONFIG[documentoDoMarco.status].label}
+                            </span>
+                          )}
+                          {projeto.financeiro?.tipoFaturamento === "marco_faturamento" && (
+                            <PrevisaoFaturamentoInline
+                              projeto={projeto}
+                              parcela={parc}
+                              podeEditar={podeVerFinanceiro}
+                            />
+                          )}
                         </div>
                       );
                     })}

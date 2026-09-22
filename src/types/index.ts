@@ -94,6 +94,23 @@ export interface Parcela {
   dataCancelamento?: string | null;
   /** Motivo do cancelamento (obrigatório ao marcar como CANCELADO). */
   motivoCancelamento?: string | null;
+  /** Quem liberou (auditoria). Ausente em parcelas liberadas antes desse controle existir. */
+  liberadoPor?: { uid: string; nome: string } | null;
+  /**
+   * Data prevista atual (YYYY-MM-DD), recalculada em cascata quando uma parcela anterior é
+   * liberada — só existe em projetos "parcelado" com a previsão inicial preenchida.
+   */
+  dataPrevista?: string | null;
+  /** Baseline imutável da data prevista, usada para calcular o intervalo entre parcelas. */
+  dataPrevistaOriginal?: string | null;
+  /**
+   * Previsão de faturamento do marco (só "marco_faturamento"), editável enquanto a parcela
+   * está AGUARDANDO. Quando a parcela tem tipoDocumentoId, ela é mostrada ao lado do status
+   * do documento MIT correspondente em Projeto.documentos.
+   */
+  dataPrevisaoFaturamento?: string | null;
+  previsaoAtualizadaEm?: number | null;
+  previsaoAtualizadaPor?: string | null;
 }
 
 export type TipoFaturamento = "apontamento_horas" | "parcelado" | "marco_faturamento";
@@ -177,11 +194,31 @@ export interface TermometroObservacao {
   criadoEm: number;
 }
 
+export type UnidadeDuracao = "minutos" | "horas";
+
 export interface EscopoAtividade {
   id: string;
   descricao: string;
   /** Profundidade na hierarquia pai/filho (0 = raiz). Ausente = 0. Os filhos de uma atividade são as seguintes com nível maior. */
   nivel?: number;
+  /** Duração estimada da tarefa. Ausente em atividades que são só agrupadoras (têm filhos) ou em escopos antigos. */
+  duracao?: number;
+  /** Ausente = "horas" quando duracao existe. */
+  unidadeDuracao?: UnidadeDuracao;
+}
+
+/** Auditoria de uma importação de escopo (coleção "escoposImportados"). */
+export interface EscopoImportacao {
+  id: string;
+  escopoId: string;
+  nomeEscopo: string;
+  arquivoNome: string;
+  linhasValidadas: number;
+  /** Quantas linhas chegaram sem duração e precisaram ser corrigidas na pré-importação. */
+  linhasComErro: number;
+  usuarioId: string;
+  usuarioNome: string;
+  criadoEm: number;
 }
 
 export interface Escopo {
@@ -195,6 +232,14 @@ export interface EnvolvidoChave {
   nome: string;
   email?: string;
   telefone?: string;
+}
+
+/** Registro de auditoria de uma tarefa excluída ao incluir um escopo no projeto (3.1). */
+export interface ExclusaoEscopo {
+  atividadeId: string;
+  descricao: string;
+  usuarioNome: string;
+  criadoEm: number;
 }
 
 export interface Projeto {
@@ -217,6 +262,8 @@ export interface Projeto {
   escopoId?: string | null;
   escopoNome?: string | null;
   escopoAtividades?: EscopoAtividade[] | null;
+  /** Tarefas do escopo excluídas na inclusão ("Personalizar exclusões"), para auditoria. */
+  escopoExclusoes?: ExclusaoEscopo[] | null;
   principaisEnvolvidos?: EnvolvidoChave[] | null;
   /** Ausente = "normal". Só admin/coordenador altera. */
   termometro?: Termometro | null;

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const ABAS = [
   { href: "/financeiro", label: "Visão geral" },
   { href: "/financeiro/liberacao", label: "Liberação de Faturamento" },
+  { href: "/financeiro/faturamento-previsto", label: "Faturamento Previsto" },
   { href: "/financeiro/fechamento-mensal", label: "Fechamento Mensal" },
 ];
 

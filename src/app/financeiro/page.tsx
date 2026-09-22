@@ -15,13 +15,15 @@ import {
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { alterarStatusParcela, type DadosStatusParcela } from "@/lib/parcela";
 import { statusEfetivo } from "@/lib/statusHora";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Cliente, EventoCalendario, Projeto, Recurso, StatusParcela, TipoRecurso } from "@/types";
 
-const PRECISA_DADOS: StatusParcela[] = ["FATURADO", "RECEBIDO", "CANCELADO"];
+const PRECISA_DADOS: StatusParcela[] = ["LIBERADO", "FATURADO", "RECEBIDO", "CANCELADO"];
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 function FinanceiroPageContent() {
+  const { usuario } = useAuth();
   const { data: projetos } = useCollection<Projeto>("projetos");
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: recursos } = useCollection<Recurso>("recursos");
@@ -36,13 +38,13 @@ function FinanceiroPageContent() {
     if (PRECISA_DADOS.includes(novoStatus)) {
       setAlterando({ projeto, numero, status: novoStatus });
     } else {
-      alterarStatusParcela(projeto, numero, novoStatus);
+      alterarStatusParcela(projeto, numero, novoStatus, {}, usuario ?? undefined);
     }
   }
 
   async function confirmarAlteracao(dados: DadosStatusParcela) {
     if (!alterando) return;
-    await alterarStatusParcela(alterando.projeto, alterando.numero, alterando.status, dados);
+    await alterarStatusParcela(alterando.projeto, alterando.numero, alterando.status, dados, usuario ?? undefined);
     setAlterando(null);
   }
 
@@ -237,6 +239,8 @@ function FinanceiroPageContent() {
 
       <AlterarStatusParcelaModal
         statusAlvo={alterando?.status ?? null}
+        parcelas={alterando?.projeto.financeiro.parcelas ?? []}
+        numero={alterando?.numero ?? 0}
         onCancelar={() => setAlterando(null)}
         onConfirmar={confirmarAlteracao}
       />

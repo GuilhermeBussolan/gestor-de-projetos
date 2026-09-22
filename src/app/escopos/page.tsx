@@ -9,7 +9,7 @@ import { CadastrosTabs } from "@/components/layout/CadastrosTabs";
 import { Button } from "@/components/ui/Button";
 import { ImportarEscopoModal } from "@/components/importacao/ImportarEscopoModal";
 import { EscopoFormModal } from "@/components/escopos/EscopoFormModal";
-import { nivelAtividade, numerarAtividades, temFilhos } from "@/lib/escopo";
+import { formatarMinutos, nivelAtividade, numerarAtividades, somaDuracaoBloco, temFilhos } from "@/lib/escopo";
 import { Upload, ChevronDown, ChevronUp } from "lucide-react";
 import type { Escopo } from "@/types";
 
@@ -90,6 +90,15 @@ function EscoposPageContent() {
                               <span className={temFilhos(e.atividades, i) ? "font-bold text-brand-navy-2" : ""}>
                                 {a.descricao}
                               </span>
+                              {temFilhos(e.atividades, i) ? (
+                                <span className="ml-1.5 text-[11px] text-brand-faint">
+                                  ({formatarMinutos(somaDuracaoBloco(e.atividades, i))})
+                                </span>
+                              ) : a.duracao ? (
+                                <span className="ml-1.5 text-[11px] text-brand-faint">
+                                  ({a.duracao} {a.unidadeDuracao === "minutos" ? "min" : "hora(s)"})
+                                </span>
+                              ) : null}
                             </p>
                           ))}
                         </div>

@@ -18,6 +18,8 @@ export interface LinhaLiberacao {
   emailNF: string;
   status: StatusParcela;
   dataLiberacao: number | null;
+  /** YYYY-MM-DD — só relevante enquanto a parcela ainda está Aguardando. */
+  dataPrevista: string | null;
 }
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -41,6 +43,7 @@ export function montarRelatorioLiberacao(projetos: Projeto[], clientes: Cliente[
         emailNF: projeto.contatoFaturamento?.emailNF ?? "",
         status: parc.status,
         dataLiberacao: parc.dataLiberacao ?? null,
+        dataPrevista: parc.dataPrevista ?? null,
       });
     }
   }

@@ -11,7 +11,7 @@ import { EnvolvidosFields } from "@/components/projetos/EnvolvidosFields";
 import { EscopoSelector } from "@/components/projetos/EscopoSelector";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type EnvolvidoChave, type Escopo, type EscopoAtividade, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type EnvolvidoChave, type Escopo, type EscopoAtividade, type ExclusaoEscopo, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function ProjetoForm({
   onClose,
@@ -48,19 +48,22 @@ function ProjetoForm({
   const [escopoId, setEscopoId] = useState<string | null>(null);
   const [escopoNome, setEscopoNome] = useState<string | null>(null);
   const [escopoAtividades, setEscopoAtividades] = useState<EscopoAtividade[]>([]);
+  const [escopoExclusoes, setEscopoExclusoes] = useState<ExclusaoEscopo[]>([]);
   const [salvando, setSalvando] = useState(false);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
 
-  function selecionarEscopo(escopo: Escopo) {
+  function selecionarEscopo(escopo: Escopo, atividades: EscopoAtividade[], exclusoes: ExclusaoEscopo[]) {
     setEscopoId(escopo.id);
     setEscopoNome(escopo.nome);
-    setEscopoAtividades(escopo.atividades);
+    setEscopoAtividades(atividades);
+    setEscopoExclusoes(exclusoes);
   }
 
   function removerEscopo() {
     setEscopoId(null);
     setEscopoNome(null);
     setEscopoAtividades([]);
+    setEscopoExclusoes([]);
   }
 
   const coordenadores = recursos.filter((r) => r.tipo === "coordenador");
@@ -106,6 +109,7 @@ function ProjetoForm({
         escopoId,
         escopoNome,
         escopoAtividades: escopoAtividades.length > 0 ? escopoAtividades : null,
+        escopoExclusoes: escopoExclusoes.length > 0 ? escopoExclusoes : null,
         principaisEnvolvidos:
           envolvidos.filter((e) => e.nome.trim()).length > 0
             ? envolvidos.filter((e) => e.nome.trim())
@@ -221,6 +225,7 @@ function ProjetoForm({
           onSelecionar={selecionarEscopo}
           onRemover={removerEscopo}
           persisteAoConfirmar={false}
+          exclusoesAtuais={escopoExclusoes}
         />
       </div>
 

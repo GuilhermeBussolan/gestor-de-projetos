@@ -126,6 +126,127 @@ export function alternarAtividadeMarcada(
   return Array.from(set);
 }
 
+/**
+ * Alterna a inclusão de um nó e de todo o bloco abaixo dele (filhos e netos), sem tocar nos
+ * ancestrais nem nos irmãos — ao contrário de `alternarAtividadeMarcada` (que também desmarca
+ * os pais acima quando um descendente é desmarcado, pensado para o indicador de progresso do
+ * apontamento). Aqui, excluir uma tarefa nunca pode fazer a tarefa pai dela sumir da lista.
+ */
+export function alternarBlocoIncluido(
+  atividades: EscopoAtividade[],
+  incluidas: string[],
+  id: string
+): string[] {
+  const indice = atividades.findIndex((a) => a.id === id);
+  if (indice < 0) return incluidas;
+  const set = new Set(incluidas);
+  const bloco = atividades.slice(indice, fimDoBloco(atividades, indice));
+  const incluir = !set.has(atividades[indice].id);
+  bloco.forEach((a) => (incluir ? set.add(a.id) : set.delete(a.id)));
+  return Array.from(set);
+}
+
+/** Move o bloco (a atividade + descendentes) trocando de lugar com o irmão vizinho anterior/seguinte. */
+export function moverBlocoVizinho(
+  atividades: EscopoAtividade[],
+  indice: number,
+  direcao: -1 | 1
+): EscopoAtividade[] {
+  const fim = fimDoBloco(atividades, indice);
+  if (direcao === -1) {
+    const anterior = irmaoAnterior(atividades, indice);
+    if (anterior === null) return atividades;
+    return [
+      ...atividades.slice(0, anterior),
+      ...atividades.slice(indice, fim),
+      ...atividades.slice(anterior, indice),
+      ...atividades.slice(fim),
+    ];
+  }
+  const proximo = irmaoSeguinte(atividades, indice);
+  if (proximo === null) return atividades;
+  const fimProximo = fimDoBloco(atividades, proximo);
+  return [
+    ...atividades.slice(0, indice),
+    ...atividades.slice(proximo, fimProximo),
+    ...atividades.slice(indice, fim),
+    ...atividades.slice(fimProximo),
+  ];
+}
+
+/** Índices de todos os irmãos (mesmo nível, mesmo pai) do grupo ao qual `indice` pertence, em ordem. */
+export function indicesIrmaos(atividades: EscopoAtividade[], indice: number): number[] {
+  let primeiro = indice;
+  for (let ant = irmaoAnterior(atividades, primeiro); ant !== null; ant = irmaoAnterior(atividades, primeiro)) {
+    primeiro = ant;
+  }
+  const indices = [primeiro];
+  for (let prox = irmaoSeguinte(atividades, primeiro); prox !== null; prox = irmaoSeguinte(atividades, indices[indices.length - 1])) {
+    indices.push(prox);
+  }
+  return indices;
+}
+
+/**
+ * Arrasta o bloco da atividade `idOrigem` até a posição `posicaoAlvo` entre os próprios irmãos
+ * (mesmo nível, mesmo pai) — nunca muda a atividade de hierarquia, só a ordem dela ali dentro.
+ * Reaproveita `moverBlocoVizinho` passo a passo, por segurança (mesma lógica já usada nas setas).
+ */
+export function moverBlocoEntreIrmaos(
+  atividades: EscopoAtividade[],
+  idOrigem: string,
+  posicaoAlvo: number
+): EscopoAtividade[] {
+  let atual = atividades;
+  for (let seguranca = 0; seguranca < atividades.length; seguranca++) {
+    const indice = atual.findIndex((a) => a.id === idOrigem);
+    if (indice < 0) return atual;
+    const irmaos = indicesIrmaos(atual, indice);
+    const posAtual = irmaos.indexOf(indice);
+    if (posAtual === posicaoAlvo || posAtual === -1) return atual;
+    atual = moverBlocoVizinho(atual, indice, posicaoAlvo > posAtual ? 1 : -1);
+  }
+  return atual;
+}
+
+/** true quando as duas atividades são irmãs (mesmo nível, mesmo pai) — a única troca de ordem permitida. */
+export function saoIrmas(atividades: EscopoAtividade[], idA: string, idB: string): boolean {
+  const indiceA = atividades.findIndex((a) => a.id === idA);
+  if (indiceA < 0) return false;
+  const indiceB = atividades.findIndex((a) => a.id === idB);
+  if (indiceB < 0) return false;
+  return indicesIrmaos(atividades, indiceA).includes(indiceB);
+}
+
+/** Duração de uma atividade em minutos (0 quando não preenchida). */
+export function duracaoEmMinutos(a: Pick<EscopoAtividade, "duracao" | "unidadeDuracao">): number {
+  if (!a.duracao) return 0;
+  return (a.unidadeDuracao ?? "horas") === "minutos" ? a.duracao : a.duracao * 60;
+}
+
+/** "1h30", "45 min", "2h" — para mostrar um total em minutos de forma legível. */
+export function formatarMinutos(totalMinutos: number): string {
+  if (totalMinutos <= 0) return "—";
+  const horas = Math.floor(totalMinutos / 60);
+  const minutos = Math.round(totalMinutos - horas * 60);
+  if (horas === 0) return `${minutos} min`;
+  if (minutos === 0) return `${horas}h`;
+  return `${horas}h${minutos}min`;
+}
+
+/**
+ * Soma (em minutos) de todas as atividades-folha dentro do bloco de `indice` — ela mesma, se for
+ * folha, ou os netos/bisnetos que forem folha, se for uma agrupadora. É assim que o valor de um
+ * tópico nasce da soma dos subtópicos, que por sua vez nasce da soma dos subsubtópicos.
+ */
+export function somaDuracaoBloco(atividades: EscopoAtividade[], indice: number): number {
+  const folhas = idsFolhas(atividades);
+  const fim = fimDoBloco(atividades, indice);
+  return atividades
+    .slice(indice, fim)
+    .reduce((soma, a) => soma + (folhas.has(a.id) ? duracaoEmMinutos(a) : 0), 0);
+}
+
 export function formatarDataCurta(iso: string): string {
   const [ano, mes, dia] = iso.split("-");
   return `${dia}/${mes}/${ano}`;

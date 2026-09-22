@@ -1,24 +1,37 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { Upload, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Upload, CheckCircle2 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input } from "@/components/ui/Field";
-import { lerArquivoTabular, pegarCampo } from "@/lib/importarArquivo";
-import { criarAtividadeId } from "@/lib/escopo";
+import { lerArquivoTabular } from "@/lib/importarArquivo";
+import {
+  aplicarCorrecoesDuracao,
+  atividadesSemDuracao,
+  converterLinhasEmAtividades,
+} from "@/lib/importarEscopo";
+import { normalizarNiveis, numerarAtividades } from "@/lib/escopo";
+import { useAuth } from "@/contexts/AuthContext";
 import type { EscopoAtividade } from "@/types";
 
-type Etapa = "form" | "processando" | "revisao" | "importando" | "concluido" | "erro";
+type Etapa = "form" | "processando" | "corrigindo" | "revisao" | "importando" | "concluido" | "erro";
 
 function EscopoImportForm({ onClose }: { onClose: () => void }) {
+  const { usuario } = useAuth();
   const [nome, setNome] = useState("");
+  const [arquivoNome, setArquivoNome] = useState("");
   const [etapa, setEtapa] = useState<Etapa>("form");
   const [atividades, setAtividades] = useState<EscopoAtividade[]>([]);
+  const [totalErrosOriginal, setTotalErrosOriginal] = useState(0);
+  const [correcoes, setCorrecoes] = useState<Map<string, string>>(new Map());
   const [erro, setErro] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const faltando = useMemo(() => atividadesSemDuracao(atividades), [atividades]);
+  const numeracao = useMemo(() => numerarAtividades(atividades), [atividades]);
 
   async function aoEscolherArquivo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -33,31 +46,53 @@ function EscopoImportForm({ onClose }: { onClose: () => void }) {
     setErro("");
     try {
       const linhas = await lerArquivoTabular(file);
-      const descricoes = linhas
-        .map((l) => pegarCampo(l.valores, "Atividade", "Descrição", "Descricao", "Item"))
-        .map((t) => t.trim())
-        .filter(Boolean);
-      if (descricoes.length === 0) {
-        setErro('Nenhuma atividade encontrada. A primeira coluna do arquivo deve se chamar "Atividade" ou "Descrição".');
+      const resultado = converterLinhasEmAtividades(linhas);
+      if (resultado.atividades.length === 0) {
+        setErro(
+          'Nenhuma atividade encontrada. Use uma coluna "Atividade"/"Descrição", ou "Tarefa Pai"/"Tarefa Filha", e uma coluna "Duração".'
+        );
         setEtapa("erro");
         return;
       }
-      setAtividades(descricoes.map((descricao) => ({ id: criarAtividadeId(), descricao })));
-      setEtapa("revisao");
+      setArquivoNome(file.name);
+      setAtividades(resultado.atividades);
+      setTotalErrosOriginal(resultado.erros.length);
+      setCorrecoes(new Map());
+      setEtapa(resultado.erros.length > 0 ? "corrigindo" : "revisao");
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Não foi possível ler o arquivo.");
       setEtapa("erro");
     }
   }
 
+  function aplicarCorrecoes() {
+    const atualizado = aplicarCorrecoesDuracao(atividades, correcoes);
+    setAtividades(atualizado);
+    setCorrecoes(new Map());
+    if (atividadesSemDuracao(atualizado).length === 0) setEtapa("revisao");
+  }
+
   async function confirmar() {
     setEtapa("importando");
     try {
-      await addDoc(collection(db, "escopos"), {
+      const atividadesFinal = normalizarNiveis(atividades);
+      const escopoRef = await addDoc(collection(db, "escopos"), {
         nome: nome.trim(),
-        atividades,
+        atividades: atividadesFinal,
         createdAt: serverTimestamp(),
       });
+      if (usuario) {
+        await addDoc(collection(db, "escoposImportados"), {
+          escopoId: escopoRef.id,
+          nomeEscopo: nome.trim(),
+          arquivoNome,
+          linhasValidadas: atividadesFinal.length,
+          linhasComErro: totalErrosOriginal,
+          usuarioId: usuario.uid,
+          usuarioNome: usuario.nomeCompleto,
+          criadoEm: Date.now(),
+        });
+      }
       setEtapa("concluido");
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao salvar o escopo.");
@@ -68,6 +103,7 @@ function EscopoImportForm({ onClose }: { onClose: () => void }) {
   function reiniciar() {
     setEtapa("form");
     setAtividades([]);
+    setCorrecoes(new Map());
     setErro("");
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -77,8 +113,11 @@ function EscopoImportForm({ onClose }: { onClose: () => void }) {
       {etapa === "form" && (
         <div className="space-y-4">
           <div className="rounded-xl border border-brand-border bg-brand-hover p-4 text-[13px] text-brand-muted">
-            Envie um arquivo .csv ou .xlsx com uma coluna <strong>Atividade</strong> (ou{" "}
-            <strong>Descrição</strong>), uma linha por atividade do escopo.
+            Envie um arquivo .csv ou .xlsx com uma coluna <strong>Duração</strong> (obrigatória em
+            toda linha) e <strong>Unidade</strong> (opcional, minutos ou horas). Para a lista de
+            atividades, use <strong>Atividade</strong> (ou <strong>Descrição</strong>) numa única
+            coluna, ou <strong>Tarefa Pai</strong> e <strong>Tarefa Filha</strong> para já importar
+            com hierarquia.
           </div>
           <FormRow label="Nome do escopo">
             <Input
@@ -127,20 +166,77 @@ function EscopoImportForm({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
+      {etapa === "corrigindo" && (
+        <div className="space-y-4">
+          <p className="flex items-start gap-2 rounded-md bg-[#fdeceb] p-3 text-sm text-[#b5392a]">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            Importação bloqueada: {faltando.length} tarefa{faltando.length === 1 ? "" : "s"} sem
+            duração. Revise o arquivo ou preencha os campos faltantes abaixo.
+          </p>
+          <div className="max-h-[360px] overflow-y-auto rounded-xl border border-brand-border">
+            <table className="w-full text-[12.5px]">
+              <thead>
+                <tr className="border-b border-brand-border-soft bg-brand-hover text-left text-[10.5px] font-bold tracking-[.08em] text-brand-faint uppercase">
+                  <th className="px-3 py-2">Tarefa</th>
+                  <th className="px-3 py-2">Duração (min ou horas)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {faltando.map((a) => (
+                  <tr key={a.id} className="border-t border-brand-border-soft">
+                    <td className="px-3 py-2 text-brand-navy-2">{a.descricao}</td>
+                    <td className="px-3 py-2">
+                      <Input
+                        type="number"
+                        min="0.5"
+                        step="0.5"
+                        className="w-28"
+                        placeholder="0,0"
+                        value={correcoes.get(a.id) ?? ""}
+                        onChange={(e) =>
+                          setCorrecoes((prev) => new Map(prev).set(a.id, e.target.value))
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={aplicarCorrecoes} disabled={correcoes.size === 0}>
+              Aplicar e continuar
+            </Button>
+          </div>
+        </div>
+      )}
+
       {etapa === "revisao" && (
         <div className="space-y-4">
           <p className="text-sm text-brand-muted">
             Escopo <strong className="text-brand-navy-2">{nome}</strong> com{" "}
             <strong className="text-brand-navy-2">{atividades.length}</strong> atividade
-            {atividades.length === 1 ? "" : "s"}:
+            {atividades.length === 1 ? "" : "s"}
+            {totalErrosOriginal > 0 ? ` (${totalErrosOriginal} duração${totalErrosOriginal === 1 ? "" : "es"} completada${totalErrosOriginal === 1 ? "" : "s"} manualmente)` : ""}:
           </p>
           <div className="max-h-[360px] overflow-y-auto rounded-xl border border-brand-border">
             <table className="w-full text-[12.5px]">
               <tbody>
                 {atividades.map((a, i) => (
                   <tr key={a.id} className="border-t border-brand-border-soft first:border-t-0">
-                    <td className="px-3 py-2 text-brand-faint">{i + 1}</td>
-                    <td className="px-3 py-2 text-brand-navy-2">{a.descricao}</td>
+                    <td className="px-3 py-2 text-brand-faint">{numeracao[i]}</td>
+                    <td
+                      className="px-3 py-2 text-brand-navy-2"
+                      style={{ paddingLeft: 12 + (a.nivel ?? 0) * 18 }}
+                    >
+                      {a.descricao}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap text-brand-faint">
+                      {a.duracao ? `${a.duracao} ${a.unidadeDuracao === "minutos" ? "min" : "hora(s)"}` : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

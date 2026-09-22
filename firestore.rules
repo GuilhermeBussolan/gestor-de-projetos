@@ -74,6 +74,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Auditoria de cada importação de escopo (2.1): quem importou, o arquivo e quantas linhas
+    // precisaram de correção de duração. Só é criada pela própria tela de importação — nunca
+    // editada ou apagada depois.
+    match /escoposImportados/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.usuarioId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     // Espelho enxuto de "usuarios" (nome, perfil, recurso) que todo usuário logado
     // lê — alimenta a lista de @ da linha do tempo, já que "usuarios" só é listável
     // por administradores. Cada pessoa mantém a própria entrada (sem poder mudar o

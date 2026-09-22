@@ -9,6 +9,7 @@ import { FormRow, Input } from "@/components/ui/Field";
 import { AlterarStatusParcelaModal } from "@/components/financeiro/AlterarStatusParcelaModal";
 import { STATUS_FATURAMENTO_ORDEM, STATUS_PARCELA_CONFIG, STATUS_PARCELA_ORDEM } from "@/lib/constants";
 import { alterarStatusParcela, type DadosStatusParcela } from "@/lib/parcela";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   montarRelatorioLiberacao,
   exportarLiberacaoExcel,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/relatorioLiberacao";
 import type { Cliente, Projeto, StatusParcela } from "@/types";
 
-const PRECISA_DADOS: StatusParcela[] = ["FATURADO", "RECEBIDO", "CANCELADO"];
+const PRECISA_DADOS: StatusParcela[] = ["LIBERADO", "FATURADO", "RECEBIDO", "CANCELADO"];
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -58,6 +59,7 @@ function StatusCard({
 }
 
 function FinanceiroLiberacaoPageContent() {
+  const { usuario } = useAuth();
   const { data: projetos } = useCollection<Projeto>("projetos");
   const { data: clientes } = useCollection<Cliente>("clientes");
 
@@ -119,13 +121,13 @@ function FinanceiroLiberacaoPageContent() {
     if (PRECISA_DADOS.includes(status)) {
       setAlterando({ projeto, numero: l.numero, status });
     } else {
-      alterarStatusParcela(projeto, l.numero, status);
+      alterarStatusParcela(projeto, l.numero, status, {}, usuario ?? undefined);
     }
   }
 
   async function confirmarAlteracao(dados: DadosStatusParcela) {
     if (!alterando) return;
-    await alterarStatusParcela(alterando.projeto, alterando.numero, alterando.status, dados);
+    await alterarStatusParcela(alterando.projeto, alterando.numero, alterando.status, dados, usuario ?? undefined);
     setAlterando(null);
   }
 
@@ -269,6 +271,8 @@ function FinanceiroLiberacaoPageContent() {
 
       <AlterarStatusParcelaModal
         statusAlvo={alterando?.status ?? null}
+        parcelas={alterando?.projeto.financeiro.parcelas ?? []}
+        numero={alterando?.numero ?? 0}
         onCancelar={() => setAlterando(null)}
         onConfirmar={confirmarAlteracao}
       />
