@@ -89,7 +89,15 @@ export async function ehCronogramaGantt(file: File): Promise<boolean> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(await file.arrayBuffer());
   const ws = wb.worksheets[0];
-  return !!ws && !!localizarColunas(ws);
+  const achado = ws ? localizarColunas(ws) : null;
+  if (!ws || !achado) return false;
+  // Uma planilha tabular comum também tem "Atividade" e "Duração": só é o modelo Gantt se a
+  // hierarquia vier de fórmulas de soma na coluna de tempo (e não de uma coluna "Nível").
+  const ultima = ws.lastRow ? ws.lastRow.number : ws.rowCount;
+  for (let r = achado.linhaCabecalho + 1; r <= ultima; r++) {
+    if (ws.getRow(r).getCell(achado.colunas.tempo).type === ExcelJS.ValueType.Formula) return true;
+  }
+  return false;
 }
 
 export async function lerCronogramaGantt(file: File): Promise<ResultadoImportacaoCronograma> {
