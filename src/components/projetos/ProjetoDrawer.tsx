@@ -18,9 +18,10 @@ import {
 } from "@/lib/constants";
 import {
   calcularAtividadesConcluidas,
-  calcularDatasAtividades,
   calcularHorasRealizadas,
   calcularPercentualProjeto,
+  calcularRegistrosAtividades,
+  resumoGruposRotina,
 } from "@/lib/dashboardCalc";
 import { contarFolhas, formatarDataCurta, nivelAtividade, numerarAtividades, temFilhos } from "@/lib/escopo";
 import { termometroEfetivo } from "@/lib/termometro";
@@ -103,12 +104,16 @@ export function ProjetoDrawerConteudo({
 
   const termometro = termometroEfetivo(projeto);
   const termometroCfg = TERMOMETRO_CONFIG[termometro];
-  const percentual = calcularPercentualProjeto(projeto.documentos);
+  const percentual = calcularPercentualProjeto(projeto, eventos);
   const horas = calcularHorasRealizadas(projeto.id, eventos, recursos);
   const atividadesConcluidas = calcularAtividadesConcluidas(projeto.id, eventos);
-  const datasAtividades = calcularDatasAtividades(projeto.id, eventos);
+  const registrosAtividades = calcularRegistrosAtividades(projeto.id, eventos, recursos);
   const folhasEscopo = contarFolhas(projeto.escopoAtividades ?? [], atividadesConcluidas);
   const numeracaoEscopo = numerarAtividades(projeto.escopoAtividades ?? []);
+  // Só existe quando o cronograma foi importado (é dele que vem a duração por atividade).
+  const gruposRotina = resumoGruposRotina(projeto.id, projeto.escopoAtividades ?? [], eventos).filter(
+    (g) => g.horasPrevistas > 0
+  );
   const previstoConsultor = projeto.horasPrevistasConsultor ?? 0;
   const previstoCoordenador = projeto.horasPrevistasCoordenador ?? 0;
   const finalizado = projeto.status === "finalizado";
@@ -300,7 +305,7 @@ export function ProjetoDrawerConteudo({
                 {projeto.escopoAtividades.map((a, i) => {
                   const feita = atividadesConcluidas.has(a.id);
                   const pai = temFilhos(projeto.escopoAtividades!, i);
-                  const feitoEm = datasAtividades.get(a.id) ?? [];
+                  const feitoEm = registrosAtividades.get(a.id) ?? [];
                   return (
                     <div key={a.id} style={{ paddingLeft: nivelAtividade(a) * 18 }}>
                       <p className={feita ? "text-[#15754c]" : "text-brand-muted"}>
@@ -314,7 +319,10 @@ export function ProjetoDrawerConteudo({
                       </p>
                       {feitoEm.length > 0 && (
                         <p className="text-[11px] text-[#15754c]">
-                          Feito em: {feitoEm.map(formatarDataCurta).join(", ")}
+                          Feito em:{" "}
+                          {feitoEm
+                            .map((r) => `${formatarDataCurta(r.data)} (${r.recursoNome})`)
+                            .join(", ")}
                         </p>
                       )}
                     </div>
@@ -322,6 +330,52 @@ export function ProjetoDrawerConteudo({
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {gruposRotina.length > 0 && (
+          <div className="mb-5.5">
+            <p className="mb-2.5 text-sm font-extrabold text-brand-navy-2">
+              Horas Previstas x Realizadas (por grupo de rotina)
+            </p>
+            <div className="overflow-hidden rounded-xl border border-brand-border bg-white shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
+              {gruposRotina.map((g) => {
+                const acima = g.diferenca > 0.01;
+                const dentro = g.diferenca <= 0.01;
+                return (
+                  <div
+                    key={g.grupoId}
+                    className="border-t border-brand-border-soft px-4 py-2.5 first:border-t-0"
+                  >
+                    <p className="flex items-center gap-1.5 text-[12.5px] font-bold text-brand-navy-2">
+                      {g.descricao}
+                      {g.concluido && (
+                        <span className="rounded-full bg-[#e3f5ea] px-1.5 py-0.5 text-[10px] font-bold text-[#15754c]">
+                          Concluído
+                        </span>
+                      )}
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11.5px] text-brand-muted">
+                      <span>
+                        Previsto: <strong className="text-brand-navy-2">{g.horasPrevistas.toFixed(1)}h</strong>
+                      </span>
+                      <span>
+                        Realizado: <strong className="text-brand-navy-2">{g.horasRealizadas.toFixed(1)}h</strong>
+                      </span>
+                      <span
+                        className={
+                          acima ? "font-semibold text-[#b5392a]" : dentro ? "font-semibold text-[#15754c]" : ""
+                        }
+                      >
+                        Diferença: {g.diferenca > 0 ? "+" : ""}
+                        {g.diferenca.toFixed(1)}h
+                      </span>
+                      <span>{g.percentualRealizado.toFixed(0)}% realizado</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

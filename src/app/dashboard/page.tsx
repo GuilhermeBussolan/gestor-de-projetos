@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { deleteDoc, doc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { MessageCircle, SlidersHorizontal, X } from "lucide-react";
+import { AlertTriangle, Calendar, CheckCircle2, MessageCircle, SlidersHorizontal, User, X } from "lucide-react";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ContatoModal } from "@/components/dashboard/ContatoModal";
@@ -17,7 +17,9 @@ import { EditarProjetoModal } from "@/components/projetos/EditarProjetoModal";
 import { AlterarTermometroModal } from "@/components/projetos/AlterarTermometroModal";
 import { TermometroPieChart } from "@/components/dashboard/TermometroPieChart";
 import { useAuth } from "@/contexts/AuthContext";
-import { calcularHorasRealizadas, calcularPercentualProjeto, statusAbaProjeto } from "@/lib/dashboardCalc";
+import { calcularAtividadesConcluidas, calcularHorasRealizadas, calcularPercentualProjeto, statusAbaProjeto } from "@/lib/dashboardCalc";
+import { calcularProximoAtendimento, PERIODO_LABEL } from "@/lib/cronograma";
+import { formatarDataCurta } from "@/lib/escopo";
 import { ABA_STATUS_PROJETO_CONFIG, ABA_STATUS_PROJETO_ORDEM, TERMOMETRO_CONFIG, TERMOMETRO_ORDEM } from "@/lib/constants";
 import { formatarHoras } from "@/lib/horas";
 import { statusEfetivo } from "@/lib/statusHora";
@@ -49,14 +51,24 @@ function DashboardPageContent() {
   const souConsultor = usuario?.perfil === "consultor";
   const podeVerFinanceiro = !souConsultor;
   const meuRecursoId = usuario?.recursoId ?? null;
+  const hojeIso = new Date().toISOString().slice(0, 10);
 
   const { data: projetosTodos } = useCollection<Projeto>("projetos");
   const { data: clientes } = useCollection<Cliente>("clientes");
+  // Um consultor só deve ver o CALENDÁRIO pessoal de outros restrito, mas dentro do contexto de um
+  // projeto em que ele está alocado, precisa enxergar o que os colegas já fizeram no escopo (senão
+  // o percentual e o checklist de atividades feitas ficam incompletos pra ele). Por isso a consulta
+  // aqui é por projeto (`in`), não por recurso — a regra do Firestore garante que só voltam
+  // apontamentos de projetos em que ele está alocado.
+  const meusProjetoIds = useMemo(
+    () => projetosTodos.filter((p) => p.consultorIds?.includes(meuRecursoId ?? "")).map((p) => p.id).slice(0, 30),
+    [projetosTodos, meuRecursoId]
+  );
   const { data: eventos } = useCollection<EventoCalendario>(
     "eventosCalendario",
-    souConsultor ? [where("recursoId", "==", meuRecursoId ?? "")] : [],
-    !souConsultor || !!meuRecursoId,
-    [souConsultor, meuRecursoId]
+    souConsultor ? [where("projetoId", "in", meusProjetoIds)] : [],
+    !souConsultor || meusProjetoIds.length > 0,
+    [souConsultor, meusProjetoIds]
   );
   const { data: recursos } = useCollection<Recurso>("recursos");
   const { data: tiposDocumento } = useCollection<TipoDocumento>("tiposDocumento", []);
@@ -64,6 +76,7 @@ function DashboardPageContent() {
 
   const [contatoProjeto, setContatoProjeto] = useState<Projeto | null>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
+  const [atendimentoAbertoId, setAtendimentoAbertoId] = useState<string | null>(null);
   const [editando, setEditando] = useState<Projeto | null>(null);
   const [alterandoTermometro, setAlterandoTermometro] = useState<Projeto | null>(null);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
@@ -117,13 +130,13 @@ function DashboardPageContent() {
   const projetosAba = useMemo(() => {
     if (abaProjetos === "todos") return projetosVisao;
     return projetosVisao.filter(
-      (p) => statusAbaProjeto(p, calcularPercentualProjeto(p.documentos)) === abaProjetos
+      (p) => statusAbaProjeto(p, calcularPercentualProjeto(p, eventos)) === abaProjetos
     );
-  }, [projetosVisao, abaProjetos]);
+  }, [projetosVisao, abaProjetos, eventos]);
 
   const idsProjetosAba = useMemo(() => new Set(projetosAba.map((p) => p.id)), [projetosAba]);
 
-  const percentuais = projetosAba.map((p) => calcularPercentualProjeto(p.documentos));
+  const percentuais = projetosAba.map((p) => calcularPercentualProjeto(p, eventos));
   const andamentoMedio =
     percentuais.length > 0 ? percentuais.reduce((a, b) => a + b, 0) / percentuais.length : 0;
 
@@ -222,17 +235,17 @@ function DashboardPageContent() {
       cancelados: 0,
     };
     projetosComFiltrosBase.forEach((p) => {
-      contagem[statusAbaProjeto(p, calcularPercentualProjeto(p.documentos))]++;
+      contagem[statusAbaProjeto(p, calcularPercentualProjeto(p, eventos))]++;
     });
     return contagem;
-  }, [projetosComFiltrosBase]);
+  }, [projetosComFiltrosBase, eventos]);
 
   const projetosFiltrados = useMemo(() => {
     if (abaProjetos === "todos") return projetosComFiltrosBase;
     return projetosComFiltrosBase.filter(
-      (p) => statusAbaProjeto(p, calcularPercentualProjeto(p.documentos)) === abaProjetos
+      (p) => statusAbaProjeto(p, calcularPercentualProjeto(p, eventos)) === abaProjetos
     );
-  }, [projetosComFiltrosBase, abaProjetos]);
+  }, [projetosComFiltrosBase, abaProjetos, eventos]);
 
   function limparFiltros() {
     setFiltroTipo("");
@@ -380,7 +393,7 @@ function DashboardPageContent() {
           <div className="max-h-64 space-y-0.5 overflow-y-auto">
             {projetosAba.map((p) => {
               const cliente = nomeExibicaoCliente(clientes.find((c) => c.id === p.clienteId));
-              const percentual = calcularPercentualProjeto(p.documentos);
+              const percentual = calcularPercentualProjeto(p, eventos);
               return (
                 <button
                   key={p.id}
@@ -600,10 +613,10 @@ function DashboardPageContent() {
         )}
       </div>
 
-      <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fill,208px)]">
+      <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fill,256px)]">
         {projetosFiltrados.map((p) => {
           const cliente = clientes.find((c) => c.id === p.clienteId);
-          const percentual = calcularPercentualProjeto(p.documentos);
+          const percentual = calcularPercentualProjeto(p, eventos);
           const emAlta = percentual >= 100;
           const cor = emAlta ? "#15754c" : "#2f6fe4";
           const horas = calcularHorasRealizadas(p.id, eventos, recursos);
@@ -613,28 +626,51 @@ function DashboardPageContent() {
           const mostrarHorasCoordenador =
             !souConsultor && (previstoCoordenador > 0 || horas.coordenador > 0);
           const termometroCfg = TERMOMETRO_CONFIG[termometroEfetivo(p)];
-          const statusCfg = ABA_STATUS_PROJETO_CONFIG[statusAbaProjeto(p, percentual)];
+          const statusAba = statusAbaProjeto(p, percentual);
+          const statusCfg = ABA_STATUS_PROJETO_CONFIG[statusAba];
           // Borda e tag seguem o status; o ponto só muda de cor se o termômetro pedir atenção/crítico.
           const corIndicador = statusCfg.cor;
           const corPonto = termometroEfetivo(p) === "normal" ? statusCfg.cor : termometroCfg.text;
+
+          const nomesConsultores = recursos
+            .filter((r) => p.consultorIds?.includes(r.id))
+            .map((r) => r.nomeCompleto);
+          const equipeTexto =
+            nomesConsultores.length === 0
+              ? ""
+              : nomesConsultores.length <= 2
+                ? nomesConsultores.join(", ")
+                : `${nomesConsultores[0]} +${nomesConsultores.length - 1}`;
+
+          const concluidasEscopo = calcularAtividadesConcluidas(p.id, eventos);
+          const proximo = calcularProximoAtendimento(p, concluidasEscopo, recursos, hojeIso);
 
           return (
             <div
               key={p.id}
               onClick={() => setDetalheId(p.id)}
               style={{ borderLeftColor: corIndicador }}
-              className="flex cursor-pointer flex-col gap-2.5 rounded-2xl border border-brand-border border-l-4 bg-white p-4 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-card-hover"
+              className="flex cursor-pointer flex-col gap-3 rounded-2xl border border-brand-border border-l-4 bg-white p-4 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-card-hover"
             >
               <div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span
+                      title={p.termometroObservacao?.texto ?? termometroCfg.label}
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: corPonto }}
+                    />
+                    <p className="truncate text-[15px] leading-tight font-extrabold tracking-[-0.01em] text-brand-navy-2">
+                      {nomeExibicaoCliente(cliente)}
+                    </p>
+                  </div>
                   <span
-                    title={p.termometroObservacao?.texto ?? termometroCfg.label}
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: corPonto }}
-                  />
-                  <p className="truncate text-[14px] leading-tight font-extrabold tracking-[-0.01em] text-brand-navy-2">
-                    {nomeExibicaoCliente(cliente)}
-                  </p>
+                    title={`Status do projeto: ${statusCfg.label.toLowerCase()}`}
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-[.02em] uppercase whitespace-nowrap"
+                    style={{ backgroundColor: statusCfg.bg, color: statusCfg.texto }}
+                  >
+                    {statusCfg.label}
+                  </span>
                 </div>
                 <p className="truncate text-[11px] text-brand-faint">
                   {p.codigoProposta} · {p.modulo}
@@ -644,6 +680,15 @@ function DashboardPageContent() {
                   dataFim={p.dataFim}
                   className="text-[10px] text-brand-faint"
                 />
+                {equipeTexto && (
+                  <div
+                    title={`Equipe alocada: ${nomesConsultores.join(", ")}`}
+                    className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-brand-muted"
+                  >
+                    <User size={12} className="shrink-0 text-brand-faint" />
+                    <span className="truncate">{equipeTexto}</span>
+                  </div>
+                )}
                 {p.status === "cancelado" && p.cancelamento ? (
                   <p className="mt-1 truncate text-[10.5px]" style={{ color: statusCfg.texto }}>
                     {p.cancelamento.motivo}
@@ -659,12 +704,29 @@ function DashboardPageContent() {
 
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-lg leading-none font-extrabold tracking-[-0.02em]" style={{ color: cor }}>
+                  <span
+                    title="Percentual do escopo já feito — cada tarefa marcada como concluída no apontamento conta igual."
+                    className="text-lg leading-none font-extrabold tracking-[-0.02em]"
+                    style={{ color: cor }}
+                  >
                     {percentual.toFixed(0)}%
                   </span>
-                  <span className="text-[10.5px] font-semibold text-brand-muted">
-                    {p.documentos.filter((d) => d.status === "ASSINADO").length}/{p.documentos.length}
-                  </span>
+                  {(mostrarHorasConsultor || mostrarHorasCoordenador) && (
+                    <div className="flex items-center gap-3 text-[10.5px] text-brand-faint">
+                      {mostrarHorasConsultor && (
+                        <span title="Horas de consultoria realizadas / previstas">
+                          C <strong className="text-brand-navy-2">{horas.consultor.toFixed(0)}h</strong>
+                          {previstoConsultor > 0 ? `/${previstoConsultor.toFixed(0)}h` : ""}
+                        </span>
+                      )}
+                      {mostrarHorasCoordenador && (
+                        <span title="Horas de coordenação realizadas / previstas">
+                          Co <strong className="text-brand-navy-2">{horas.coordenador.toFixed(0)}h</strong>
+                          {previstoCoordenador > 0 ? `/${previstoCoordenador.toFixed(0)}h` : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-brand-accent-soft">
                   <div
@@ -679,20 +741,86 @@ function DashboardPageContent() {
                 </div>
               </div>
 
-              {(mostrarHorasConsultor || mostrarHorasCoordenador) && (
-                <div className="flex items-center gap-3 text-[10.5px] text-brand-faint">
-                  {mostrarHorasConsultor && (
-                    <span>
-                      C <strong className="text-brand-navy-2">{horas.consultor.toFixed(0)}h</strong>
-                      {previstoConsultor > 0 ? `/${previstoConsultor.toFixed(0)}h` : ""}
-                    </span>
+              {(proximo.tipo === "agendado" || proximo.tipo === "atrasado") && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    title="Clique para ver os detalhes da próxima atividade"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAtendimentoAbertoId((v) => (v === p.id ? null : p.id));
+                    }}
+                    className={`flex w-full items-start gap-2 rounded-[10px] p-2.5 text-left transition-colors ${
+                      proximo.tipo === "atrasado"
+                        ? "bg-[#fdeceb] hover:bg-[#fbdcd8]"
+                        : "bg-brand-accent-soft hover:bg-[#dbe6fd]"
+                    }`}
+                  >
+                    {proximo.tipo === "atrasado" ? (
+                      <AlertTriangle size={15} className="mt-0.5 shrink-0 text-[#b5392a]" />
+                    ) : (
+                      <Calendar size={15} className="mt-0.5 shrink-0 text-brand-accent" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className="text-[9px] font-bold tracking-[.03em] uppercase"
+                        style={{ color: proximo.tipo === "atrasado" ? "#b5392a" : "#2f6fe4" }}
+                      >
+                        {proximo.tipo === "atrasado" ? "Atendimento atrasado" : "Próximo atendimento"}
+                      </p>
+                      <p className="text-[12px] font-bold text-brand-navy-2">
+                        {proximo.tipo === "atrasado" ? "Desde " : ""}
+                        {formatarDataCurta(proximo.data!)}
+                        {proximo.periodo ? ` · ${PERIODO_LABEL[proximo.periodo]}` : ""}
+                      </p>
+                      <p className="truncate text-[10px] text-brand-muted">
+                        {proximo.recursoNome} · {proximo.atividadeDescricao}
+                      </p>
+                    </div>
+                  </button>
+
+                  {atendimentoAbertoId === p.id && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-full left-0 z-20 mt-1 w-64 space-y-1.5 rounded-xl border border-brand-border bg-white p-3 text-left shadow-card-lg"
+                    >
+                      <p className="text-[12.5px] font-bold text-brand-navy-2">{proximo.atividadeDescricao}</p>
+                      <p className="text-[11px] text-brand-muted">Grupo: {proximo.grupoDescricao}</p>
+                      <p className="text-[11px] text-brand-muted">
+                        {formatarDataCurta(proximo.data!)}
+                        {proximo.periodo ? ` · ${PERIODO_LABEL[proximo.periodo]}` : ""}
+                        {proximo.horasPrevistas ? ` · ${proximo.horasPrevistas}h previstas` : ""}
+                      </p>
+                      <p className="text-[11px] text-brand-muted">Consultor: {proximo.recursoNome}</p>
+                      {proximo.tipo === "atrasado" && (
+                        <p className="rounded-md bg-[#fdeceb] px-2 py-1.5 text-[10.5px] font-semibold text-[#b5392a]">
+                          Data prevista já passou e a atividade ainda não foi apontada como feita.
+                        </p>
+                      )}
+                    </div>
                   )}
-                  {mostrarHorasCoordenador && (
-                    <span>
-                      Co <strong className="text-brand-navy-2">{horas.coordenador.toFixed(0)}h</strong>
-                      {previstoCoordenador > 0 ? `/${previstoCoordenador.toFixed(0)}h` : ""}
-                    </span>
-                  )}
+                </div>
+              )}
+              {proximo.tipo === "sem_cronograma" && (
+                <div className="flex items-start gap-2 rounded-[10px] bg-brand-hover p-2.5">
+                  <Calendar size={15} className="mt-0.5 shrink-0 text-brand-faint" />
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-bold tracking-[.03em] text-brand-faint uppercase">
+                      Próximo atendimento
+                    </p>
+                    <p className="text-[11px] font-bold text-brand-muted">Sem cronograma importado</p>
+                  </div>
+                </div>
+              )}
+              {proximo.tipo === "concluido" && (
+                <div className="flex items-start gap-2 rounded-[10px] bg-[#e3f5ea] p-2.5">
+                  <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-[#15754c]" />
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-bold tracking-[.03em] text-[#15754c] uppercase">
+                      Escopo concluído
+                    </p>
+                    <p className="text-[11px] font-bold text-brand-navy-2">Nenhuma atividade pendente</p>
+                  </div>
                 </div>
               )}
 
@@ -753,6 +881,7 @@ function DashboardPageContent() {
           recursos={recursos}
           tiposDocumento={tiposDocumento}
           escopos={escopos}
+          projetos={projetosTodos}
         />
       )}
 

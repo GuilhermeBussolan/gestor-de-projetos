@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { EnvolvidosFields } from "@/components/projetos/EnvolvidosFields";
 import { EscopoSelector } from "@/components/projetos/EscopoSelector";
+import { ImportarCronogramaModal } from "@/components/importacao/ImportarCronogramaModal";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { useAuth } from "@/contexts/AuthContext";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
@@ -137,13 +138,16 @@ function EditarProjetoForm({
   recursos,
   tiposDocumento,
   escopos,
+  projetos,
 }: {
   projeto: Projeto;
   onClose: () => void;
   recursos: Recurso[];
   tiposDocumento: TipoDocumento[];
   escopos: Escopo[];
+  projetos: Projeto[];
 }) {
+  const [cronogramaAberto, setCronogramaAberto] = useState(false);
   const [codigoProposta, setCodigoProposta] = useState(projeto.codigoProposta ?? "");
   const [modulo, setModulo] = useState<Modulo>(projeto.modulo ?? MODULOS[0]);
   const [tipoAtendimento, setTipoAtendimento] = useState<TipoAtendimento>(
@@ -179,6 +183,7 @@ function EditarProjetoForm({
     projeto.escopoExclusoes ?? []
   );
   const [salvando, setSalvando] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState("");
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
 
   async function selecionarEscopo(escopo: Escopo, atividades: EscopoAtividade[], exclusoes: ExclusaoEscopo[]) {
@@ -224,6 +229,7 @@ function EditarProjetoForm({
     e.preventDefault();
     if (!financeiroRef.current) return;
     setSalvando(true);
+    setErroSalvar("");
     try {
       const documentos = documentoIds.map((tipoDocumentoId) => {
         const existente = projeto.documentos.find((d) => d.tipoDocumentoId === tipoDocumentoId);
@@ -243,7 +249,7 @@ function EditarProjetoForm({
         financeiroRef.current.obterFinanceiro()
       );
 
-      await updateDoc(doc(db, "projetos", projeto.id), {
+      const dados = {
         codigoProposta,
         modulo,
         tipoAtendimento,
@@ -272,9 +278,19 @@ function EditarProjetoForm({
           memo: contatoMemo,
         },
         financeiro,
+      };
+      // Remove qualquer campo `undefined` residual — o Firestore rejeita a gravação inteira se
+      // algum sobrar (ex: uma parcela financeira sem uma das datas ainda preenchida).
+      const dadosSemUndefined = JSON.parse(JSON.stringify(dados));
+
+      await updateDoc(doc(db, "projetos", projeto.id), {
+        ...dadosSemUndefined,
         updatedAt: serverTimestamp(),
       });
       onClose();
+    } catch (err) {
+      console.error("Falha ao salvar projeto:", err);
+      setErroSalvar("Não foi possível salvar. Tente novamente.");
     } finally {
       setSalvando(false);
     }
@@ -359,7 +375,16 @@ function EditarProjetoForm({
       </div>
 
       <div>
-        <p className="mb-1 text-sm font-medium text-brand-navy-2">Escopo do projeto (opcional)</p>
+        <div className="mb-1 flex items-center justify-between">
+          <p className="text-sm font-medium text-brand-navy-2">Escopo do projeto (opcional)</p>
+          <button
+            type="button"
+            onClick={() => setCronogramaAberto(true)}
+            className="text-[12.5px] font-semibold text-brand-accent hover:underline"
+          >
+            Importar cronograma
+          </button>
+        </div>
         <EscopoSelector
           escopos={escopos}
           escopoIdAtual={escopoId}
@@ -367,6 +392,19 @@ function EditarProjetoForm({
           exclusoesAtuais={escopoExclusoes}
           onSelecionar={selecionarEscopo}
           onRemover={removerEscopo}
+        />
+        <ImportarCronogramaModal
+          open={cronogramaAberto}
+          projeto={{ ...projeto, escopoAtividades }}
+          recursos={recursos}
+          outrosProjetos={projetos.filter((p) => p.id !== projeto.id)}
+          onClose={() => setCronogramaAberto(false)}
+          onImportado={(atividades) => {
+            setEscopoId(null);
+            setEscopoNome(null);
+            setEscopoAtividades(atividades);
+            setEscopoExclusoes([]);
+          }}
         />
       </div>
 
@@ -453,6 +491,7 @@ function EditarProjetoForm({
 
       <CancelarProjetoSecao projeto={projeto} onCancelado={onClose} />
 
+      {erroSalvar && <p className="text-sm font-medium text-red-600">{erroSalvar}</p>}
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>
           Cancelar
@@ -471,12 +510,14 @@ export function EditarProjetoModal({
   recursos,
   tiposDocumento,
   escopos,
+  projetos,
 }: {
   projeto: Projeto | null;
   onClose: () => void;
   recursos: Recurso[];
   tiposDocumento: TipoDocumento[];
   escopos: Escopo[];
+  projetos: Projeto[];
 }) {
   return (
     <Modal open={!!projeto} onClose={onClose} title="Editar projeto" wide>
@@ -488,6 +529,7 @@ export function EditarProjetoModal({
           recursos={recursos}
           tiposDocumento={tiposDocumento}
           escopos={escopos}
+          projetos={projetos}
         />
       )}
     </Modal>

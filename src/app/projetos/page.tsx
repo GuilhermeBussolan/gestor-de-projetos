@@ -146,7 +146,7 @@ function ProjetosPageContent() {
               {projetosFiltrados.map((p) => {
                 const cliente = clientes.find((c) => c.id === p.clienteId);
                 const coordenador = recursos.find((r) => r.id === p.coordenadorId);
-                const percentual = calcularPercentualProjeto(p.documentos);
+                const percentual = calcularPercentualProjeto(p, eventos);
                 const termometroCfg = TERMOMETRO_CONFIG[termometroEfetivo(p)];
                 return (
                   <tr
@@ -268,6 +268,7 @@ function ProjetosPageContent() {
         recursos={recursos}
         tiposDocumento={tiposDocumento}
         escopos={escopos}
+        projetos={projetos}
       />
       <ImportarProjetosModal
         open={importarAberto}

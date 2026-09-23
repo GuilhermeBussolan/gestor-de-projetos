@@ -138,8 +138,15 @@ service cloud.firestore {
     // próprios eventos (onde recursoId é o recurso vinculado a ele); admin e
     // coordenador enxergam e gerenciam o calendário de todo mundo.
     match /eventosCalendario/{id} {
+      // Além do próprio apontamento, um consultor também pode ler os apontamentos de outros
+      // consultores DENTRO DE UM PROJETO em que ele esteja alocado — para ele enxergar o que já
+      // foi feito no escopo e o percentual real do projeto, sem ver apontamentos de projetos
+      // que não são dele. A visão de calendário pessoal continua restrita ao próprio recurso
+      // porque a tela em si só busca os eventos do próprio consultor.
       allow read: if isAdmin() || isCoordenador() || isFinanceiro() ||
-        (isSignedIn() && resource.data.recursoId == meuRecursoId());
+        (isSignedIn() && resource.data.recursoId == meuRecursoId()) ||
+        (isSignedIn() &&
+          meuRecursoId() in get(/databases/$(database)/documents/projetos/$(resource.data.projetoId)).data.get('consultorIds', []));
       // Consultor não pode criar apontamento em projeto com status "finalizado"
       // (admin/coordenador continuam podendo, mesmo com o projeto finalizado).
       // .get() com padrão 'ativo' evita erro em projetos antigos sem o campo status.

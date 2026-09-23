@@ -87,12 +87,12 @@ export const TERMOMETRO_CONFIG: Record<Termometro, { label: string; bg: string; 
 
 export const TERMOMETRO_ORDEM: Termometro[] = ["normal", "atencao", "critico"];
 
-/** cor = borda/ponto do card; texto = texto de apoio (ex.: motivo do cancelamento). */
-export const ABA_STATUS_PROJETO_CONFIG: Record<AbaStatusProjeto, { label: string; cor: string; texto: string }> = {
-  a_iniciar: { label: "A iniciar", cor: "#2f6fe4", texto: "#2456b8" },
-  em_andamento: { label: "Em andamento", cor: "#e08a1e", texto: "#a4650d" },
-  concluidos: { label: "Concluídos", cor: "#15754c", texto: "#15754c" },
-  cancelados: { label: "Cancelados", cor: "#8b94ad", texto: "#6a7594" },
+/** cor = borda/ponto do card; texto = texto de apoio (ex.: motivo do cancelamento); bg = fundo do selo de status. */
+export const ABA_STATUS_PROJETO_CONFIG: Record<AbaStatusProjeto, { label: string; cor: string; texto: string; bg: string }> = {
+  a_iniciar: { label: "A iniciar", cor: "#2f6fe4", texto: "#2456b8", bg: "#e8efff" },
+  em_andamento: { label: "Em andamento", cor: "#e08a1e", texto: "#a4650d", bg: "#fff2de" },
+  concluidos: { label: "Concluídos", cor: "#15754c", texto: "#15754c", bg: "#e3f5ea" },
+  cancelados: { label: "Cancelados", cor: "#8b94ad", texto: "#6a7594", bg: "#eef1f8" },
 };
 
 export const ABA_STATUS_PROJETO_ORDEM: AbaStatusProjeto[] = [

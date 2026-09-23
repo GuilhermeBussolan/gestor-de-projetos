@@ -198,7 +198,7 @@ export function montarFechamentoMensal(
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dataBR = (iso: string) => iso.split("-").reverse().join("/");
-const nomeArquivoSeguro = (s: string) => s.replace(/[\\/:*?"<>|]/g, "-");
+export const nomeArquivoSeguro = (s: string) => s.replace(/[\\/:*?"<>|]/g, "-");
 
 function cabecalhoColunas(o: ColunasOpcionais): string[] {
   return [
@@ -236,7 +236,7 @@ function linhaTotal(totalHoras: number, totalRepasse: number, o: ColunasOpcionai
   return [...Array(antesDasHoras - 1).fill(""), "Total", formatarHoras(totalHoras), moeda(totalRepasse)];
 }
 
-async function carregarImagemDataUrl(url: string): Promise<string | null> {
+export async function carregarImagemDataUrl(url: string): Promise<string | null> {
   if (!url.trim()) return null;
   try {
     const resp = await fetch(url);
@@ -253,8 +253,34 @@ async function carregarImagemDataUrl(url: string): Promise<string | null> {
   }
 }
 
-function formatoImagem(dataUrl: string): "PNG" | "JPEG" {
+export function formatoImagem(dataUrl: string): "PNG" | "JPEG" {
   return dataUrl.startsWith("data:image/jpeg") || dataUrl.startsWith("data:image/jpg") ? "JPEG" : "PNG";
+}
+
+/**
+ * Redesenha a imagem num canvas na largura de destino (em pixels) antes de embutir no PDF — sem
+ * isso, uma logo em alta resolução (a nossa tem 2587×980) vira um PDF de dezenas de MB, porque o
+ * jsPDF embute o bitmap bruto, não o PNG comprimido do arquivo original.
+ */
+export function redimensionarImagem(dataUrl: string, larguraAlvoPx: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const escala = larguraAlvoPx / img.width;
+      const canvas = document.createElement("canvas");
+      canvas.width = larguraAlvoPx;
+      canvas.height = Math.round(img.height * escala);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas indisponível"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("Falha ao redimensionar imagem"));
+    img.src = dataUrl;
+  });
 }
 
 function linhaEscopo(escopo: EscopoFechamento): string {
@@ -274,7 +300,8 @@ export async function exportarFechamentoPdf(
 
   // A logo mantém a proporção original e o texto começa abaixo dela (antes ficava por cima).
   let baseDaLogo = 0;
-  const logo = await carregarImagemDataUrl(logoUrl);
+  const logoBruto = await carregarImagemDataUrl(logoUrl);
+  const logo = logoBruto ? await redimensionarImagem(logoBruto, 360).catch(() => logoBruto) : null;
   if (logo) {
     try {
       const props = pdf.getImageProperties(logo);

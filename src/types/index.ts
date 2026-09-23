@@ -196,6 +196,9 @@ export interface TermometroObservacao {
 
 export type UnidadeDuracao = "minutos" | "horas";
 
+/** Metade do dia em que uma atividade do cronograma está alocada — mesma janela do +M/+T do calendário. */
+export type PeriodoDia = "manha" | "tarde";
+
 export interface EscopoAtividade {
   id: string;
   descricao: string;
@@ -205,6 +208,14 @@ export interface EscopoAtividade {
   duracao?: number;
   /** Ausente = "horas" quando duracao existe. */
   unidadeDuracao?: UnidadeDuracao;
+  /**
+   * Campos do cronograma (só em atividades-folha, só quando o projeto tem um cronograma
+   * importado): quem faz, quando começa e em que turno. Formam a "alocação prevista" usada no
+   * Mapa de Alocação e na detecção de sobreposição — não são apontamento de horas.
+   */
+  recursoId?: string | null;
+  dataInicio?: string | null;
+  periodo?: PeriodoDia | null;
 }
 
 /** Auditoria de uma importação de escopo (coleção "escoposImportados"). */

@@ -17,6 +17,7 @@ import { where } from "firebase/firestore";
 import { Plus, Repeat } from "lucide-react";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { CalendarioTabs } from "@/components/layout/CalendarioTabs";
 import { EventoModal } from "@/components/calendario/EventoModal";
 import { OcorrenciaModal } from "@/components/calendario/OcorrenciaModal";
 import { Button } from "@/components/ui/Button";
@@ -112,7 +113,9 @@ function CalendarioPageContent() {
   }
 
   return (
-    <div className="flex gap-5">
+    <div>
+      {!souConsultor && <CalendarioTabs />}
+      <div className="flex gap-5">
       <div className="min-w-0 flex-1">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">
@@ -329,6 +332,7 @@ function CalendarioPageContent() {
           usuario={usuario}
         />
       )}
+      </div>
     </div>
   );
 }

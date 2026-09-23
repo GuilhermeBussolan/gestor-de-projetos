@@ -4,13 +4,14 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { deleteDoc, doc, where } from "firebase/firestore";
 import { format } from "date-fns";
-import { CheckCheck, ChevronDown, ChevronUp, Upload } from "lucide-react";
+import { CheckCheck, ChevronDown, ChevronUp, FileText, Upload } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { KpisHoras } from "@/components/apontamento/KpisHoras";
+import { AbaPrevistoRealizado } from "@/components/apontamento/AbaPrevistoRealizado";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { ImportarHorasRetroativasModal } from "@/components/importacao/ImportarHorasRetroativasModal";
@@ -26,6 +27,7 @@ import {
 } from "@/lib/relatorioApontamento";
 import { TIPO_BOX_CONFIG } from "@/lib/constants";
 import { idsFolhas } from "@/lib/escopo";
+import { gerarOrdemServicoPdf } from "@/lib/ordemServico";
 import type { Cliente, EventoCalendario, Projeto, Recurso, StatusHora, TipoBox, Usuario } from "@/types";
 
 function formatarDataBR(iso: string) {
@@ -54,6 +56,7 @@ function LinhaHora({
   children?: React.ReactNode;
 }) {
   const [expandido, setExpandido] = useState(false);
+  const [gerandoOS, setGerandoOS] = useState(false);
   const projeto = projetos.find((p) => p.id === ev.projetoId);
   const cliente = clientes.find((c) => c.id === projeto?.clienteId);
   const recurso = recursos.find((r) => r.id === ev.recursoId);
@@ -129,6 +132,25 @@ function LinhaHora({
             >
               {expandido ? "Ocultar" : "Detalhes"}
               {expandido ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
+          )}
+          {atividadesFeitas.length > 0 && projeto && (
+            <button
+              type="button"
+              disabled={gerandoOS}
+              title="Gerar PDF da Ordem de Serviço com as atividades deste apontamento, para enviar ao cliente e pedir confirmação"
+              onClick={async () => {
+                setGerandoOS(true);
+                try {
+                  await gerarOrdemServicoPdf(ev, projeto, cliente, recurso, atividadesFeitas);
+                } finally {
+                  setGerandoOS(false);
+                }
+              }}
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-semibold text-brand-accent hover:bg-brand-accent-soft disabled:opacity-50"
+            >
+              <FileText size={13} />
+              {gerandoOS ? "Gerando..." : "Gerar OS"}
             </button>
           )}
           {children}
@@ -652,6 +674,7 @@ const ABAS_BASE = [
   { id: "previstas", label: "Horas previstas" },
   { id: "aprovacao", label: "Aprovação de horas" },
   { id: "aprovadas", label: "Horas aprovadas" },
+  { id: "comparativo", label: "Previsto x Realizado" },
 ] as const;
 
 type AbaId = (typeof ABAS_BASE)[number]["id"];
@@ -672,7 +695,7 @@ function ApontamentoPageContent() {
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: recursos } = useCollection<Recurso>("recursos");
 
-  const abas = ABAS_BASE.filter((a) => a.id !== "aprovacao" || podeAprovar);
+  const abas = ABAS_BASE.filter((a) => (a.id !== "aprovacao" && a.id !== "comparativo") || podeAprovar);
   const [aba, setAba] = useState<AbaId>("previstas");
   const [importarAberto, setImportarAberto] = useState(false);
   const [filtroBox, setFiltroBox] = useState<"" | TipoBox>("");
@@ -767,6 +790,14 @@ function ApontamentoPageContent() {
       {aba === "aprovadas" && (
         <AbaAprovadas
           usuario={usuario}
+          eventos={eventosFiltrados}
+          projetos={projetos}
+          clientes={clientes}
+          recursos={recursos}
+        />
+      )}
+      {aba === "comparativo" && podeAprovar && (
+        <AbaPrevistoRealizado
           eventos={eventosFiltrados}
           projetos={projetos}
           clientes={clientes}

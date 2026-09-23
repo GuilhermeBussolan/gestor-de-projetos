@@ -169,11 +169,13 @@ function EscopoForm({ escopo, onClose }: { escopo: Escopo | null; onClose: () =>
     const semDescricaoVazia = atividades.filter((a) => a.descricao.trim());
     // Atividade que virou agrupadora (ganhou filhos ao ser recuada por outra) não guarda duração
     // própria — o valor dela é sempre a soma dos filhos, calculada na hora de exibir.
-    const atividadesValidas = normalizarNiveis(semDescricaoVazia).map((a, i, arr) =>
-      temFilhos(arr, i)
-        ? { ...a, descricao: a.descricao.trim(), duracao: undefined, unidadeDuracao: undefined }
-        : { ...a, descricao: a.descricao.trim() }
-    );
+    const atividadesValidas = normalizarNiveis(semDescricaoVazia).map((a, i, arr) => {
+      if (temFilhos(arr, i)) {
+        const { duracao: _duracao, unidadeDuracao: _unidadeDuracao, ...resto } = a;
+        return { ...resto, descricao: a.descricao.trim() };
+      }
+      return { ...a, descricao: a.descricao.trim() };
+    });
     if (atividadesValidas.length === 0) {
       setErro("Adicione ao menos uma atividade.");
       return;

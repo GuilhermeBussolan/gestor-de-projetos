@@ -1,13 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, updateDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useCollection } from "@/lib/useCollection";
 import { Modal } from "@/components/ui/Modal";
 import { AtividadesEscopoChecklist } from "@/components/projetos/AtividadesEscopoChecklist";
+import { ComparativoPrevistoRealizado } from "@/components/calendario/ComparativoPrevistoRealizado";
 import { calcularDatasAtividades } from "@/lib/dashboardCalc";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
+import { avaliarGruposAoApontar } from "@/lib/comparativoHoras";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { calcularTotalHoras, formatarHoras } from "@/lib/horas";
 import { STATUS_HORA_CONFIG, statusAoConfirmar, statusEfetivo, statusNaCriacao } from "@/lib/statusHora";
@@ -73,12 +76,40 @@ export function EventoModal({
     : projetos;
 
   const projetoSelecionado = projetos.find((p) => p.id === projetoId);
-  const atividadesEscopo = projetoSelecionado?.escopoAtividades ?? [];
+  const atividadesEscopo = useMemo(() => projetoSelecionado?.escopoAtividades ?? [], [projetoSelecionado]);
+
+  // O que já foi feito no escopo é do PROJETO inteiro, não só do que este consultor apontou — por
+  // isso busca à parte, sem o filtro por recurso que a tela de calendário pessoal usa (a regra do
+  // Firestore libera ler apontamentos de colegas dentro de um projeto em que o usuário está alocado).
+  const { data: eventosDoProjeto } = useCollection<EventoCalendario>(
+    "eventosCalendario",
+    [where("projetoId", "==", projetoId)],
+    !!projetoId,
+    [projetoId]
+  );
 
   const datasAtividades = useMemo(
-    () => calcularDatasAtividades(projetoId, eventos),
-    [projetoId, eventos]
+    () => calcularDatasAtividades(projetoId, eventosDoProjeto),
+    [projetoId, eventosDoProjeto]
   );
+
+  const totalHorasAtual = calcularTotalHoras(horaInicio, horaFim, horaDesconto);
+
+  // Previsto x Realizado (seção 5): só entra em cena quando o escopo do projeto tem duração
+  // cadastrada (cronograma importado) — projetos antigos, sem isso, não geram alerta nenhum.
+  const avaliacaoGrupos = useMemo(
+    () =>
+      avaliarGruposAoApontar(
+        projetoId,
+        atividadesEscopo,
+        atividadesMarcadas,
+        totalHorasAtual,
+        eventosDoProjeto,
+        eventoEditando?.id
+      ).filter((g) => g.horasPrevistas > 0),
+    [projetoId, atividadesEscopo, atividadesMarcadas, totalHorasAtual, eventosDoProjeto, eventoEditando?.id]
+  );
+  const precisaObservacao = avaliacaoGrupos.some((g) => g.cenario === "acima");
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
@@ -86,6 +117,20 @@ export function EventoModal({
     if (!projetoId || !recursoId) return;
     if (souConsultorEditandoMeuEvento && dataEvento > hojeISO) {
       setErro("Não é permitido apontar horas em datas futuras.");
+      return;
+    }
+    const totalHoras = calcularTotalHoras(horaInicio, horaFim, horaDesconto);
+    const totalDoDia = eventos
+      .filter(
+        (e) =>
+          e.id !== eventoEditando?.id &&
+          e.recursoId === recursoId &&
+          e.data === dataEvento &&
+          statusEfetivo(e) !== "cancelado"
+      )
+      .reduce((acc, e) => acc + e.totalHoras, 0);
+    if (totalDoDia + totalHoras > 24) {
+      setErro("O total de horas apontadas nesse dia para esse recurso passaria de 24 horas.");
       return;
     }
     const temConflito = eventos.some(
@@ -102,9 +147,12 @@ export function EventoModal({
       setErro("Já existe um apontamento para esse mesmo dia e horário.");
       return;
     }
+    if (precisaObservacao && !descricao.trim()) {
+      setErro("As horas apontadas ultrapassaram o previsto — informe uma observação justificando o excedente.");
+      return;
+    }
     setSalvando(true);
     try {
-      const totalHoras = calcularTotalHoras(horaInicio, horaFim, horaDesconto);
       const dados = {
         data: dataEvento,
         projetoId,
@@ -263,10 +311,6 @@ export function EventoModal({
           Total: <strong>{formatarHoras(calcularTotalHoras(horaInicio, horaFim, horaDesconto))}</strong>
         </p>
 
-        <FormRow label="Descrição (opcional)">
-          <Textarea rows={2} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
-        </FormRow>
-
         {atividadesEscopo.length > 0 && (
           <div>
             <p className="mb-1 text-sm font-medium text-brand-navy-2">
@@ -281,6 +325,12 @@ export function EventoModal({
             />
           </div>
         )}
+
+        <ComparativoPrevistoRealizado grupos={avaliacaoGrupos} />
+
+        <FormRow label={precisaObservacao ? "Observação (obrigatória — horas acima do previsto)" : "Descrição (opcional)"}>
+          <Textarea rows={2} value={descricao} onChange={(e) => setDescricao(e.target.value)} required={precisaObservacao} />
+        </FormRow>
 
         {erro && <p className="text-sm font-medium text-red-600">{erro}</p>}
 
