@@ -1,7 +1,7 @@
 "use client";
 
 import { Modal } from "@/components/ui/Modal";
-import type { LinhaClienteMes } from "@/lib/faturamentoPrevisto";
+import { TIPO_ITEM_CONFIG, type LinhaClienteMes } from "@/lib/faturamentoPrevisto";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -30,7 +30,7 @@ export function DetalheMesFaturamentoModal({
   const totalMes = linhas.reduce((s, l) => s + l.totalMes, 0);
 
   return (
-    <Modal open={!!mes} onClose={onClose} title={mes ? `Faturamento previsto — ${labelMes(mes)}` : ""} extraWide>
+    <Modal open={!!mes} onClose={onClose} title={mes ? `Faturamento previsto x realizado — ${labelMes(mes)}` : ""} extraWide>
       {mes && (
         <div>
           <p className="mb-4 text-sm text-brand-muted">
@@ -47,7 +47,7 @@ export function DetalheMesFaturamentoModal({
                       Valor venda: <strong className="text-brand-navy-2">{moeda(l.valorVenda)}</strong>
                     </span>
                     <span>
-                      Faturado: <strong className="text-brand-navy-2">{moeda(l.faturado)}</strong>
+                      Realizado: <strong className="text-brand-navy-2">{moeda(l.realizado)}</strong>
                     </span>
                     <span>
                       Saldo: <strong className="text-brand-navy-2">{moeda(l.saldo)}</strong>
@@ -55,6 +55,11 @@ export function DetalheMesFaturamentoModal({
                     <span>
                       Total no mês: <strong className="text-brand-accent">{moeda(l.totalMes)}</strong>
                     </span>
+                    {l.canceladoMes > 0 && (
+                      <span>
+                        Cancelado: <strong className="text-[#b5392a]">{moeda(l.canceladoMes)}</strong>
+                      </span>
+                    )}
                   </div>
                 </div>
                 <table className="w-full text-[12.5px]">
@@ -73,11 +78,10 @@ export function DetalheMesFaturamentoModal({
                         <td className="py-1.5 text-brand-navy-2">{it.identificacao}</td>
                         <td className="py-1.5">
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                              it.tipo === "liberado" ? "bg-[#e3f5ea] text-[#15754c]" : "bg-[#e8efff] text-[#2456b8]"
-                            }`}
+                            className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                            style={{ backgroundColor: TIPO_ITEM_CONFIG[it.tipo].bg, color: TIPO_ITEM_CONFIG[it.tipo].text }}
                           >
-                            {it.tipo === "liberado" ? "Liberado" : "Previsto"}
+                            {TIPO_ITEM_CONFIG[it.tipo].label}
                           </span>
                         </td>
                         <td className="py-1.5 text-right font-bold text-brand-navy-2">{moeda(it.valor)}</td>

@@ -28,6 +28,7 @@ import {
 import { TIPO_BOX_CONFIG } from "@/lib/constants";
 import { idsFolhas } from "@/lib/escopo";
 import { gerarOrdemServicoPdf } from "@/lib/ordemServico";
+import { BolinhaContagem } from "@/components/ui/BolinhaContagem";
 import type { Cliente, EventoCalendario, Projeto, Recurso, StatusHora, TipoBox, Usuario } from "@/types";
 
 function formatarDataBR(iso: string) {
@@ -700,6 +701,11 @@ function ApontamentoPageContent() {
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: recursos } = useCollection<Recurso>("recursos");
 
+  const pendenciasAprovacao = useMemo(
+    () => eventos.filter((e) => statusEfetivo(e) === "aguardando_aprovacao").length,
+    [eventos]
+  );
+
   const abas = ABAS_BASE.filter((a) => (a.id !== "aprovacao" && a.id !== "comparativo") || podeAprovar);
   const [aba, setAba] = useState<AbaId>("previstas");
   const [importarAberto, setImportarAberto] = useState(false);
@@ -763,13 +769,16 @@ function ApontamentoPageContent() {
           <button
             key={a.id}
             onClick={() => setAba(a.id)}
-            className={`rounded-[8px] px-3.5 py-1.5 text-[12.5px] font-bold transition-colors ${
+            className={`flex items-center rounded-[8px] px-3.5 py-1.5 text-[12.5px] font-bold transition-colors ${
               aba === a.id
                 ? "bg-white text-brand-navy-2 shadow-[0_2px_6px_rgba(21,40,73,0.12)]"
                 : "text-brand-faint hover:text-brand-muted"
             }`}
           >
             {a.label}
+            {a.id === "aprovacao" && (
+              <BolinhaContagem quantidade={pendenciasAprovacao} className="ml-1.5" titulo="Apontamentos aguardando aprovação" />
+            )}
           </button>
         ))}
       </div>

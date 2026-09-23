@@ -11,6 +11,7 @@ import { calcularDatasAtividades } from "@/lib/dashboardCalc";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { avaliarBlocosAoApontar } from "@/lib/comparativoHoras";
+import { sistemasQrh } from "@/lib/qrh";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { calcularTotalHoras, formatarHoras } from "@/lib/horas";
 import { STATUS_HORA_CONFIG, statusAoConfirmar, statusEfetivo, statusNaCriacao } from "@/lib/statusHora";
@@ -81,6 +82,10 @@ export function EventoModal({
 
   const projetoSelecionado = projetos.find((p) => p.id === projetoId);
   const atividadesEscopo = useMemo(() => projetoSelecionado?.escopoAtividades ?? [], [projetoSelecionado]);
+  const sistemasDoCliente = sistemasQrh({
+    modulo: projetoSelecionado?.modulo ?? "KPH",
+    detalhesQRH: projetoSelecionado?.detalhesQRH,
+  });
 
   // O que já foi feito no escopo é do PROJETO inteiro, não só do que este consultor apontou — por
   // isso busca à parte, sem o filtro por recurso que a tela de calendário pessoal usa (a regra do
@@ -274,6 +279,12 @@ export function EventoModal({
               );
             })}
           </Select>
+          {sistemasDoCliente.length > 0 && (
+            <p className="mt-1.5 rounded-md bg-brand-accent-soft px-2.5 py-1.5 text-[12px] text-[#2456b8]">
+              <strong>Sistemas do cliente (QRH):</strong>{" "}
+              {sistemasDoCliente.map((sis) => `${sis.rotulo} ${sis.valor}`).join(" · ")}
+            </p>
+          )}
           {projetosDisponiveis.length === 0 && (
             <p className="mt-1 text-xs text-amber-600">
               {souConsultorEditandoMeuEvento &&

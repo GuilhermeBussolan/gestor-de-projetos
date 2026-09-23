@@ -25,6 +25,7 @@ import {
 } from "@/lib/dashboardCalc";
 import { contarFolhas, duracaoEmMinutos, formatarDataCurta, nivelAtividade, numerarAtividades, temFilhos } from "@/lib/escopo";
 import { calcularProgressoFolhas } from "@/lib/progressoEscopo";
+import { sistemasQrh } from "@/lib/qrh";
 import { termometroEfetivo } from "@/lib/termometro";
 import { RegistroItem } from "@/components/timeline/RegistroItem";
 import { PrevisaoFaturamentoInline } from "@/components/financeiro/PrevisaoFaturamentoInline";
@@ -116,6 +117,7 @@ export function ProjetoDrawerConteudo({
   const gruposRotina = resumoGruposRotina(projeto.id, projeto.escopoAtividades ?? [], eventos).filter(
     (g) => g.horasPrevistas > 0
   );
+  const sistemasDoCliente = sistemasQrh(projeto);
   const previstoConsultor = projeto.horasPrevistasConsultor ?? 0;
   const previstoCoordenador = projeto.horasPrevistasCoordenador ?? 0;
   const finalizado = projeto.status === "finalizado";
@@ -276,6 +278,23 @@ export function ProjetoDrawerConteudo({
                 previsto={previstoCoordenador}
               />
             )}
+          </div>
+        )}
+
+        {sistemasDoCliente.length > 0 && (
+          <div className="mb-5.5">
+            <p className="mb-2.5 text-sm font-extrabold text-brand-navy-2">Módulo QRH — sistemas do cliente</p>
+            <div className="grid grid-cols-3 gap-2.5">
+              {sistemasDoCliente.map((sis) => (
+                <div
+                  key={sis.rotulo}
+                  className="rounded-xl border border-brand-border bg-brand-accent-soft/50 px-3.5 py-2.5 shadow-[0_8px_20px_rgba(21,40,73,0.05)]"
+                >
+                  <p className="text-[10.5px] font-bold tracking-[.06em] text-brand-faint uppercase">{sis.rotulo}</p>
+                  <p className="text-[14px] font-extrabold text-brand-navy-2">{sis.valor}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -537,6 +556,16 @@ export function ProjetoDrawerConteudo({
           </div>
         )}
 
+        {projeto.dataAssinaturaProposta && (
+          <div className="mb-5.5">
+            <p className="mb-2.5 text-sm font-extrabold text-brand-navy-2">Dados da proposta</p>
+            <div className="rounded-xl border border-brand-border bg-white px-4 py-3 text-[12.5px] text-brand-muted shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
+              Assinatura da proposta:{" "}
+              <strong className="text-brand-navy-2">{formatarDataCurta(projeto.dataAssinaturaProposta)}</strong>
+            </div>
+          </div>
+        )}
+
         {projeto.principaisEnvolvidos && projeto.principaisEnvolvidos.length > 0 && (
           <div className="mb-5.5">
             <p className="mb-2.5 text-sm font-extrabold text-brand-navy-2">Principais envolvidos</p>
@@ -547,6 +576,12 @@ export function ProjetoDrawerConteudo({
                   className="flex flex-wrap items-baseline gap-x-3 border-t border-brand-border-soft px-4 py-2.5 first:border-t-0"
                 >
                   <span className="text-[12.5px] font-semibold text-brand-navy-2">{env.nome}</span>
+                  {env.cargo && <span className="text-[12px] text-brand-muted">{env.cargo}</span>}
+                  {env.vinculo && (
+                    <span className="rounded-full bg-brand-accent-soft px-2 py-0.5 text-[10px] font-bold text-[#2456b8]">
+                      {env.vinculo}
+                    </span>
+                  )}
                   {env.email && <span className="text-[12px] text-brand-muted">{env.email}</span>}
                   {env.telefone && <span className="text-[12px] text-brand-muted">{env.telefone}</span>}
                 </div>

@@ -20,6 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { calcularAtividadesConcluidas, calcularHorasRealizadas, calcularPercentualProjeto, statusAbaProjeto } from "@/lib/dashboardCalc";
 import { calcularProximoAtendimento, PERIODO_LABEL } from "@/lib/cronograma";
 import { formatarDataCurta } from "@/lib/escopo";
+import { sistemasQrh } from "@/lib/qrh";
 import { ABA_STATUS_PROJETO_CONFIG, ABA_STATUS_PROJETO_ORDEM, TERMOMETRO_CONFIG, TERMOMETRO_ORDEM } from "@/lib/constants";
 import { formatarHoras } from "@/lib/horas";
 import { statusEfetivo } from "@/lib/statusHora";
@@ -642,6 +643,7 @@ function DashboardPageContent() {
                 ? nomesConsultores.join(", ")
                 : `${nomesConsultores[0]} +${nomesConsultores.length - 1}`;
 
+          const sistemasDoCliente = sistemasQrh(p);
           const concluidasEscopo = calcularAtividadesConcluidas(p.id, eventos);
           const proximo = calcularProximoAtendimento(p, concluidasEscopo, recursos, hojeIso);
 
@@ -687,6 +689,21 @@ function DashboardPageContent() {
                   >
                     <User size={12} className="shrink-0 text-brand-faint" />
                     <span className="truncate">{equipeTexto}</span>
+                  </div>
+                )}
+                {sistemasDoCliente.length > 0 && (
+                  <div
+                    title="Sistemas do cliente (módulo QRH)"
+                    className="mt-1.5 flex flex-wrap gap-1"
+                  >
+                    {sistemasDoCliente.map((sis) => (
+                      <span
+                        key={sis.rotulo}
+                        className="rounded-md bg-brand-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-[#2456b8]"
+                      >
+                        {sis.rotulo}: {sis.valor}
+                      </span>
+                    ))}
                   </div>
                 )}
                 {p.status === "cancelado" && p.cancelamento ? (

@@ -17,9 +17,13 @@ import {
   filtrarItens,
   matrizAnual,
   montarItensFaturamento,
+  TIPOS_ITEM_ORDEM,
+  TIPO_ITEM_CONFIG,
+  totaisDoAnoPorTipo,
   totaisPorMes,
   totalDoAno,
   type FiltrosFaturamento,
+  type TipoItemFaturamento,
 } from "@/lib/faturamentoPrevisto";
 import type { Cliente, Projeto, TipoFaturamento } from "@/types";
 
@@ -35,14 +39,16 @@ function FaturamentoPrevistoPageContent() {
   const [ano, setAno] = useState(ANO_ATUAL);
   const [clienteId, setClienteId] = useState("");
   const [tipoFaturamento, setTipoFaturamento] = useState<"" | TipoFaturamento>("");
+  const [status, setStatus] = useState<"" | TipoItemFaturamento>("");
   const [mesAberto, setMesAberto] = useState<string | null>(null);
 
-  const filtros: FiltrosFaturamento = useMemo(() => ({ clienteId, tipoFaturamento }), [clienteId, tipoFaturamento]);
+  const filtros: FiltrosFaturamento = useMemo(() => ({ clienteId, tipoFaturamento, status }), [clienteId, tipoFaturamento, status]);
 
   const todosItens = useMemo(() => montarItensFaturamento(projetos, clientes, ano), [projetos, clientes, ano]);
   const itens = useMemo(() => filtrarItens(todosItens, filtros), [todosItens, filtros]);
   const totais = useMemo(() => totaisPorMes(itens, ano), [itens, ano]);
   const total = totalDoAno(totais);
+  const totaisPorTipo = useMemo(() => totaisDoAnoPorTipo(totais), [totais]);
   const matriz = useMemo(() => matrizAnual(itens, projetos), [itens, projetos]);
 
   const linhasDoMes = useMemo(
@@ -59,7 +65,7 @@ function FaturamentoPrevistoPageContent() {
     <div>
       <FinanceiroTabs />
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Faturamento Previsto</h1>
+        <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Faturamento Previsto x Realizado</h1>
         <div className="flex gap-2">
           <Button variant="secondary" disabled={matriz.length === 0} onClick={() => exportarMatrizCsv(matriz, ano)}>
             Exportar CSV
@@ -70,8 +76,8 @@ function FaturamentoPrevistoPageContent() {
         </div>
       </div>
       <p className="mb-5 text-sm text-brand-muted">
-        Parcelas e marcos já liberados (verde) e ainda previstos (azul), mês a mês. Clique numa
-        barra para ver o detalhe por cliente.
+        Parcelas e marcos mês a mês, por situação: previsto, liberado, faturado, recebido e cancelado.
+        Clique numa barra para ver o detalhe por cliente.
       </p>
 
       <div className="mb-5 flex flex-wrap items-end gap-2.5">
@@ -98,6 +104,18 @@ function FaturamentoPrevistoPageContent() {
             </Select>
           </FormRow>
         </div>
+        <div className="w-44 shrink-0">
+          <FormRow label="Situação">
+            <Select value={status} onChange={(e) => setStatus(e.target.value as "" | TipoItemFaturamento)}>
+              <option value="">Todas</option>
+              {TIPOS_ITEM_ORDEM.map((t) => (
+                <option key={t} value={t}>
+                  {TIPO_ITEM_CONFIG[t].label}
+                </option>
+              ))}
+            </Select>
+          </FormRow>
+        </div>
         <div className="w-52 shrink-0">
           <FormRow label="Tipo de faturamento">
             <Select value={tipoFaturamento} onChange={(e) => setTipoFaturamento(e.target.value as "" | TipoFaturamento)}>
@@ -114,9 +132,9 @@ function FaturamentoPrevistoPageContent() {
 
       <div className="rounded-2xl border border-brand-border bg-white p-5 shadow-card">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <LegendaFaturamento />
+          <LegendaFaturamento totais={totaisPorTipo} />
           <p className="text-[12.5px] text-brand-muted">
-            Total previsto {ano}: <strong className="text-brand-navy-2">{moeda(total)}</strong>
+            Total programado {ano} (sem cancelados): <strong className="text-brand-navy-2">{moeda(total)}</strong>
           </p>
         </div>
         <GraficoFaturamentoBarras totais={totais} mesSelecionado={mesAberto} onClickMes={setMesAberto} />
@@ -129,8 +147,13 @@ function FaturamentoPrevistoPageContent() {
               <tr className="bg-brand-hover text-left text-[10px] font-bold tracking-[.07em] whitespace-nowrap text-brand-faint uppercase">
                 <th className="px-3 py-2.5">Cliente</th>
                 <th className="px-3 py-2.5">Valor Venda</th>
-                <th className="px-3 py-2.5">Faturado</th>
+                <th className="px-3 py-2.5">Realizado</th>
                 <th className="px-3 py-2.5">Saldo</th>
+                {(["liberado", "faturado", "recebido", "cancelado"] as const).map((t) => (
+                  <th key={t} className="px-2 py-2.5 text-right">
+                    {TIPO_ITEM_CONFIG[t].label} {ano}
+                  </th>
+                ))}
                 {MESES_ABREV.map((m) => (
                   <th key={m} className="px-2 py-2.5 text-right">
                     Previsto {m}
@@ -144,8 +167,13 @@ function FaturamentoPrevistoPageContent() {
                 <tr key={l.clienteId} className="border-t border-brand-border-soft whitespace-nowrap">
                   <td className="px-3 py-2 font-bold text-brand-navy-2">{l.cliente}</td>
                   <td className="px-3 py-2 text-brand-muted">{moeda(l.valorVenda)}</td>
-                  <td className="px-3 py-2 text-brand-muted">{moeda(l.faturado)}</td>
+                  <td className="px-3 py-2 text-brand-muted">{moeda(l.realizado)}</td>
                   <td className="px-3 py-2 text-brand-muted">{moeda(l.saldo)}</td>
+                  {((["liberado", "faturado", "recebido", "cancelado"] as const)).map((t) => (
+                    <td key={t} className="px-2 py-2 text-right text-brand-muted">
+                      {l.porTipo[t] > 0 ? moeda(l.porTipo[t]) : "—"}
+                    </td>
+                  ))}
                   {l.previstoPorMes.map((v, i) => (
                     <td key={i} className="px-2 py-2 text-right text-brand-muted">
                       {v > 0 ? moeda(v) : "—"}
@@ -156,7 +184,7 @@ function FaturamentoPrevistoPageContent() {
               ))}
               {matriz.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="px-4 py-8 text-center text-brand-faint">
+                  <td colSpan={20} className="px-4 py-8 text-center text-brand-faint">
                     Nenhum lançamento previsto para esse filtro em {ano}.
                   </td>
                 </tr>

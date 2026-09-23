@@ -239,10 +239,31 @@ export interface Escopo {
   createdAt: number;
 }
 
+export const VINCULOS_ENVOLVIDO = ["TOTVS", "CLIENTE", "PARCEIRO"] as const;
+export type VinculoEnvolvido = (typeof VINCULOS_ENVOLVIDO)[number];
+
 export interface EnvolvidoChave {
   nome: string;
+  cargo?: string;
+  /** De que lado o envolvido está: TOTVS, cliente ou parceiro. Vazio = não informado. */
+  vinculo?: VinculoEnvolvido | "";
   email?: string;
   telefone?: string;
+}
+
+/** Sistema em uso no cliente (folha e estoque do módulo QRH). */
+export const SISTEMAS_ERP = ["PROTHEUS", "RM", "DATASUL", "OUTROS"] as const;
+export type SistemaErp = (typeof SISTEMAS_ERP)[number];
+export const SISTEMAS_ESTOQUE = [...SISTEMAS_ERP, "N/A"] as const;
+export type SistemaEstoque = (typeof SISTEMAS_ESTOQUE)[number];
+export const SISTEMAS_ESOCIAL = ["TAF", "Middleware", "Quírons", "N/A"] as const;
+export type SistemaEsocial = (typeof SISTEMAS_ESOCIAL)[number];
+
+/** Informações extras do módulo de atendimento QRH (só existe quando o módulo do projeto é QRH). */
+export interface DetalhesQRH {
+  folha?: SistemaErp | null;
+  estoque?: SistemaEstoque | null;
+  esocial?: SistemaEsocial | null;
 }
 
 /** Registro de auditoria de uma tarefa excluída ao incluir um escopo no projeto (3.1). */
@@ -268,6 +289,10 @@ export interface Projeto {
   horasPrevistasCoordenador: number;
   dataInicio?: string | null;
   dataFim?: string | null;
+  /** Data em que a proposta foi assinada (YYYY-MM-DD). */
+  dataAssinaturaProposta?: string | null;
+  /** Só quando o módulo é QRH: sistemas de folha, estoque e e-Social do cliente. */
+  detalhesQRH?: DetalhesQRH | null;
   status?: StatusProjeto | null;
   contatoFaturamento?: ContatoFaturamento | null;
   escopoId?: string | null;

@@ -9,9 +9,10 @@ import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { ClienteCombobox } from "@/components/projetos/ClienteCombobox";
 import { EnvolvidosFields } from "@/components/projetos/EnvolvidosFields";
 import { EscopoSelector } from "@/components/projetos/EscopoSelector";
+import { QrhFields } from "@/components/projetos/QrhFields";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type EnvolvidoChave, type Escopo, type EscopoAtividade, type ExclusaoEscopo, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type DetalhesQRH, type EnvolvidoChave, type Escopo, type EscopoAtividade, type ExclusaoEscopo, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function ProjetoForm({
   onClose,
@@ -38,6 +39,8 @@ function ProjetoForm({
   const [horasPrevistasCoordenador, setHorasPrevistasCoordenador] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
+  const [dataAssinaturaProposta, setDataAssinaturaProposta] = useState("");
+  const [detalhesQRH, setDetalhesQRH] = useState<DetalhesQRH>({});
   const [contatoNome, setContatoNome] = useState("");
   const [contatoCnpj, setContatoCnpj] = useState("");
   const [contatoEmail, setContatoEmail] = useState("");
@@ -105,6 +108,15 @@ function ProjetoForm({
         horasPrevistasCoordenador: Number(horasPrevistasCoordenador) || 0,
         dataInicio: dataInicio || null,
         dataFim: dataFim || null,
+        dataAssinaturaProposta: dataAssinaturaProposta || null,
+        detalhesQRH:
+          modulo === "QRH"
+            ? {
+                folha: detalhesQRH.folha ?? null,
+                estoque: detalhesQRH.estoque ?? null,
+                esocial: detalhesQRH.esocial ?? null,
+              }
+            : null,
         status: "ativo",
         escopoId,
         escopoNome,
@@ -169,6 +181,8 @@ function ProjetoForm({
           </Select>
         </FormRow>
       </div>
+
+      {modulo === "QRH" && <QrhFields valor={detalhesQRH} onChange={setDetalhesQRH} />}
 
       <FormRow label="Coordenador (opcional)">
         <Select value={coordenadorId} onChange={(e) => setCoordenadorId(e.target.value)}>
@@ -252,6 +266,16 @@ function ProjetoForm({
             placeholder="0"
             value={horasPrevistasCoordenador}
             onChange={(e) => setHorasPrevistasCoordenador(e.target.value)}
+          />
+        </FormRow>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <FormRow label="Data de assinatura da proposta (opcional)">
+          <Input
+            type="date"
+            value={dataAssinaturaProposta}
+            onChange={(e) => setDataAssinaturaProposta(e.target.value)}
           />
         </FormRow>
       </div>

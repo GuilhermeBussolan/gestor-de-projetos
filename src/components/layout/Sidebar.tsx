@@ -18,7 +18,9 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import { BolinhaContagem } from "@/components/ui/BolinhaContagem";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePendenciasAprovacao } from "@/lib/usePendenciasAprovacao";
 import type { Perfil } from "@/types";
 
 interface NavItem {
@@ -78,6 +80,7 @@ const CADASTROS_ABERTO_KEY = "gp_cadastros_aberto";
 export function Sidebar() {
   const { usuario } = useAuth();
   const pathname = usePathname();
+  const pendenciasAprovacao = usePendenciasAprovacao(usuario?.perfil);
   const [colapsada, setColapsada] = useState(
     () => localStorage.getItem(SIDEBAR_COLAPSADA_KEY) === "1"
   );
@@ -109,10 +112,12 @@ export function Sidebar() {
   function NavLink({ item }: { item: NavItem }) {
     const ativo = pathname === item.href;
     const Icone = item.icon;
+    const pendencias = item.href === "/apontamento" ? pendenciasAprovacao : 0;
+    const tituloPendencias = `${pendencias} apontamento${pendencias === 1 ? "" : "s"} aguardando aprovação`;
     return (
       <Link
         href={item.href}
-        title={colapsada ? item.label : undefined}
+        title={pendencias > 0 ? tituloPendencias : colapsada ? item.label : undefined}
         className={`flex items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-[13.5px] font-semibold transition-colors ${
           colapsada ? "justify-center" : ""
         } ${
@@ -121,8 +126,12 @@ export function Sidebar() {
             : "text-white/65 hover:bg-white/8 hover:text-white"
         }`}
       >
-        <Icone size={17} className="shrink-0" />
+        <span className="relative flex shrink-0">
+          <Icone size={17} />
+          {colapsada && <BolinhaContagem quantidade={pendencias} className="absolute -top-2 -right-2.5" />}
+        </span>
         {!colapsada && <span className="truncate">{item.label}</span>}
+        {!colapsada && <BolinhaContagem quantidade={pendencias} className="ml-auto" />}
       </Link>
     );
   }

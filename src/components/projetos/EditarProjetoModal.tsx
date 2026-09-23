@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { EnvolvidosFields } from "@/components/projetos/EnvolvidosFields";
 import { EscopoSelector } from "@/components/projetos/EscopoSelector";
+import { QrhFields } from "@/components/projetos/QrhFields";
 import { ImportarCronogramaModal } from "@/components/importacao/ImportarCronogramaModal";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { useAuth } from "@/contexts/AuthContext";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import { MODULOS, TIPOS_ATENDIMENTO, type EnvolvidoChave, type Escopo, type EscopoAtividade, type ExclusaoEscopo, type Financeiro, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type DetalhesQRH, type EnvolvidoChave, type Escopo, type EscopoAtividade, type ExclusaoEscopo, type Financeiro, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function formatarDataHoraCurta(timestamp: number): string {
   return new Date(timestamp).toLocaleString("pt-BR", {
@@ -167,6 +168,8 @@ function EditarProjetoForm({
   );
   const [dataInicio, setDataInicio] = useState(projeto.dataInicio ?? "");
   const [dataFim, setDataFim] = useState(projeto.dataFim ?? "");
+  const [dataAssinaturaProposta, setDataAssinaturaProposta] = useState(projeto.dataAssinaturaProposta ?? "");
+  const [detalhesQRH, setDetalhesQRH] = useState<DetalhesQRH>(projeto.detalhesQRH ?? {});
   const [contatoNome, setContatoNome] = useState(projeto.contatoFaturamento?.nome ?? "");
   const [contatoCnpj, setContatoCnpj] = useState(projeto.contatoFaturamento?.cnpj ?? "");
   const [contatoEmail, setContatoEmail] = useState(projeto.contatoFaturamento?.email ?? "");
@@ -261,6 +264,15 @@ function EditarProjetoForm({
         horasPrevistasCoordenador: Number(horasPrevistasCoordenador) || 0,
         dataInicio: dataInicio || null,
         dataFim: dataFim || null,
+        dataAssinaturaProposta: dataAssinaturaProposta || null,
+        detalhesQRH:
+          modulo === "QRH"
+            ? {
+                folha: detalhesQRH.folha ?? null,
+                estoque: detalhesQRH.estoque ?? null,
+                esocial: detalhesQRH.esocial ?? null,
+              }
+            : null,
         escopoId,
         escopoNome,
         escopoAtividades: escopoAtividades.length > 0 ? escopoAtividades : null,
@@ -328,6 +340,8 @@ function EditarProjetoForm({
           </Select>
         </FormRow>
       </div>
+
+      {modulo === "QRH" && <QrhFields valor={detalhesQRH} onChange={setDetalhesQRH} />}
 
       <FormRow label="Coordenador (opcional)">
         <Select value={coordenadorId} onChange={(e) => setCoordenadorId(e.target.value)}>
@@ -431,6 +445,16 @@ function EditarProjetoForm({
             placeholder="0"
             value={horasPrevistasCoordenador}
             onChange={(e) => setHorasPrevistasCoordenador(e.target.value)}
+          />
+        </FormRow>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <FormRow label="Data de assinatura da proposta (opcional)">
+          <Input
+            type="date"
+            value={dataAssinaturaProposta}
+            onChange={(e) => setDataAssinaturaProposta(e.target.value)}
           />
         </FormRow>
       </div>
