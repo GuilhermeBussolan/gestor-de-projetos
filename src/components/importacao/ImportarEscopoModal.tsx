@@ -13,11 +13,26 @@ import {
   atividadesSemDuracao,
   converterLinhasEmAtividades,
 } from "@/lib/importarEscopo";
+import { ehCronogramaGantt, lerCronogramaGantt } from "@/lib/importarCronogramaGantt";
 import { normalizarNiveis, numerarAtividades } from "@/lib/escopo";
 import { useAuth } from "@/contexts/AuthContext";
 import type { EscopoAtividade } from "@/types";
 
 type Etapa = "form" | "processando" | "corrigindo" | "revisao" | "importando" | "concluido" | "erro";
+
+async function lerGantt(file: File) {
+  const r = await lerCronogramaGantt(file);
+  return {
+    erros: r.erros,
+    linhasValidadas: r.linhasValidadas,
+    atividades: r.atividades.map<EscopoAtividade>((a) => ({
+      id: a.id,
+      descricao: a.descricao,
+      nivel: a.nivel,
+      ...(a.duracao !== undefined ? { duracao: a.duracao, unidadeDuracao: a.unidadeDuracao } : {}),
+    })),
+  };
+}
 
 function EscopoImportForm({ onClose }: { onClose: () => void }) {
   const { usuario } = useAuth();
@@ -45,8 +60,10 @@ function EscopoImportForm({ onClose }: { onClose: () => void }) {
     setEtapa("processando");
     setErro("");
     try {
-      const linhas = await lerArquivoTabular(file);
-      const resultado = converterLinhasEmAtividades(linhas);
+      // Cronograma-padrão (Gantt, com Fase > módulo > submódulo > tarefa): lê os 4 níveis direto da planilha.
+      const resultado = (await ehCronogramaGantt(file))
+        ? await lerGantt(file)
+        : converterLinhasEmAtividades(await lerArquivoTabular(file));
       if (resultado.atividades.length === 0) {
         setErro(
           'Nenhuma atividade encontrada. Use uma coluna "Atividade"/"Descrição", ou "Tarefa Pai"/"Tarefa Filha", e uma coluna "Duração".'
@@ -117,7 +134,10 @@ function EscopoImportForm({ onClose }: { onClose: () => void }) {
             toda linha) e <strong>Unidade</strong> (opcional, minutos ou horas). Para a lista de
             atividades, use <strong>Atividade</strong> (ou <strong>Descrição</strong>) numa única
             coluna, ou <strong>Tarefa Pai</strong> e <strong>Tarefa Filha</strong> para já importar
-            com hierarquia.
+            com hierarquia. Para hierarquia com qualquer número de níveis, acrescente a coluna{" "}
+            <strong>Nível</strong> (1 = raiz, 2 = filha...) e mantenha as linhas em ordem; quem tem
+            filhas não precisa de duração. O cronograma-padrão (com &quot;Nome da Tarefa&quot;) também
+            é aceito direto, com todos os níveis.
           </div>
           <FormRow label="Nome do escopo">
             <Input

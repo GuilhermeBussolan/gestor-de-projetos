@@ -34,6 +34,10 @@ export function parseDuracao(texto: string): number | null {
  *   é uma tarefa real e precisa de duração); "Unidade" é opcional, padrão "horas".
  */
 export function converterLinhasEmAtividades(linhas: LinhaImportada[]): ResultadoImportacaoEscopo {
+  if (linhas.some((l) => pegarCampo(l.valores, "Nível", "Nivel").trim())) {
+    return converterLinhasComNivel(linhas);
+  }
+
   const usaHierarquia = linhas.some(
     (l) => pegarCampo(l.valores, "Tarefa Pai", "Pai") || pegarCampo(l.valores, "Tarefa Filha", "Filha")
   );
@@ -89,6 +93,46 @@ export function converterLinhasEmAtividades(linhas: LinhaImportada[]): Resultado
     }
   }
 
+  return { atividades, erros, linhasValidadas };
+}
+
+/**
+ * Hierarquia de qualquer profundidade pela coluna "Nível" (0 ou 1 = raiz; aceita as duas bases).
+ * A ordem das linhas é a ordem do escopo. Quem tem linhas mais fundas logo depois é agrupador e não
+ * precisa de duração (ela é a soma dos filhos); as demais linhas exigem "Duração".
+ */
+function converterLinhasComNivel(linhas: LinhaImportada[]): ResultadoImportacaoEscopo {
+  const lidas = linhas
+    .map((l) => ({
+      l,
+      descricao: pegarCampo(l.valores, "Atividade", "Descrição", "Descricao", "Tarefa", "Item").trim(),
+      nivel: Number(pegarCampo(l.valores, "Nível", "Nivel").trim().replace(",", ".")),
+    }))
+    .filter((x) => x.descricao);
+  const validos = lidas.filter((x) => Number.isFinite(x.nivel) && x.nivel >= 0);
+  const base = validos.length ? Math.min(...validos.map((x) => x.nivel)) : 0;
+
+  const atividades: EscopoAtividade[] = [];
+  const erros: ErroDuracao[] = [];
+  let linhasValidadas = 0;
+  let anterior = 0;
+  lidas.forEach((x, i) => {
+    const bruto = Number.isFinite(x.nivel) && x.nivel >= 0 ? Math.round(x.nivel - base) : anterior;
+    const nivel = Math.min(bruto, anterior + 1);
+    anterior = nivel;
+    const proximo = lidas[i + 1];
+    const proximoBruto = proximo && Number.isFinite(proximo.nivel) ? Math.round(proximo.nivel - base) : 0;
+    const agrupador = proximo !== undefined && proximoBruto > bruto;
+    if (agrupador) {
+      atividades.push({ id: criarAtividadeId(), descricao: x.descricao, nivel });
+      return;
+    }
+    const duracao = parseDuracao(pegarCampo(x.l.valores, "Duração", "Duracao", "Horas"));
+    const unidadeDuracao = normalizarUnidade(pegarCampo(x.l.valores, "Unidade", "Unidade Duração", "Unidade Duracao"));
+    linhasValidadas++;
+    if (duracao === null) erros.push({ linha: x.l.linha, descricao: x.descricao });
+    atividades.push({ id: criarAtividadeId(), descricao: x.descricao, nivel, duracao: duracao ?? undefined, unidadeDuracao });
+  });
   return { atividades, erros, linhasValidadas };
 }
 
