@@ -320,5 +320,11 @@ export interface EventoCalendario {
   retroativo?: boolean;
   /** IDs das EscopoAtividade do projeto marcadas como realizadas nesse apontamento. */
   atividadesRealizadas?: string[] | null;
+  /**
+   * false = as atividades marcadas ficaram "em andamento" (haverá novos apontamentos); true ou
+   * ausente = foram concluídas neste apontamento (ausente = apontamentos antigos, que sempre
+   * significaram "feito").
+   */
+  atividadesFinalizadas?: boolean | null;
   createdAt: number;
 }

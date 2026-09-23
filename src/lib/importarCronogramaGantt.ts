@@ -70,7 +70,7 @@ interface NoBruto {
   linha: number;
   texto: string;
   isGroup: boolean;
-  horas?: number;
+  minutos?: number;
   dataInicio: string | null;
   periodo: ReturnType<typeof parsePeriodoCronograma>;
   recursoNome?: string;
@@ -118,14 +118,14 @@ export async function lerCronogramaGantt(file: File): Promise<ResultadoImportaca
     const tempoCell = row.getCell(colunas.tempo);
     const isGroup = tempoCell.type === ExcelJS.ValueType.Formula;
     let filhos: number[] = [];
-    let horas: number | undefined;
+    let minutos: number | undefined;
     if (isGroup) {
       const formulaTexto = (tempoCell.value as { formula?: string } | null)?.formula ?? "";
       filhos = extrairLinhasDaFormula(formulaTexto);
     } else if (tempoCell.value instanceof Date) {
-      horas = Math.round(((tempoCell.value.getTime() - EPOCA_EXCEL_MS) / 3600000) * 100) / 100;
+      minutos = Math.round((tempoCell.value.getTime() - EPOCA_EXCEL_MS) / 60000);
     } else if (typeof tempoCell.value === "number") {
-      horas = Math.round(tempoCell.value * 24 * 100) / 100;
+      minutos = Math.round(tempoCell.value * 24 * 60);
     }
 
     const dataInicio = colunas.inicio ? dataDaCelula(row.getCell(colunas.inicio).value) : null;
@@ -134,10 +134,10 @@ export async function lerCronogramaGantt(file: File): Promise<ResultadoImportaca
     const recursoValor = colunas.recurso ? row.getCell(colunas.recurso).value : null;
     const recursoNome = typeof recursoValor === "string" && recursoValor.trim() ? recursoValor.trim() : undefined;
 
-    nos.set(r, { linha: r, texto, isGroup, horas, dataInicio, periodo, recursoNome, filhos });
+    nos.set(r, { linha: r, texto, isGroup, minutos, dataInicio, periodo, recursoNome, filhos });
     if (!isGroup) {
       linhasValidadas++;
-      if (horas === undefined) erros.push({ linha: r, descricao: texto });
+      if (minutos === undefined) erros.push({ linha: r, descricao: texto });
     }
   }
 
@@ -167,8 +167,10 @@ export async function lerCronogramaGantt(file: File): Promise<ResultadoImportaca
         id: criarAtividadeId(),
         descricao: no.texto,
         nivel,
-        duracao: no.horas,
-        unidadeDuracao: "horas",
+        // Hora cheia ou meia hora fica em horas; o resto (5 min, 10 min...) vai em minutos exatos, sem
+        // arredondar — 5 min como 0,08h fazia a soma de um bloco perder minutos.
+        duracao: no.minutos !== undefined && no.minutos % 30 === 0 ? no.minutos / 60 : no.minutos,
+        unidadeDuracao: no.minutos !== undefined && no.minutos % 30 === 0 ? "horas" : "minutos",
         dataInicio: no.dataInicio,
         periodo: no.periodo,
         recursoNome: no.recursoNome,

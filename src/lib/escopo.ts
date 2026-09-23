@@ -221,7 +221,9 @@ export function saoIrmas(atividades: EscopoAtividade[], idA: string, idB: string
 /** Duração de uma atividade em minutos (0 quando não preenchida). */
 export function duracaoEmMinutos(a: Pick<EscopoAtividade, "duracao" | "unidadeDuracao">): number {
   if (!a.duracao) return 0;
-  return (a.unidadeDuracao ?? "horas") === "minutos" ? a.duracao : a.duracao * 60;
+  // Sempre em minutos inteiros: durações importadas antes com horas arredondadas em 2 casas (5 min
+  // virou 0,08h) voltam ao valor real, e a soma de várias folhas não acumula erro.
+  return Math.round((a.unidadeDuracao ?? "horas") === "minutos" ? a.duracao : a.duracao * 60);
 }
 
 /** "1h30", "45 min", "2h" — para mostrar um total em minutos de forma legível. */

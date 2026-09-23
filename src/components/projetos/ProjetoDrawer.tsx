@@ -23,7 +23,8 @@ import {
   calcularRegistrosAtividades,
   resumoGruposRotina,
 } from "@/lib/dashboardCalc";
-import { contarFolhas, formatarDataCurta, nivelAtividade, numerarAtividades, temFilhos } from "@/lib/escopo";
+import { contarFolhas, duracaoEmMinutos, formatarDataCurta, nivelAtividade, numerarAtividades, temFilhos } from "@/lib/escopo";
+import { calcularProgressoFolhas } from "@/lib/progressoEscopo";
 import { termometroEfetivo } from "@/lib/termometro";
 import { RegistroItem } from "@/components/timeline/RegistroItem";
 import { PrevisaoFaturamentoInline } from "@/components/financeiro/PrevisaoFaturamentoInline";
@@ -108,6 +109,7 @@ export function ProjetoDrawerConteudo({
   const horas = calcularHorasRealizadas(projeto.id, eventos, recursos);
   const atividadesConcluidas = calcularAtividadesConcluidas(projeto.id, eventos);
   const registrosAtividades = calcularRegistrosAtividades(projeto.id, eventos, recursos);
+  const progressoFolhas = calcularProgressoFolhas(projeto.id, projeto.escopoAtividades ?? [], eventos);
   const folhasEscopo = contarFolhas(projeto.escopoAtividades ?? [], atividadesConcluidas);
   const numeracaoEscopo = numerarAtividades(projeto.escopoAtividades ?? []);
   // Só existe quando o cronograma foi importado (é dele que vem a duração por atividade).
@@ -318,11 +320,17 @@ export function ProjetoDrawerConteudo({
                         {feita && <CheckCircle2 size={12} className="ml-1 -mt-0.5 inline align-middle" />}
                       </p>
                       {feitoEm.length > 0 && (
-                        <p className="text-[11px] text-[#15754c]">
-                          Feito em:{" "}
+                        <p className={`text-[11px] ${feita ? "text-[#15754c]" : "text-[#2456b8]"}`}>
+                          {feita ? "Feito em" : "Apontado em"}:{" "}
                           {feitoEm
                             .map((r) => `${formatarDataCurta(r.data)} (${r.recursoNome})`)
                             .join(", ")}
+                        </p>
+                      )}
+                      {!feita && !pai && (progressoFolhas.get(a.id)?.horas ?? 0) > 0 && (
+                        <p className="text-[11px] font-semibold text-[#a4650d]">
+                          Em andamento · {progressoFolhas.get(a.id)!.horas.toFixed(1)}h
+                          {duracaoEmMinutos(a) > 0 ? ` de ${(duracaoEmMinutos(a) / 60).toFixed(1)}h` : ""}
                         </p>
                       )}
                     </div>

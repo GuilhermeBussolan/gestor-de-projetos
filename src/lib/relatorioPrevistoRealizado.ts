@@ -2,8 +2,9 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { saveAs } from "file-saver";
 import { classificarCenario, type CenarioComparativo } from "@/lib/comparativoHoras";
-import { calcularHorasRealizadasAtividade, resumoGruposRotina } from "@/lib/dashboardCalc";
-import { idsFolhas, fimDoBloco } from "@/lib/escopo";
+import { resumoGruposRotina } from "@/lib/dashboardCalc";
+import { calcularProgressoFolhas } from "@/lib/progressoEscopo";
+import { duracaoEmMinutos, idsFolhas, fimDoBloco } from "@/lib/escopo";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import type { Cliente, EscopoAtividade, EventoCalendario, Projeto, Recurso } from "@/types";
 
@@ -106,12 +107,13 @@ export function detalheTarefasDoGrupo(
   const atividades = projeto.escopoAtividades ?? [];
   const folhas = idsFolhas(atividades);
   const fim = fimDoBloco(atividades, indiceGrupo);
+  const progresso = calcularProgressoFolhas(projeto.id, atividades, eventos);
   return atividades
     .slice(indiceGrupo, fim)
     .filter((a) => folhas.has(a.id))
     .map((a) => {
-      const horasPrevistas = a.duracao ? (a.unidadeDuracao === "minutos" ? a.duracao / 60 : a.duracao) : 0;
-      const horasRealizadas = calcularHorasRealizadasAtividade(projeto.id, a.id, eventos);
+      const horasPrevistas = duracaoEmMinutos(a) / 60;
+      const horasRealizadas = progresso.get(a.id)?.horas ?? 0;
       return {
         atividadeId: a.id,
         descricao: a.descricao,

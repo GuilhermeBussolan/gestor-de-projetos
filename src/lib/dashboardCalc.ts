@@ -1,13 +1,13 @@
 import { fimDoBloco, idsFolhas, somaDuracaoBloco } from "@/lib/escopo";
+import { apontamentoFinalizou, calcularProgressoFolhas, fracaoDaFolha, type ProgressoFolha } from "@/lib/progressoEscopo";
 import { statusEfetivo } from "@/lib/statusHora";
 import type { AbaStatusProjeto, EscopoAtividade, EventoCalendario, Projeto, Recurso } from "@/types";
 
 /**
- * Percentual do projeto = andamento do escopo, não mais dos documentos (MITs): quantas
- * atividades-folha já foram marcadas como feitas (num apontamento aprovado do Calendário) sobre o
- * total de folhas do escopo — cada atividade conta 1 a 1, não pesa pela duração dela (uma tarefa
- * de 20h concluída avança o percentual igual a uma de 1h). Sem nenhuma atividade no escopo, o
- * projeto é 0% (a iniciar).
+ * Percentual do projeto = andamento do escopo, não mais dos documentos (MITs): média do progresso de
+ * cada atividade-folha — cada uma conta 1 a 1, sem pesar pela duração. Uma atividade finalizada vale
+ * 100%; uma em andamento (apontada sem marcar "Finalizado") vale as horas apontadas sobre as previstas
+ * (4h de 8h = 50%). Sem nenhuma atividade no escopo, o projeto é 0% (a iniciar).
  */
 export function calcularPercentualProjeto(
   projeto: Pick<Projeto, "id" | "escopoAtividades">,
@@ -18,9 +18,9 @@ export function calcularPercentualProjeto(
   const folhasEscopo = atividades.filter((a) => folhas.has(a.id));
   if (folhasEscopo.length === 0) return 0;
 
-  const concluidas = calcularAtividadesConcluidas(projeto.id, eventos);
-  const feitas = folhasEscopo.filter((a) => concluidas.has(a.id)).length;
-  return Math.round((feitas / folhasEscopo.length) * 10000) / 100;
+  const progresso = calcularProgressoFolhas(projeto.id, atividades, eventos);
+  const soma = folhasEscopo.reduce((acc, a) => acc + fracaoDaFolha(a, progresso.get(a.id)), 0);
+  return Math.round((soma / folhasEscopo.length) * 10000) / 100;
 }
 
 /**
@@ -126,8 +126,8 @@ export function calcularRegistrosAtividades(
 }
 
 /**
- * IDs das atividades do escopo já marcadas como feitas em algum apontamento
- * aprovado do projeto — a mesma régua de "aprovado" usada nas horas.
+ * IDs das atividades do escopo concluídas em algum apontamento aprovado do projeto — a mesma régua
+ * de "aprovado" usada nas horas. Apontamento marcado como "em andamento" não conclui a atividade.
  */
 export function calcularAtividadesConcluidas(
   projetoId: string,
@@ -139,6 +139,7 @@ export function calcularAtividadesConcluidas(
     if (ev.id === ignorarEventoId) continue;
     if (ev.projetoId !== projetoId) continue;
     if (statusEfetivo(ev) !== "aprovado") continue;
+    if (!apontamentoFinalizou(ev)) continue;
     (ev.atividadesRealizadas ?? []).forEach((id) => concluidas.add(id));
   }
   return concluidas;
@@ -156,13 +157,25 @@ export function grupoConcluido(
   return idsDoGrupo.length > 0 && idsDoGrupo.every((id) => concluidas.has(id));
 }
 
+/** Soma das horas apontadas nas atividades-folha do bloco que começa em `indice` (a atividade, com tudo dentro dela). */
+export function horasApontadasNoBloco(
+  atividades: EscopoAtividade[],
+  indice: number,
+  progresso: Map<string, ProgressoFolha>
+): number {
+  const folhas = idsFolhas(atividades);
+  const fim = fimDoBloco(atividades, indice);
+  return atividades
+    .slice(indice, fim)
+    .filter((a) => folhas.has(a.id))
+    .reduce((soma, a) => soma + (progresso.get(a.id)?.horas ?? 0), 0);
+}
+
 /**
- * Horas Realizadas (Grupo): soma o totalHoras de todo apontamento aprovado que marcou qualquer
- * atividade-folha dentro do bloco do "grupo de rotina" (a atividade em `indiceGrupo`) como feita.
- * Um apontamento que marca folhas de mais de um grupo conta integralmente em cada um — a mesma
- * aproximação já usada para "atividades concluídas", já que o apontamento não fatia as horas por
- * atividade. `ignorarEventoId` serve para simular "e se eu salvar este apontamento", sem contar
- * a versão antiga dele quando está sendo editado.
+ * Horas Realizadas (Grupo): horas apontadas (aprovadas) nas atividades-folha do bloco do "grupo de
+ * rotina". As horas de um apontamento são repartidas entre as atividades que ele marcou (ver
+ * `distribuirHorasEvento`), então um apontamento que toca dois grupos não conta em dobro.
+ * `ignorarEventoId` serve para simular "e se eu salvar este apontamento".
  */
 export function calcularHorasRealizadasGrupo(
   projetoId: string,
@@ -171,34 +184,18 @@ export function calcularHorasRealizadasGrupo(
   eventos: EventoCalendario[],
   ignorarEventoId?: string
 ): number {
-  const folhas = idsFolhas(atividades);
-  const fim = fimDoBloco(atividades, indiceGrupo);
-  const idsDoGrupo = new Set(
-    atividades.slice(indiceGrupo, fim).filter((a) => folhas.has(a.id)).map((a) => a.id)
-  );
-  let total = 0;
-  for (const ev of eventos) {
-    if (ev.id === ignorarEventoId) continue;
-    if (ev.projetoId !== projetoId) continue;
-    if (statusEfetivo(ev) !== "aprovado") continue;
-    if ((ev.atividadesRealizadas ?? []).some((id) => idsDoGrupo.has(id))) total += ev.totalHoras;
-  }
-  return total;
+  const progresso = calcularProgressoFolhas(projetoId, atividades, eventos, ignorarEventoId);
+  return horasApontadasNoBloco(atividades, indiceGrupo, progresso);
 }
 
-/** Horas aprovadas de eventos que marcaram esta atividade-folha específica como feita. */
+/** Horas aprovadas apontadas nesta atividade-folha específica. */
 export function calcularHorasRealizadasAtividade(
   projetoId: string,
+  atividades: EscopoAtividade[],
   atividadeId: string,
   eventos: EventoCalendario[]
 ): number {
-  let total = 0;
-  for (const ev of eventos) {
-    if (ev.projetoId !== projetoId) continue;
-    if (statusEfetivo(ev) !== "aprovado") continue;
-    if ((ev.atividadesRealizadas ?? []).includes(atividadeId)) total += ev.totalHoras;
-  }
-  return total;
+  return calcularProgressoFolhas(projetoId, atividades, eventos).get(atividadeId)?.horas ?? 0;
 }
 
 export interface ResumoGrupoRotina {
@@ -220,12 +217,13 @@ export function resumoGruposRotina(
   eventos: EventoCalendario[]
 ): ResumoGrupoRotina[] {
   const concluidas = calcularAtividadesConcluidas(projetoId, eventos);
+  const progresso = calcularProgressoFolhas(projetoId, atividades, eventos);
   return atividades
     .map((a, i) => ({ a, i }))
     .filter(({ a }) => (a.nivel ?? 0) === 0)
     .map(({ a, i }) => {
       const horasPrevistas = somaDuracaoBloco(atividades, i) / 60;
-      const horasRealizadas = calcularHorasRealizadasGrupo(projetoId, atividades, i, eventos);
+      const horasRealizadas = horasApontadasNoBloco(atividades, i, progresso);
       const concluido = grupoConcluido(atividades, i, concluidas);
       return {
         grupoId: a.id,

@@ -12,7 +12,10 @@ export function calcularTotalHoras(horaInicio: string, horaFim: string, horaDesc
 
 export function formatarHoras(totalHoras: number): string {
   const valor = Number.isFinite(totalHoras) ? totalHoras : 0;
-  const horas = Math.floor(valor);
-  const minutos = Math.round((valor - horas) * 60);
+  // Arredonda o total em minutos antes de separar horas e minutos — separar primeiro dava "03:60"
+  // para 3,9999h.
+  const totalMinutos = Math.round(valor * 60);
+  const horas = Math.floor(totalMinutos / 60);
+  const minutos = totalMinutos - horas * 60;
   return `${String(horas).padStart(2, "0")}:${String(minutos).padStart(2, "0")}`;
 }

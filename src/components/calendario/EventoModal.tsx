@@ -10,7 +10,7 @@ import { ComparativoPrevistoRealizado } from "@/components/calendario/Comparativ
 import { calcularDatasAtividades } from "@/lib/dashboardCalc";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
-import { avaliarGruposAoApontar } from "@/lib/comparativoHoras";
+import { avaliarBlocosAoApontar } from "@/lib/comparativoHoras";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { calcularTotalHoras, formatarHoras } from "@/lib/horas";
 import { STATUS_HORA_CONFIG, statusAoConfirmar, statusEfetivo, statusNaCriacao } from "@/lib/statusHora";
@@ -62,6 +62,10 @@ export function EventoModal({
   const [atividadesMarcadas, setAtividadesMarcadas] = useState<string[]>(
     eventoEditando?.atividadesRealizadas ?? []
   );
+  // "Em andamento" = ainda haverá outros apontamentos nas atividades marcadas; desligado = finalizadas.
+  const [emAndamento, setEmAndamento] = useState(
+    eventoEditando ? eventoEditando.atividadesFinalizadas === false : true
+  );
   const [salvando, setSalvando] = useState(false);
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
   const [erro, setErro] = useState("");
@@ -95,21 +99,23 @@ export function EventoModal({
 
   const totalHorasAtual = calcularTotalHoras(horaInicio, horaFim, horaDesconto);
 
-  // Previsto x Realizado (seção 5): só entra em cena quando o escopo do projeto tem duração
-  // cadastrada (cronograma importado) — projetos antigos, sem isso, não geram alerta nenhum.
-  const avaliacaoGrupos = useMemo(
+  // Previsto x Realizado: por atividade marcada (ex: "Riscos" = 8h), não pelo grupo de rotina. Só
+  // entra em cena quando o escopo do projeto tem duração cadastrada (cronograma importado) —
+  // projetos antigos, sem isso, não geram alerta nenhum.
+  const avaliacaoBlocos = useMemo(
     () =>
-      avaliarGruposAoApontar(
+      avaliarBlocosAoApontar(
         projetoId,
         atividadesEscopo,
         atividadesMarcadas,
         totalHorasAtual,
+        !emAndamento,
         eventosDoProjeto,
         eventoEditando?.id
-      ).filter((g) => g.horasPrevistas > 0),
-    [projetoId, atividadesEscopo, atividadesMarcadas, totalHorasAtual, eventosDoProjeto, eventoEditando?.id]
+      ).filter((b) => b.horasPrevistas > 0),
+    [projetoId, atividadesEscopo, atividadesMarcadas, totalHorasAtual, emAndamento, eventosDoProjeto, eventoEditando?.id]
   );
-  const precisaObservacao = avaliacaoGrupos.some((g) => g.cenario === "acima");
+  const precisaObservacao = avaliacaoBlocos.some((b) => b.cenario === "acima");
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
@@ -163,6 +169,7 @@ export function EventoModal({
         totalHoras,
         descricao,
         atividadesRealizadas: atividadesMarcadas,
+        atividadesFinalizadas: atividadesMarcadas.length > 0 ? !emAndamento : true,
       };
       if (eventoEditando) {
         await updateDoc(doc(db, "eventosCalendario", eventoEditando.id), {
@@ -326,7 +333,39 @@ export function EventoModal({
           </div>
         )}
 
-        <ComparativoPrevistoRealizado grupos={avaliacaoGrupos} />
+        {atividadesMarcadas.length > 0 && (
+          <div>
+            <p className="mb-1 text-sm font-medium text-brand-navy-2">Situação das atividades marcadas</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { valor: true, titulo: "Em andamento", ajuda: "Haverá novos apontamentos" },
+                { valor: false, titulo: "Finalizado", ajuda: "Concluí o que marquei" },
+              ].map((op) => {
+                const ativo = emAndamento === op.valor;
+                return (
+                  <button
+                    key={op.titulo}
+                    type="button"
+                    aria-pressed={ativo}
+                    onClick={() => setEmAndamento(op.valor)}
+                    className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                      ativo
+                        ? "border-brand-accent bg-brand-accent-soft"
+                        : "border-brand-border bg-white hover:bg-brand-hover"
+                    }`}
+                  >
+                    <span className={`block text-[13px] font-bold ${ativo ? "text-brand-accent" : "text-brand-navy-2"}`}>
+                      {op.titulo}
+                    </span>
+                    <span className="block text-[11px] text-brand-muted">{op.ajuda}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <ComparativoPrevistoRealizado blocos={avaliacaoBlocos} />
 
         <FormRow label={precisaObservacao ? "Observação (obrigatória — horas acima do previsto)" : "Descrição (opcional)"}>
           <Textarea rows={2} value={descricao} onChange={(e) => setDescricao(e.target.value)} required={precisaObservacao} />

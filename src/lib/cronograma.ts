@@ -1,4 +1,4 @@
-import { idsFolhas, nivelAtividade } from "@/lib/escopo";
+import { duracaoEmMinutos, idsFolhas, nivelAtividade } from "@/lib/escopo";
 import { horaParaMinutos } from "@/lib/horas";
 import type { EscopoAtividade, PeriodoDia, Projeto, Recurso } from "@/types";
 
@@ -38,8 +38,7 @@ export function indiceGrupoDaAtividade(atividades: EscopoAtividade[], indice: nu
 }
 
 function horasDaAtividade(a: Pick<EscopoAtividade, "duracao" | "unidadeDuracao">): number {
-  if (!a.duracao) return 0;
-  return (a.unidadeDuracao ?? "horas") === "minutos" ? a.duracao / 60 : a.duracao;
+  return duracaoEmMinutos(a) / 60;
 }
 
 /** Todas as alocações previstas de um projeto — só atividades-folha com recurso, data e período. */

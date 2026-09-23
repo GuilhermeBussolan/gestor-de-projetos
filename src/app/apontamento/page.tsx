@@ -110,6 +110,11 @@ function LinhaHora({
               {atividadesFeitas.length > 0 && (
                 <div className="mt-2 rounded-md bg-brand-hover px-3 py-2 text-[12.5px] text-brand-muted">
                   <strong className="text-brand-navy-2">Atividades do escopo realizadas:</strong>
+                  {ev.atividadesFinalizadas === false && (
+                    <span className="ml-2 rounded-full bg-[#e8efff] px-2 py-0.5 text-[10.5px] font-bold text-[#2456b8]">
+                      Em andamento
+                    </span>
+                  )}
                   <ul className="mt-1 list-disc space-y-0.5 pl-4">
                     {atividadesFeitas.map((nome, i) => (
                       <li key={i}>{nome}</li>
