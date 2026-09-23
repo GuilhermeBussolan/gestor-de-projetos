@@ -10,6 +10,8 @@ import { EnvolvidosFields } from "@/components/projetos/EnvolvidosFields";
 import { EscopoSelector } from "@/components/projetos/EscopoSelector";
 import { QrhFields } from "@/components/projetos/QrhFields";
 import { ImportarCronogramaModal } from "@/components/importacao/ImportarCronogramaModal";
+import { HistoricoCronogramaModal } from "@/components/projetos/HistoricoCronogramaModal";
+import { BotoesCronograma } from "@/components/projetos/CronogramaAcoes";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { useAuth } from "@/contexts/AuthContext";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
@@ -149,6 +151,7 @@ function EditarProjetoForm({
   projetos: Projeto[];
 }) {
   const [cronogramaAberto, setCronogramaAberto] = useState(false);
+  const [historicoCronogramaAberto, setHistoricoCronogramaAberto] = useState(false);
   const [codigoProposta, setCodigoProposta] = useState(projeto.codigoProposta ?? "");
   const [modulo, setModulo] = useState<Modulo>(projeto.modulo ?? MODULOS[0]);
   const [tipoAtendimento, setTipoAtendimento] = useState<TipoAtendimento>(
@@ -391,13 +394,12 @@ function EditarProjetoForm({
       <div>
         <div className="mb-1 flex items-center justify-between">
           <p className="text-sm font-medium text-brand-navy-2">Escopo do projeto (opcional)</p>
-          <button
-            type="button"
-            onClick={() => setCronogramaAberto(true)}
-            className="text-[12.5px] font-semibold text-brand-accent hover:underline"
-          >
-            Importar cronograma
-          </button>
+          <BotoesCronograma
+            podeImportar
+            mostrarHistorico
+            onImportar={() => setCronogramaAberto(true)}
+            onHistorico={() => setHistoricoCronogramaAberto(true)}
+          />
         </div>
         <EscopoSelector
           escopos={escopos}
@@ -406,6 +408,12 @@ function EditarProjetoForm({
           exclusoesAtuais={escopoExclusoes}
           onSelecionar={selecionarEscopo}
           onRemover={removerEscopo}
+        />
+        <HistoricoCronogramaModal
+          open={historicoCronogramaAberto}
+          projeto={projeto}
+          recursos={recursos}
+          onClose={() => setHistoricoCronogramaAberto(false)}
         />
         <ImportarCronogramaModal
           open={cronogramaAberto}

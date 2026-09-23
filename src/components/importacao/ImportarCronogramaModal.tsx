@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { collection, doc, orderBy, serverTimestamp, where, writeBatch } from "firebase/firestore";
 import { AlertTriangle, CheckCircle2, Upload } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/Field";
+import { Input, Select, Textarea } from "@/components/ui/Field";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCollection } from "@/lib/useCollection";
 import { lerArquivoTabular } from "@/lib/importarArquivo";
 import {
   aplicarAssociacaoRecursos,
@@ -16,12 +18,15 @@ import {
 } from "@/lib/importarCronograma";
 import { ehCronogramaGantt, lerCronogramaGantt } from "@/lib/importarCronogramaGantt";
 import { aplicarCorrecoesDuracao, atividadesSemDuracao } from "@/lib/importarEscopo";
-import { normalizarNiveis, numerarAtividades } from "@/lib/escopo";
+import { idsFolhas, normalizarNiveis, numerarAtividades } from "@/lib/escopo";
+import { calcularProgressoFolhas } from "@/lib/progressoEscopo";
+import { casarAtividades, compararVersoes, preservarRealizado, totalMinutosFolhas } from "@/lib/versaoCronograma";
+import { ConferenciaVersao } from "@/components/importacao/ConferenciaVersao";
 import { PERIODO_LABEL, idsAtividadesSobrepostas, todasAlocacoes } from "@/lib/cronograma";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import type { EscopoAtividade, Projeto, Recurso } from "@/types";
+import type { EscopoAtividade, EventoCalendario, Projeto, Recurso, VersaoCronograma } from "@/types";
 
-type Etapa = "form" | "processando" | "corrigindo" | "recursos" | "revisao" | "importando" | "concluido" | "erro";
+type Etapa = "form" | "processando" | "corrigindo" | "recursos" | "conferencia" | "revisao" | "importando" | "concluido" | "erro";
 
 function dataBR(iso: string | null | undefined) {
   return iso ? iso.split("-").reverse().join("/") : "—";
@@ -46,6 +51,24 @@ function CronogramaImportForm({
   const [correcoes, setCorrecoes] = useState<Map<string, string>>(new Map());
   const [associacao, setAssociacao] = useState<Map<string, string>>(new Map());
   const [erro, setErro] = useState("");
+  const [arquivoNome, setArquivoNome] = useState("");
+  const [observacao, setObservacao] = useState("");
+  /** Vínculos manuais: id da atividade da versão atual -> id da atividade nova do arquivo. */
+  const [vinculos, setVinculos] = useState<Map<string, string>>(new Map());
+  const { usuario } = useAuth();
+  const versoesCol = useCollection<VersaoCronograma>(
+    `projetos/${projeto.id}/versoesCronograma`,
+    [orderBy("numero", "asc")],
+    true,
+    [projeto.id]
+  );
+  const versoes = versoesCol.data;
+  const { data: eventosProjeto } = useCollection<EventoCalendario>(
+    "eventosCalendario",
+    [where("projetoId", "==", projeto.id)],
+    true,
+    [projeto.id]
+  );
 
   const faltando = useMemo(() => atividadesSemDuracao(atividades), [atividades]);
   const nomesRecurso = useMemo(() => nomesRecursosDoCronograma(atividades), [atividades]);
@@ -55,10 +78,51 @@ function CronogramaImportForm({
     () => normalizarNiveis(aplicarAssociacaoRecursos(atividades, associacao)),
     [atividades, associacao]
   );
+  // Cronograma "vivo": cada atividade do arquivo tenta reaproveitar o ID da equivalente já existente
+  // no projeto, para o realizado (apontamentos guardam IDs) continuar ligado mesmo se a ordem mudar.
+  const temEscopoAtual = (projeto.escopoAtividades ?? []).length > 0;
+  const casamentoBase = useMemo(
+    () => casarAtividades(projeto.escopoAtividades ?? [], atividadesFinal),
+    [projeto.escopoAtividades, atividadesFinal]
+  );
+  const casamento = useMemo(
+    () => casarAtividades(projeto.escopoAtividades ?? [], atividadesFinal, vinculos),
+    [projeto.escopoAtividades, atividadesFinal, vinculos]
+  );
+  const horasPorAtividade = useMemo(
+    () => calcularProgressoFolhas(projeto.id, projeto.escopoAtividades ?? [], eventosProjeto),
+    [projeto.id, projeto.escopoAtividades, eventosProjeto]
+  );
+  const nomeRecurso = (id: string) => recursos.find((r) => r.id === id)?.nomeCompleto ?? "recurso";
+  // O que já foi feito não se perde: tarefas concluídas mantêm data/recurso e as que saíram do arquivo
+  // mas têm horas apontadas continuam no cronograma como "realizadas em versão anterior".
+  const preservado = useMemo(
+    () => preservarRealizado(projeto.escopoAtividades ?? [], casamento.atividades, horasPorAtividade, nomeRecurso),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projeto.escopoAtividades, casamento.atividades, horasPorAtividade, recursos]
+  );
+  const atividadesSalvar = temEscopoAtual ? preservado.atividades : atividadesFinal;
+  const comparacao = useMemo(() => {
+    const c = compararVersoes(projeto.escopoAtividades ?? [], atividadesSalvar, nomeRecurso);
+    return { ...c, resumo: { ...c.resumo, agendaPreservada: preservado.agendaPreservada.length } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projeto.escopoAtividades, atividadesSalvar, recursos, preservado.agendaPreservada]);
+  const removidasComHoras = useMemo(() => {
+    const folhas = idsFolhas(projeto.escopoAtividades ?? []);
+    return casamento.semParAntigas.filter(
+      (a) => folhas.has(a.id) && (horasPorAtividade.get(a.id)?.horas ?? 0) > 0
+    );
+  }, [casamento.semParAntigas, projeto.escopoAtividades, horasPorAtividade]);
+  const opcoesNovas = useMemo(() => {
+    const folhasNovas = idsFolhas(atividadesFinal);
+    return casamentoBase.semParNovas.filter((a) => folhasNovas.has(a.id));
+  }, [casamentoBase.semParNovas, atividadesFinal]);
+  const ultimaVersao = versoes.length > 0 ? versoes[versoes.length - 1].numero : null;
+
   const sobrepostas = useMemo(() => {
-    const projetoSimulado = { id: projeto.id, codigoProposta: projeto.codigoProposta, escopoAtividades: atividadesFinal };
+    const projetoSimulado = { id: projeto.id, codigoProposta: projeto.codigoProposta, escopoAtividades: atividadesSalvar };
     return idsAtividadesSobrepostas(todasAlocacoes([...outrosProjetos, projetoSimulado]));
-  }, [atividadesFinal, outrosProjetos, projeto.id, projeto.codigoProposta]);
+  }, [atividadesSalvar, outrosProjetos, projeto.id, projeto.codigoProposta]);
 
   async function aoEscolherArquivo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -77,6 +141,8 @@ function CronogramaImportForm({
         return;
       }
       setAtividades(resultado.atividades);
+      setArquivoNome(file.name);
+      setVinculos(new Map());
       setCorrecoes(new Map());
       setAssociacao(new Map());
       setEtapa(resultado.erros.length > 0 ? "corrigindo" : "recursos");
@@ -94,18 +160,67 @@ function CronogramaImportForm({
   }
 
   async function confirmar() {
+    if (!usuario) return;
     setEtapa("importando");
     try {
       // Remove qualquer campo `undefined` residual (o Firestore rejeita a gravação se algum
       // sobrar, ex: uma atividade sem data/recurso lida do arquivo).
-      const atividadesSemUndefined = JSON.parse(JSON.stringify(atividadesFinal)) as EscopoAtividade[];
-      await updateDoc(doc(db, "projetos", projeto.id), {
+      const limpar = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+      const atividadesSemUndefined = limpar(atividadesSalvar);
+      const anteriores = projeto.escopoAtividades ?? [];
+      const col = collection(db, "projetos", projeto.id, "versoesCronograma");
+      const batch = writeBatch(db);
+      const autor = { usuarioId: usuario.uid, usuarioNome: usuario.nomeCompleto };
+      let numero = ultimaVersao ?? 0;
+
+      if (versoes.length === 0 && anteriores.length > 0) {
+        // Primeira importação num projeto que já tinha escopo: guarda esse escopo como versão 1.
+        numero += 1;
+        batch.set(
+          doc(col),
+          limpar({
+            numero,
+            criadoEm: Date.now() - 1,
+            ...autor,
+            origem: "escopo_inicial",
+            arquivoNome: "",
+            observacao: "Escopo do projeto antes da primeira importação de cronograma.",
+            atividades: anteriores,
+            totalMinutos: totalMinutosFolhas(anteriores),
+            totalTarefas: idsFolhas(anteriores).size,
+            resumo: compararVersoes([], anteriores).resumo,
+            mudancas: [],
+            horasSemVinculo: 0,
+          })
+        );
+      }
+      numero += 1;
+      batch.set(
+        doc(col),
+        limpar({
+          numero,
+          criadoEm: Date.now(),
+          ...autor,
+          origem: "importacao",
+          arquivoNome,
+          observacao: observacao.trim(),
+          atividades: atividadesSemUndefined,
+          totalMinutos: totalMinutosFolhas(atividadesSemUndefined),
+          totalTarefas: idsFolhas(atividadesSemUndefined).size,
+          resumo: comparacao.resumo,
+          mudancas: comparacao.mudancas.slice(0, 400),
+          horasSemVinculo: 0,
+        })
+      );
+      batch.update(doc(db, "projetos", projeto.id), {
         escopoId: null,
         escopoNome: null,
         escopoAtividades: atividadesSemUndefined,
         escopoExclusoes: null,
+        cronogramaVersao: numero,
         updatedAt: serverTimestamp(),
       });
+      await batch.commit();
       onImportado(atividadesSemUndefined);
       setEtapa("concluido");
     } catch (err) {
@@ -132,8 +247,7 @@ function CronogramaImportForm({
             <p className="flex items-start gap-2 rounded-md bg-[#fff2de] p-3 text-[12.5px] text-[#a4650d]">
               <AlertTriangle size={15} className="mt-0.5 shrink-0" />
               Este projeto já tem um escopo com {projeto.escopoAtividades.length} atividade
-              {projeto.escopoAtividades.length === 1 ? "" : "s"}. Importar um cronograma substitui
-              essa lista por completo.
+              {projeto.escopoAtividades.length === 1 ? "" : "s"}. Importar um cronograma cria uma nova versão no histórico e substitui a lista atual; as horas já apontadas continuam ligadas às tarefas que o sistema reconhecer pelo nome (mesmo com a ordem alterada).
             </p>
           )}
           <label className="flex cursor-pointer flex-col items-center gap-2.5 rounded-xl border-2 border-dashed border-brand-border bg-white p-8 text-center hover:border-brand-accent hover:bg-brand-accent-soft/30">
@@ -248,17 +362,42 @@ function CronogramaImportForm({
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="button" onClick={() => setEtapa("revisao")} disabled={!associacaoCompleta}>
+            <Button type="button" onClick={() => setEtapa(temEscopoAtual ? "conferencia" : "revisao")} disabled={!associacaoCompleta}>
               Continuar
             </Button>
           </div>
         </div>
       )}
 
+      {etapa === "conferencia" && (
+        <ConferenciaVersao
+          versaoAtual={ultimaVersao}
+          resumo={comparacao.resumo}
+          mudancas={comparacao.mudancas}
+          removidasComHoras={removidasComHoras}
+          agendaPreservada={preservado.agendaPreservada}
+          horasPorAtividade={horasPorAtividade}
+          opcoesNovas={opcoesNovas}
+          atividadesNovas={atividadesFinal}
+          atividadesAtuais={projeto.escopoAtividades ?? []}
+          vinculos={vinculos}
+          onVincular={(idAntiga, idNova) =>
+            setVinculos((prev) => {
+              const novo = new Map(prev);
+              if (idNova) novo.set(idAntiga, idNova);
+              else novo.delete(idAntiga);
+              return novo;
+            })
+          }
+          onVoltar={() => setEtapa("recursos")}
+          onContinuar={() => setEtapa("revisao")}
+        />
+      )}
+
       {etapa === "revisao" && (
         <div className="space-y-4">
           <p className="text-sm text-brand-muted">
-            {atividadesFinal.length} atividade{atividadesFinal.length === 1 ? "" : "s"} prontas para
+            {atividadesSalvar.length} atividade{atividadesSalvar.length === 1 ? "" : "s"} prontas para
             entrar no projeto.
           </p>
           {sobrepostas.size > 0 && (
@@ -272,7 +411,7 @@ function CronogramaImportForm({
           <div className="max-h-[360px] overflow-y-auto rounded-xl border border-brand-border">
             <table className="w-full text-[12px]">
               <tbody>
-                {atividadesFinal.map((a, i) => (
+                {atividadesSalvar.map((a, i) => (
                   <tr
                     key={a.id}
                     className={`border-t border-brand-border-soft first:border-t-0 ${
@@ -282,6 +421,11 @@ function CronogramaImportForm({
                     <td className="px-2 py-1.5 text-brand-faint">{numeracao[i]}</td>
                     <td className="px-2 py-1.5 text-brand-navy-2" style={{ paddingLeft: 8 + (a.nivel ?? 0) * 16 }}>
                       {a.descricao}
+                      {a.realizadaEmVersaoAnterior && (
+                        <span className="ml-1.5 rounded-full bg-[#e3f5ea] px-1.5 py-0.5 text-[9.5px] font-bold text-[#15754c]">
+                          Realizada (versão anterior)
+                        </span>
+                      )}
                       {sobrepostas.has(a.id) && (
                         <span className="ml-1.5 rounded-full bg-[#b5392a] px-1.5 py-0.5 text-[9.5px] font-bold text-white">
                           Sobreposição
@@ -299,13 +443,37 @@ function CronogramaImportForm({
               </tbody>
             </table>
           </div>
+          <div className="space-y-1.5">
+            <label className="block text-[12.5px] font-bold text-brand-navy-2">
+              Observação desta versão <span className="text-[#b5392a]">*</span>
+            </label>
+            <Textarea
+              rows={3}
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              placeholder="Ex.: Cliente pediu para antecipar os itens de segurança; treinamento movido para a semana 3."
+            />
+            <p className="text-[11.5px] text-brand-faint">
+              Fica registrada no histórico do cronograma junto com quem importou e o que mudou.
+            </p>
+          </div>
+          {versoesCol.erro && (
+            <p className="rounded-md bg-[#fdeceb] p-3 text-[12.5px] text-[#b5392a]">
+              Não foi possível ler o histórico de versões (as regras do Firestore precisam estar publicadas
+              com a subcoleção versoesCronograma). A importação está bloqueada até isso ser resolvido.
+            </p>
+          )}
           {erro && <p className="text-sm font-medium text-red-600">{erro}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="button" onClick={confirmar}>
-              Importar cronograma
+            <Button
+              type="button"
+              onClick={confirmar}
+              disabled={observacao.trim().length < 3 || versoesCol.erro || versoesCol.loading || !usuario}
+            >
+              Importar como versão {(ultimaVersao ?? (temEscopoAtual ? 1 : 0)) + 1}
             </Button>
           </div>
         </div>
@@ -318,8 +486,8 @@ function CronogramaImportForm({
           <div className="rounded-xl border border-[#92D050]/40 bg-[#e3f5ea] p-5 text-center">
             <CheckCircle2 size={28} className="mx-auto mb-2 text-[#15754c]" />
             <p className="font-bold text-[#15754c]">
-              Cronograma importado com {atividadesFinal.length} atividade
-              {atividadesFinal.length === 1 ? "" : "s"}.
+              Cronograma importado com {atividadesSalvar.length} atividade
+              {atividadesSalvar.length === 1 ? "" : "s"}.
             </p>
           </div>
           <div className="flex justify-end">

@@ -216,6 +216,60 @@ export interface EscopoAtividade {
   recursoId?: string | null;
   dataInicio?: string | null;
   periodo?: PeriodoDia | null;
+  /**
+   * true = a tarefa saiu do arquivo de uma nova versão do cronograma, mas já tinha horas apontadas;
+   * foi mantida (com data e recurso originais) para não perder o histórico do que foi feito.
+   */
+  realizadaEmVersaoAnterior?: boolean;
+}
+
+export type TipoMudancaCronograma = "nova" | "mantida" | "removida" | "duracao" | "movida" | "renomeada" | "reordenada" | "agenda";
+
+export interface MudancaCronograma {
+  tipo: TipoMudancaCronograma;
+  /** Caminho hierárquico, ex: "Fase 3 › Riscos › Levantamento". */
+  caminho: string;
+  /** Ex: "8h → 6h". */
+  detalhe?: string;
+}
+
+export interface ResumoVersaoCronograma {
+  mantidas: number;
+  novas: number;
+  removidas: number;
+  duracaoAlterada: number;
+  movidas: number;
+  renomeadas: number;
+  reordenadas: number;
+  agendaAlterada: number;
+  /** Tarefas que saíram do arquivo mas foram mantidas por já terem horas apontadas. */
+  mantidasPorRealizado?: number;
+  /** Tarefas já concluídas que mantiveram data/período/recurso da versão anterior. */
+  agendaPreservada?: number;
+}
+
+/**
+ * Versão do cronograma de um projeto (subcoleção "projetos/{id}/versoesCronograma"): cada
+ * importação grava uma foto completa das atividades, a observação de quem importou e o que mudou
+ * em relação à versão anterior. Nunca é editada nem apagada.
+ */
+export interface VersaoCronograma {
+  id: string;
+  numero: number;
+  criadoEm: number;
+  usuarioId: string;
+  usuarioNome: string;
+  /** "escopo_inicial" = foto do escopo que o projeto já tinha antes da primeira importação de cronograma. */
+  origem: "importacao" | "escopo_inicial";
+  arquivoNome: string;
+  observacao: string;
+  atividades: EscopoAtividade[];
+  totalMinutos: number;
+  totalTarefas: number;
+  resumo: ResumoVersaoCronograma;
+  mudancas: MudancaCronograma[];
+  /** Horas apontadas em atividades que saíram do cronograma e ficaram sem vínculo nesta versão. */
+  horasSemVinculo: number;
 }
 
 /** Auditoria de uma importação de escopo (coleção "escoposImportados"). */
@@ -298,6 +352,8 @@ export interface Projeto {
   escopoId?: string | null;
   escopoNome?: string | null;
   escopoAtividades?: EscopoAtividade[] | null;
+  /** Número da versão atual do cronograma (histórico em "versoesCronograma"). Ausente = nunca importado. */
+  cronogramaVersao?: number | null;
   /** Tarefas do escopo excluídas na inclusão ("Personalizar exclusões"), para auditoria. */
   escopoExclusoes?: ExclusaoEscopo[] | null;
   principaisEnvolvidos?: EnvolvidoChave[] | null;

@@ -73,6 +73,34 @@ export function converterLinhasEmCronograma(linhas: LinhaImportada[]): Resultado
     });
   }
 
+  if (linhas.some((l) => pegarCampo(l.valores, "Nível", "Nivel").trim())) {
+    // Hierarquia de qualquer profundidade pela coluna "Nível" (1 = raiz; 0 também é aceito como raiz).
+    // Quem tem linhas mais fundas logo depois é agrupador e não precisa de duração.
+    const lidas = linhas
+      .map((l) => ({
+        l,
+        descricao: pegarCampo(l.valores, "Atividade", "Descrição", "Descricao", "Tarefa", "Item").trim(),
+        nivel: Number(pegarCampo(l.valores, "Nível", "Nivel").trim().replace(",", ".")),
+      }))
+      .filter((x) => x.descricao);
+    const validos = lidas.filter((x) => Number.isFinite(x.nivel) && x.nivel >= 0);
+    const base = validos.length ? Math.min(...validos.map((x) => x.nivel)) : 0;
+    let anterior = 0;
+    lidas.forEach((x, i) => {
+      const bruto = Number.isFinite(x.nivel) && x.nivel >= 0 ? Math.round(x.nivel - base) : anterior;
+      const nivel = Math.min(bruto, anterior + 1);
+      anterior = nivel;
+      const proximo = lidas[i + 1];
+      const proximoBruto = proximo && Number.isFinite(proximo.nivel) ? Math.round(proximo.nivel - base) : 0;
+      if (proximo !== undefined && proximoBruto > bruto) {
+        atividades.push({ id: criarAtividadeId(), descricao: x.descricao, nivel });
+      } else {
+        adicionarTarefa(x.descricao, nivel, x.l);
+      }
+    });
+    return { atividades, erros, linhasValidadas };
+  }
+
   for (const l of linhas) {
     if (!usaHierarquia) {
       const descricao = pegarCampo(l.valores, "Atividade", "Descrição", "Descricao", "Tarefa", "Item").trim();

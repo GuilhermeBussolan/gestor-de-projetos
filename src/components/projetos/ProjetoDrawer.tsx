@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { Button } from "@/components/ui/Button";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
+import { CronogramaAcoes } from "@/components/projetos/CronogramaAcoes";
 import {
   CODIGO_TERMO_ENCERRAMENTO,
   STATUS_DOCUMENTO_CONFIG,
@@ -297,6 +298,8 @@ export function ProjetoDrawerConteudo({
             </div>
           </div>
         )}
+
+        <CronogramaAcoes projeto={projeto} recursos={recursos} />
 
         {projeto.escopoAtividades && projeto.escopoAtividades.length > 0 && (
           <div className="mb-5.5">

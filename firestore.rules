@@ -121,7 +121,14 @@ service cloud.firestore {
           meuRecursoId() in resource.data.consultorIds &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoContato'])) ||
         (isFinanceiro() &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['financeiro']));
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['financeiro'])) ||
+        // O consultor alocado (em projeto não finalizado) também atualiza o cronograma: importar
+        // uma nova versão troca só os campos do escopo/cronograma.
+        (isSignedIn() &&
+          meuRecursoId() in resource.data.consultorIds &&
+          resource.data.get('status', 'ativo') != 'finalizado' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+            ['escopoId', 'escopoNome', 'escopoAtividades', 'escopoExclusoes', 'cronogramaVersao', 'updatedAt']));
 
       // Contato pode ser registrado por admin/coordenador, ou pelo consultor
       // alocado naquele projeto (mas nunca editado/apagado depois).
@@ -130,6 +137,18 @@ service cloud.firestore {
         allow create: if isAdmin() || isCoordenador() ||
           (isSignedIn() &&
             meuRecursoId() in get(/databases/$(database)/documents/projetos/$(projetoId)).data.consultorIds);
+        allow update, delete: if false;
+      }
+
+      // Histórico de versões do cronograma: cada importação grava uma foto completa + a
+      // observação de quem importou. Admin/coordenador e o consultor alocado criam, todos leem, ninguém edita/apaga.
+      match /versoesCronograma/{versaoId} {
+        allow read: if isSignedIn();
+        allow create: if isAdmin() || isCoordenador() ||
+          (isSignedIn() &&
+            request.resource.data.usuarioId == request.auth.uid &&
+            meuRecursoId() in get(/databases/$(database)/documents/projetos/$(projetoId)).data.consultorIds &&
+            get(/databases/$(database)/documents/projetos/$(projetoId)).data.get('status', 'ativo') != 'finalizado');
         allow update, delete: if false;
       }
     }
