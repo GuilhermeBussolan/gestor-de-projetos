@@ -68,8 +68,12 @@ function CalendarioPageContent() {
     return eachDayOfInterval({ start: inicio, end: fim });
   }, [mesBase]);
 
-  const recursosVisiveis =
-    filtroRecursos.length === 0 ? recursos : recursos.filter((r) => filtroRecursos.includes(r.id));
+  // O consultor só enxerga a própria agenda (apontamentos e previsto do cronograma); gestores filtram por recurso.
+  const recursosVisiveis = souConsultor
+    ? recursos.filter((r) => r.id === meuRecursoId)
+    : filtroRecursos.length === 0
+      ? recursos
+      : recursos.filter((r) => filtroRecursos.includes(r.id));
 
   function toggleFiltro(id: string) {
     setFiltroRecursos((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));

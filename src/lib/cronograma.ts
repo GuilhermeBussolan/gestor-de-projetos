@@ -135,14 +135,30 @@ export function blocosSequenciais(data: string, horasJaNoDia: number, horas: num
 }
 
 /**
- * Alocação exatamente como o cronograma diz: um turno por dia útil de início a fim, no período
- * informado. Se a duração é maior que isso, NÃO estende (o que vale é o cronograma; quem errou corrige
- * o cronograma e lança o certo). Cada turno leva no máximo 4h — a duração é dividida entre os dias.
+ * Alocação exatamente como o cronograma diz, no período informado (nunca mais que 4h por turno):
+ * - início e fim no mesmo dia (ou sem fim): um turno, no dia;
+ * - início diferente do fim: a tarefa é DIVIDIDA entre esses dias. Precisa de ceil(horas/4) turnos: o
+ *   primeiro fica no dia de início e o último no dia de fim; se precisar de mais, os intermediários
+ *   entram nos dias úteis seguintes ao início. Ex.: 6h de 28/10 a 02/11 = 4h em 28/10 + 2h em 02/11.
+ * Se a duração é maior do que cabe nos dias do intervalo, NÃO estende (quem errou corrige o cronograma).
  */
 export function blocosPorIntervalo(inicio: string, fim: string, periodo: PeriodoDia, horas: number): BlocoTurno[] {
-  const dias = diasDoIntervalo(inicio, fim).filter((d) => d === inicio || !ehFimDeSemana(d));
-  const porDia = Math.min(HORAS_POR_TURNO, horas / dias.length);
-  return dias.map((data) => ({ data, periodo, horas: Math.max(0, porDia) }));
+  const total = Math.max(0, horas);
+  const turnos = Math.ceil(total / HORAS_POR_TURNO - 1e-9);
+  if (fim <= inicio || turnos <= 1) return [{ data: inicio, periodo, horas: Math.min(HORAS_POR_TURNO, total) }];
+
+  const meio = diasDoIntervalo(inicio, fim).filter((d) => d !== inicio && d !== fim && !ehFimDeSemana(d));
+  const datas = [inicio, ...meio.slice(0, turnos - 2), fim];
+  if (datas.length >= turnos) {
+    return datas.map((data, i) => ({
+      data,
+      periodo,
+      horas: i < datas.length - 1 ? HORAS_POR_TURNO : total - HORAS_POR_TURNO * (datas.length - 1),
+    }));
+  }
+  // Mais horas do que dias no intervalo: cada dia leva o que cabe (sem passar de 4h), nada é estendido.
+  const porDia = Math.min(HORAS_POR_TURNO, total / datas.length);
+  return datas.map((data) => ({ data, periodo, horas: porDia }));
 }
 
 /** Todas as alocações previstas de um projeto — só atividades-folha com recurso e data. */
