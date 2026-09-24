@@ -304,8 +304,6 @@ export function ProjetoDrawerConteudo({
           </div>
         )}
 
-        <CronogramaAcoes projeto={projeto} recursos={recursos} />
-
         {projeto.escopoAtividades && projeto.escopoAtividades.length > 0 && (
           <div className="mb-5.5">
             <button
@@ -610,6 +608,9 @@ export function ProjetoDrawerConteudo({
             <p className="text-sm text-brand-muted">{projeto.observacoes}</p>
           </div>
         )}
+
+        {/* Uso esporádico: fica no fim da página, abaixo da linha do tempo. */}
+        <CronogramaAcoes projeto={projeto} recursos={recursos} />
 
         <div className="flex flex-wrap gap-2.5">
           {podeEditar && <Button onClick={onEditar}>Editar projeto</Button>}
