@@ -166,20 +166,27 @@ service cloud.firestore {
       }
     }
 
-    // O que cada consultor tem a receber no mês. Administrador/financeiro gerenciam; o consultor
-    // terceiro só enxerga o próprio item DEPOIS de liberado o faturamento e só pode confirmar ou
-    // contestar (campo "confirmacao"), nada mais.
+    // O que cada consultor tem a receber no mês (detalhe dos lançamentos): só administrador e financeiro.
     match /fechamentoItens/{itemId} {
+      allow read, create, update, delete: if isAdmin() || isFinanceiro();
+    }
+
+    // Fechamento de cada empresa parceira no mês. Administrador/financeiro gerenciam. O responsável da
+    // parceira (perfil "responsavel_parceira") só enxerga o da própria empresa DEPOIS de liberado o
+    // faturamento e só pode registrar a ciência e confirmar/contestar (campos "ciencia" e "confirmacao").
+    match /fechamentoParceiros/{fpId} {
       allow read: if isAdmin() || isFinanceiro() ||
-        (isSignedIn() && resource.data.recursoId == meuRecursoId() && resource.data.liberado == true);
+        (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
+          resource.data.parceiraId == meuUsuario().get('parceiraId', null) && resource.data.liberado == true);
       allow create, delete: if isAdmin() || isFinanceiro();
       allow update: if isAdmin() || isFinanceiro() ||
-        (isSignedIn() &&
-          resource.data.recursoId == meuRecursoId() &&
+        (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
+          resource.data.parceiraId == meuUsuario().get('parceiraId', null) &&
           resource.data.liberado == true &&
           resource.data.confirmacao.status in ['pendente', 'contestado'] &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['confirmacao']) &&
-          request.resource.data.confirmacao.status in ['confirmado', 'contestado']);
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ciencia', 'confirmacao']) &&
+          request.resource.data.confirmacao.status in ['pendente', 'confirmado', 'contestado'] &&
+          (request.resource.data.confirmacao.status == 'pendente' || request.resource.data.ciencia.em != null));
     }
 
     // Calendário/apontamento unificados: cada consultor só enxerga e mexe nos

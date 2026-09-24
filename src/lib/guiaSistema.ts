@@ -447,11 +447,18 @@ const FINANCEIRO: GuiaPerfil = {
   modulos: [MOD_FINANCEIRO],
 };
 
+const RESPONSAVEL_PARCEIRA: GuiaPerfil = {
+  boasVindas:
+    "Você representa sua empresa no fechamento mensal: quando o faturamento do mês é liberado, confirme que recebeu e leu, confira as horas e os valores dos consultores da sua empresa e confirme ou conteste.",
+  modulos: [],
+};
+
 export const GUIA_POR_PERFIL: Record<Perfil, GuiaPerfil> = {
   administrador: ADMINISTRADOR,
   coordenador: COORDENADOR,
   consultor: CONSULTOR,
   financeiro: FINANCEIRO,
+  responsavel_parceira: RESPONSAVEL_PARCEIRA,
 };
 
 const CHAVE_PREFIXO = "gp_guia_visto_";

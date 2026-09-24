@@ -1,6 +1,6 @@
-import { collection, doc, getDocs, query, where, writeBatch, type WriteBatch } from "firebase/firestore";
+import { collection, doc, getDocs, query, updateDoc, where, writeBatch, type WriteBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { totaisPorTipo, type ItemBase } from "@/lib/fechamento";
+import { totaisPorTipo, type ItemBase, type ParceiroBase } from "@/lib/fechamento";
 import type { Fechamento, StatusFechamento } from "@/types";
 
 export interface Ator {
@@ -30,6 +30,14 @@ async function itensDoMes(mesAno: string) {
   return snap.docs;
 }
 
+async function parceirosDoMes(mesAno: string) {
+  const snap = await getDocs(query(collection(db, "fechamentoParceiros"), where("mesAno", "==", mesAno)));
+  return snap.docs;
+}
+
+const CIENCIA_VAZIA = { em: null };
+const CONFIRMACAO_PENDENTE = { status: "pendente" };
+
 /**
  * Rascunho/em revisão -> em revisão: congela o que cada consultor tem a receber (um item por recurso)
  * e os totais por tipo. Serve também para "atualizar" uma revisão com as horas atuais.
@@ -38,25 +46,28 @@ export async function enviarParaRevisao({
   mesAno,
   atual,
   itens,
+  parceiros,
   ator,
   motivo,
 }: {
   mesAno: string;
   atual: Fechamento | null;
   itens: ItemBase[];
+  parceiros: ParceiroBase[];
   ator: Ator;
   motivo?: string;
 }) {
   const lote = writeBatch(db);
   (await itensDoMes(mesAno)).forEach((d) => lote.delete(d.ref));
+  (await parceirosDoMes(mesAno)).forEach((d) => lote.delete(d.ref));
   for (const item of itens) {
+    // A conferência é da parceira (grupo), não de cada consultor: o item só guarda o detalhe.
+    lote.set(doc(db, "fechamentoItens", item.id), limpar({ ...item, liberado: false, confirmacao: { status: "nao_aplicavel" } }));
+  }
+  for (const parceiro of parceiros) {
     lote.set(
-      doc(db, "fechamentoItens", item.id),
-      limpar({
-        ...item,
-        liberado: false,
-        confirmacao: { status: item.tipoBox === "terceiro" ? "pendente" : "nao_aplicavel" },
-      })
+      doc(db, "fechamentoParceiros", parceiro.id),
+      limpar({ ...parceiro, liberado: false, ciencia: CIENCIA_VAZIA, confirmacao: CONFIRMACAO_PENDENTE })
     );
   }
   const de = atual?.status ?? null;
@@ -87,6 +98,7 @@ export async function enviarParaRevisao({
 export async function voltarParaRascunho({ mesAno, ator, motivo }: { mesAno: string; ator: Ator; motivo: string }) {
   const lote = writeBatch(db);
   (await itensDoMes(mesAno)).forEach((d) => lote.delete(d.ref));
+  (await parceirosDoMes(mesAno)).forEach((d) => lote.delete(d.ref));
   lote.set(doc(db, "fechamentos", mesAno), { status: "rascunho", totais: null, atualizadoEm: Date.now() }, { merge: true });
   registrar(lote, mesAno, "em_revisao", "rascunho", "Voltou para rascunho", ator, motivo);
   await lote.commit();
@@ -113,10 +125,9 @@ export async function fechar({ mesAno, ator, justificativa }: { mesAno: string; 
 /** Fechado/faturado -> em revisão (erro detectado). Se já estava liberado, o consultor deixa de ver o item e a confirmação recomeça. */
 export async function reabrir({ mesAno, de, ator, motivo }: { mesAno: string; de: StatusFechamento; ator: Ator; motivo: string }) {
   const lote = writeBatch(db);
-  (await itensDoMes(mesAno)).forEach((d) => {
-    const tipo = d.data().tipoBox;
-    lote.update(d.ref, { liberado: false, confirmacao: { status: tipo === "terceiro" ? "pendente" : "nao_aplicavel" } });
-  });
+  (await itensDoMes(mesAno)).forEach((d) => lote.update(d.ref, { liberado: false }));
+  // Reabrir invalida o que o responsável da parceira já viu/confirmou: recomeça do zero.
+  (await parceirosDoMes(mesAno)).forEach((d) => lote.update(d.ref, { liberado: false, ciencia: CIENCIA_VAZIA, confirmacao: CONFIRMACAO_PENDENTE }));
   lote.set(
     doc(db, "fechamentos", mesAno),
     limpar({
@@ -140,6 +151,7 @@ export async function reabrir({ mesAno, de, ator, motivo }: { mesAno: string; de
 export async function liberarFaturamento({ mesAno, ator, observacao }: { mesAno: string; ator: Ator; observacao?: string }) {
   const lote = writeBatch(db);
   (await itensDoMes(mesAno)).forEach((d) => lote.update(d.ref, { liberado: true }));
+  (await parceirosDoMes(mesAno)).forEach((d) => lote.update(d.ref, { liberado: true }));
   lote.set(
     doc(db, "fechamentos", mesAno),
     limpar({
@@ -156,21 +168,24 @@ export async function liberarFaturamento({ mesAno, ator, observacao }: { mesAno:
   await lote.commit();
 }
 
-/** O consultor terceiro confere o próprio fechamento e confirma ou contesta (com motivo). */
+/** O responsável da parceira confirma que recebeu e leu o fechamento (passo antes de confirmar os valores). */
+export async function registrarCiencia({ id, nome }: { id: string; nome: string }) {
+  await updateDoc(doc(db, "fechamentoParceiros", id), { ciencia: { em: Date.now(), porNome: nome } });
+}
+
+/** O responsável da parceira confirma ou contesta (com motivo) os valores do fechamento da empresa dele. */
 export async function responderConfirmacao({
-  itemId,
+  id,
   decisao,
   nome,
   motivo,
 }: {
-  itemId: string;
+  id: string;
   decisao: "confirmado" | "contestado";
   nome: string;
   motivo?: string;
 }) {
-  const lote = writeBatch(db);
-  lote.update(doc(db, "fechamentoItens", itemId), {
+  await updateDoc(doc(db, "fechamentoParceiros", id), {
     confirmacao: limpar({ status: decisao, porNome: nome, em: Date.now(), motivo: motivo?.trim() || null }),
   });
-  await lote.commit();
 }

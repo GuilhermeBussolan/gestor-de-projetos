@@ -1,4 +1,5 @@
-export type Perfil = "administrador" | "coordenador" | "consultor" | "financeiro";
+/** "responsavel_parceira": quem, em cada empresa parceira, confere e confirma o fechamento mensal dos recursos dela. */
+export type Perfil = "administrador" | "coordenador" | "consultor" | "financeiro" | "responsavel_parceira";
 
 export interface Usuario {
   uid: string;
@@ -6,6 +7,8 @@ export interface Usuario {
   email: string;
   perfil: Perfil;
   recursoId?: string | null;
+  /** Só no perfil "responsavel_parceira": a empresa parceira que ele representa. */
+  parceiraId?: string | null;
   createdAt: number;
 }
 
@@ -465,6 +468,41 @@ export interface ConfirmacaoFechamento {
   porNome?: string | null;
   em?: number | null;
   motivo?: string | null;
+}
+
+/**
+ * Fechamento de uma empresa parceira no mês (coleção "fechamentoParceiros", id = "YYYY-MM_parceiraId"):
+ * os recursos dela agrupados, o que o responsável da parceira recebe, confere e confirma.
+ */
+export interface FechamentoParceiro {
+  id: string;
+  mesAno: string;
+  parceiraId: string;
+  parceiraNome: string;
+  horas: number;
+  valor: number;
+  recursos: {
+    recursoId: string;
+    recursoNome: string;
+    horas: number;
+    valorRepasse: number;
+    lancamentos: {
+      data: string;
+      cliente: string;
+      projeto: string;
+      horaInicio: string;
+      horaFim: string;
+      horaDesconto: string;
+      totalHoras: number;
+      valorRepasse: number;
+    }[];
+  }[];
+  /** true depois de "Liberar faturamento" — só então o responsável da parceira enxerga. */
+  liberado: boolean;
+  /** Confirmação de que o responsável recebeu e leu o fechamento. */
+  ciencia: { em: number | null; porNome?: string | null };
+  /** Confirmação (ou contestação) dos valores; só depois da ciência. */
+  confirmacao: ConfirmacaoFechamento;
 }
 
 /** Fechamento de um recurso no mês (coleção "fechamentoItens", id = "YYYY-MM_recursoId"): o que o terceiro confere e confirma. */

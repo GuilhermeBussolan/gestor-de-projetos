@@ -6,7 +6,7 @@ import { CircleHelp } from "lucide-react";
 import { NotificacoesMenu } from "@/components/layout/NotificacoesMenu";
 import { LinhaDoTempoProjeto } from "@/components/timeline/LinhaDoTempoProjeto";
 import { GuiaSistema } from "@/components/layout/GuiaSistema";
-import { guiaJaVisto, marcarGuiaVisto } from "@/lib/guiaSistema";
+import { GUIA_POR_PERFIL, guiaJaVisto, marcarGuiaVisto } from "@/lib/guiaSistema";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TrocarSenhaModal } from "@/components/layout/TrocarSenhaModal";
 import { AccountMenu } from "@/components/layout/AccountMenu";
@@ -18,7 +18,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [trocarSenhaAberto, setTrocarSenhaAberto] = useState(false);
   const [projetoTempoId, setProjetoTempoId] = useState<string | null>(null);
   // Abre sozinho no primeiro acesso de cada usuário neste navegador.
-  const [guiaAberto, setGuiaAberto] = useState(() => (usuario ? !guiaJaVisto(usuario.uid) : false));
+  const [guiaAberto, setGuiaAberto] = useState(() =>
+    // Perfis sem módulos no guia (ex: responsável de parceira) não abrem o tour.
+    usuario ? !guiaJaVisto(usuario.uid) && GUIA_POR_PERFIL[usuario.perfil].modulos.length > 0 : false
+  );
 
   async function handleLogout() {
     await logout();

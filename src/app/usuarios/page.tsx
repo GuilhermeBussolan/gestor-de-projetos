@@ -11,13 +11,15 @@ import { FormRow, Input, Select } from "@/components/ui/Field";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
 import { useAuth } from "@/contexts/AuthContext";
 import { sincronizarDiretorio } from "@/lib/diretorio";
-import type { Perfil, Recurso, Usuario } from "@/types";
+import { nomeExibicaoParceira } from "@/lib/parceira";
+import type { EmpresaParceira, Perfil, Recurso, Usuario } from "@/types";
 
 const PERFIL_LABEL: Record<Perfil, string> = {
   administrador: "Administrador",
   coordenador: "Coordenador",
   consultor: "Consultor",
   financeiro: "Financeiro",
+  responsavel_parceira: "Responsável da parceira",
 };
 
 const NOVO_USUARIO_VAZIO = {
@@ -26,6 +28,7 @@ const NOVO_USUARIO_VAZIO = {
   senha: "",
   perfil: "consultor" as Perfil,
   recursoId: "",
+  parceiraId: "",
 };
 
 // Documentos da coleção "usuarios" são indexados pelo uid do Firebase Auth como
@@ -37,6 +40,8 @@ function UsuariosPageContent() {
   const { data: usuariosDocs, loading } = useCollection<UsuarioDoc>("usuarios", []);
   const usuarios: Usuario[] = usuariosDocs.map(({ id, ...resto }) => ({ uid: id, ...resto }));
   const { data: recursos } = useCollection<Recurso>("recursos");
+  const { data: parceiras } = useCollection<EmpresaParceira>("parceiras");
+  const [parceiraId, setParceiraId] = useState<string>("");
   const [editando, setEditando] = useState<Usuario | null>(null);
   const [perfil, setPerfil] = useState<Perfil>("consultor");
   const [recursoId, setRecursoId] = useState<string>("");
@@ -57,6 +62,7 @@ function UsuariosPageContent() {
     setEditando(u);
     setPerfil(u.perfil);
     setRecursoId(u.recursoId ?? "");
+    setParceiraId(u.parceiraId ?? "");
   }
 
   async function salvar(e: React.FormEvent) {
@@ -67,6 +73,7 @@ function UsuariosPageContent() {
       await updateDoc(doc(db, "usuarios", editando.uid), {
         perfil,
         recursoId: recursoId || null,
+        parceiraId: perfil === "responsavel_parceira" ? parceiraId || null : null,
       });
       atualizarDiretorio();
       setEditando(null);
@@ -111,6 +118,7 @@ function UsuariosPageContent() {
           senha: novoUsuario.senha,
           perfil: novoUsuario.perfil,
           recursoId: novoUsuario.recursoId || null,
+          parceiraId: novoUsuario.parceiraId || null,
         }),
       });
       const dados = await res.json();
@@ -205,8 +213,21 @@ function UsuariosPageContent() {
               <option value="coordenador">Coordenador</option>
               <option value="consultor">Consultor</option>
               <option value="financeiro">Financeiro</option>
+              <option value="responsavel_parceira">Responsável da parceira</option>
             </Select>
           </FormRow>
+          {perfil === "responsavel_parceira" && (
+            <FormRow label="Empresa parceira que ele representa">
+              <Select value={parceiraId} onChange={(e) => setParceiraId(e.target.value)} required>
+                <option value="">Selecione...</option>
+                {parceiras.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {nomeExibicaoParceira(p)}
+                  </option>
+                ))}
+              </Select>
+            </FormRow>
+          )}
           {(perfil === "coordenador" || perfil === "consultor") && (
             <FormRow label="Recurso vinculado">
               <Select value={recursoId} onChange={(e) => setRecursoId(e.target.value)}>
@@ -272,8 +293,25 @@ function UsuariosPageContent() {
               <option value="coordenador">Coordenador</option>
               <option value="consultor">Consultor</option>
               <option value="financeiro">Financeiro</option>
+              <option value="responsavel_parceira">Responsável da parceira</option>
             </Select>
           </FormRow>
+          {novoUsuario.perfil === "responsavel_parceira" && (
+            <FormRow label="Empresa parceira que ele representa">
+              <Select
+                value={novoUsuario.parceiraId}
+                onChange={(e) => setNovoUsuario({ ...novoUsuario, parceiraId: e.target.value })}
+                required
+              >
+                <option value="">Selecione...</option>
+                {parceiras.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {nomeExibicaoParceira(p)}
+                  </option>
+                ))}
+              </Select>
+            </FormRow>
+          )}
           {(novoUsuario.perfil === "coordenador" || novoUsuario.perfil === "consultor") && (
             <FormRow label="Recurso vinculado (opcional)">
               <Select

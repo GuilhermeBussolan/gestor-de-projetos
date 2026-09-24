@@ -3,7 +3,7 @@ import { statusEfetivo } from "@/lib/statusHora";
 import { tipoBoxEfetivo, type LinhaFechamento } from "@/lib/relatorioFechamento";
 import { nomeExibicaoParceira } from "@/lib/parceira";
 import { nomeExibicaoCliente } from "@/lib/cliente";
-import type { EmpresaParceira, EventoCalendario, ItemFechamento, Projeto, Cliente, Recurso, StatusFechamento, TotaisFechamento } from "@/types";
+import type { EmpresaParceira, EventoCalendario, FechamentoParceiro, ItemFechamento, Projeto, Cliente, Recurso, StatusFechamento, TotaisFechamento } from "@/types";
 
 export const STATUS_FECHAMENTO_CONFIG: Record<StatusFechamento, { label: string; bg: string; text: string }> = {
   rascunho: { label: "Rascunho", bg: "#eef1f5", text: "#5b6b7f" },
@@ -21,9 +21,12 @@ export function proximoMes(mesAno: string): string {
   return mes === 12 ? `${ano + 1}-01` : `${ano}-${String(mes + 1).padStart(2, "0")}`;
 }
 
-/** O período só pode ser enviado para revisão depois que o mês terminou (todas as horas já podem ter sido apontadas). */
-export function mesTerminou(mesAno: string, hojeIso: string): boolean {
-  return hojeIso >= `${proximoMes(mesAno)}-01`;
+/**
+ * O fechamento de um mês (1 a 31) acontece do dia 1 ao dia 10 do mês seguinte. É só uma referência
+ * para acompanhamento: o sistema mostra o prazo, mas não bloqueia nenhuma etapa por data.
+ */
+export function prazoFechamento(mesAno: string): string {
+  return `${proximoMes(mesAno)}-10`;
 }
 
 export const idItemFechamento = (mesAno: string, recursoId: string) => `${mesAno}_${recursoId}`;
@@ -67,6 +70,37 @@ export function montarItens(linhas: LinhaFechamento[], recursos: Recurso[], parc
   return itens.sort((a, b) => a.recursoNome.localeCompare(b.recursoNome, "pt-BR"));
 }
 
+export type ParceiroBase = Omit<FechamentoParceiro, "liberado" | "ciencia" | "confirmacao">;
+
+/** Agrupa os itens dos recursos terceiros por empresa parceira — um fechamento por parceira, com os recursos dentro. */
+export function montarParceiros(itens: ItemBase[], parceiras: EmpresaParceira[], mesAno: string): ParceiroBase[] {
+  const porParceira = new Map<string, ItemBase[]>();
+  for (const i of itens.filter((x) => x.tipoBox === "terceiro")) {
+    const chave = i.parceiraId ?? "sem_parceira";
+    porParceira.set(chave, [...(porParceira.get(chave) ?? []), i]);
+  }
+  const lista: ParceiroBase[] = [];
+  porParceira.forEach((grupo, parceiraId) => {
+    const parceira = parceiras.find((p) => p.id === parceiraId);
+    lista.push({
+      id: `${mesAno}_${parceiraId}`,
+      mesAno,
+      parceiraId,
+      parceiraNome: parceira ? nomeExibicaoParceira(parceira) : "Terceiros sem parceira cadastrada",
+      horas: grupo.reduce((s, i) => s + i.horas, 0),
+      valor: grupo.reduce((s, i) => s + i.valorRepasse, 0),
+      recursos: grupo.map((i) => ({
+        recursoId: i.recursoId,
+        recursoNome: i.recursoNome,
+        horas: i.horas,
+        valorRepasse: i.valorRepasse,
+        lancamentos: i.lancamentos,
+      })),
+    });
+  });
+  return lista.sort((a, b) => a.parceiraNome.localeCompare(b.parceiraNome, "pt-BR"));
+}
+
 export function totaisPorTipo(itens: Pick<ItemFechamento, "tipoBox" | "horas" | "valorRepasse">[]): {
   proprio: TotaisFechamento;
   terceiro: TotaisFechamento;
@@ -104,7 +138,6 @@ export function calcularDivergencias({
   clientes,
   linhas,
   mesAno,
-  hojeIso,
 }: {
   eventos: EventoCalendario[];
   recursos: Recurso[];
@@ -112,7 +145,6 @@ export function calcularDivergencias({
   clientes: Cliente[];
   linhas: LinhaFechamento[];
   mesAno: string;
-  hojeIso: string;
 }): Divergencia[] {
   const lista: Divergencia[] = [];
   const nomeRecurso = (id: string) => recursos.find((r) => r.id === id)?.nomeCompleto ?? "Recurso removido";
@@ -121,15 +153,6 @@ export function calcularDivergencias({
     return nomeExibicaoCliente(clientes.find((c) => c.id === p?.clienteId));
   };
   const doMes = eventos.filter((e) => e.data.startsWith(mesAno));
-
-  if (!mesTerminou(mesAno, hojeIso)) {
-    lista.push({
-      chave: "mes_aberto",
-      severidade: "bloqueante",
-      titulo: "O período ainda não terminou",
-      detalhes: [`O fechamento só pode seguir depois de ${dataBR(`${mesAno}-01`).slice(3)} terminar (novas horas ainda podem ser apontadas).`],
-    });
-  }
 
   const pendentes = doMes.filter((e) => ["previsto", "aguardando_aprovacao", "rejeitado"].includes(statusEfetivo(e)));
   if (pendentes.length > 0) {

@@ -16,6 +16,7 @@ const PERFIL_FLUXO: Record<Perfil, string> = {
   coordenador: "Coordenador",
   consultor: "Consultor",
   financeiro: "Financeiro",
+  responsavel_parceira: "Responsável da parceira",
 };
 
 const chaveFunc = (moduloId: string, i: number) => `${moduloId}:${i}`;

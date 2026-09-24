@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebaseAdmin";
 import type { Perfil } from "@/types";
 
-const PERFIS_VALIDOS: Perfil[] = ["administrador", "coordenador", "consultor", "financeiro"];
+const PERFIS_VALIDOS: Perfil[] = ["administrador", "coordenador", "consultor", "financeiro", "responsavel_parceira"];
 
 function erroServidor(err: unknown, prefixo: string) {
   console.error(prefixo, err);
@@ -63,6 +63,7 @@ async function handlePOST(request: NextRequest) {
   const senha = typeof body?.senha === "string" ? body.senha : "";
   const perfil = body?.perfil as string | undefined;
   const recursoId = typeof body?.recursoId === "string" && body.recursoId ? body.recursoId : null;
+  const parceiraId = typeof body?.parceiraId === "string" && body.parceiraId ? body.parceiraId : null;
 
   if (!nomeCompleto || !email || senha.length < 6) {
     return NextResponse.json(
@@ -72,6 +73,9 @@ async function handlePOST(request: NextRequest) {
   }
   if (!perfil || !PERFIS_VALIDOS.includes(perfil as Perfil)) {
     return NextResponse.json({ erro: "Perfil inválido." }, { status: 400 });
+  }
+  if (perfil === "responsavel_parceira" && !parceiraId) {
+    return NextResponse.json({ erro: "Escolha a empresa parceira do responsável." }, { status: 400 });
   }
 
   let userRecord;
@@ -98,6 +102,7 @@ async function handlePOST(request: NextRequest) {
       email,
       perfil,
       recursoId,
+      parceiraId: perfil === "responsavel_parceira" ? parceiraId : null,
       createdAt: Date.now(),
     });
   } catch (err) {

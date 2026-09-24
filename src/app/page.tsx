@@ -21,7 +21,9 @@ export default function Home() {
           ? "/projetos"
           : usuario.perfil === "financeiro"
             ? "/financeiro"
-            : "/clientes";
+            : usuario.perfil === "responsavel_parceira"
+              ? "/fechamento-parceira"
+              : "/clientes";
     router.replace(destino);
   }, [usuario, loading, router]);
 

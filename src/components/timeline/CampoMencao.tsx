@@ -10,6 +10,7 @@ const PERFIL_LABEL: Record<Perfil, string> = {
   coordenador: "Coordenador",
   consultor: "Consultor",
   financeiro: "Financeiro",
+  responsavel_parceira: "Responsável da parceira",
 };
 
 /** Caixa de texto que abre uma lista de pessoas ao digitar "@". */

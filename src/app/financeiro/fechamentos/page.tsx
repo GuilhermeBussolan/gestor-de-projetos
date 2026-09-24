@@ -19,8 +19,9 @@ import {
   dataBR,
   linhasDosItens,
   type ItemBase,
-  mesTerminou,
   montarItens,
+  montarParceiros,
+  prazoFechamento,
   totaisPorTipo,
 } from "@/lib/fechamento";
 import { enviarParaRevisao, fechar, liberarFaturamento, reabrir, voltarParaRascunho } from "@/lib/fechamentoDb";
@@ -36,6 +37,7 @@ import type {
   EmpresaParceira,
   EventoCalendario,
   Fechamento,
+  FechamentoParceiro,
   HistoricoFechamento,
   ItemFechamento,
   Projeto,
@@ -49,7 +51,7 @@ const dataHora = (ms: number) => new Date(ms).toLocaleString("pt-BR", { dateStyl
 
 const CONFIRMACAO: Record<StatusConfirmacaoFechamento, { label: string; bg: string; text: string }> = {
   nao_aplicavel: { label: "—", bg: "transparent", text: "#8b94ad" },
-  pendente: { label: "Aguardando o consultor", bg: "#fff2de", text: "#a4650d" },
+  pendente: { label: "Aguardando o responsável", bg: "#fff2de", text: "#a4650d" },
   confirmado: { label: "Confirmado", bg: "#e3f5ea", text: "#15754c" },
   contestado: { label: "Contestado", bg: "#fdeceb", text: "#b5392a" },
 };
@@ -102,7 +104,7 @@ function CartaoTotais({ titulo, horas, valor, detalhe, destaque }: { titulo: str
 /** Item do fechamento: congelado (com confirmação) ou calculado ao vivo (sem). */
 type ItemExibido = ItemBase & Partial<Pick<ItemFechamento, "liberado" | "confirmacao">>;
 
-function TabelaItens({ itens, mostrarConfirmacao }: { itens: ItemExibido[]; mostrarConfirmacao: boolean }) {
+function TabelaItens({ itens, parceirosSalvos, mostrarConfirmacao }: { itens: ItemExibido[]; parceirosSalvos: FechamentoParceiro[]; mostrarConfirmacao: boolean }) {
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
   const alternar = (id: string) =>
     setAbertos((p) => {
@@ -125,10 +127,9 @@ function TabelaItens({ itens, mostrarConfirmacao }: { itens: ItemExibido[]; most
     return { proprios, parceiras: Array.from(porParceira.entries()).sort((a, b) => a[0].localeCompare(b[0], "pt-BR")) };
   }, [itens]);
 
-  const cols = mostrarConfirmacao ? 6 : 5;
+  const cols = 5;
   const linhaItem = (i: (typeof itens)[number]) => {
     const aberto = abertos.has(i.id);
-    const conf = i.confirmacao ? CONFIRMACAO[i.confirmacao.status] : CONFIRMACAO.nao_aplicavel;
     return (
       <Fragment key={i.id}>
         <tr className="cursor-pointer border-t border-brand-border-soft hover:bg-brand-hover" onClick={() => alternar(i.id)}>
@@ -141,21 +142,6 @@ function TabelaItens({ itens, mostrarConfirmacao }: { itens: ItemExibido[]; most
           <td className="px-3 py-2.5 text-brand-muted">{i.lancamentos.length}</td>
           <td className="px-3 py-2.5 text-brand-navy-2">{formatarHoras(i.horas)}</td>
           <td className="px-3 py-2.5 font-bold text-brand-navy-2">{moeda(i.valorRepasse)}</td>
-          {mostrarConfirmacao && (
-            <td className="px-3 py-2.5">
-              {i.tipoBox === "terceiro" && i.confirmacao ? (
-                <span
-                  className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
-                  style={{ backgroundColor: conf.bg, color: conf.text }}
-                  title={i.confirmacao.motivo ?? undefined}
-                >
-                  {conf.label}
-                </span>
-              ) : (
-                <span className="text-brand-faint">—</span>
-              )}
-            </td>
-          )}
           <td className="w-2" />
         </tr>
         {aberto && (
@@ -179,11 +165,6 @@ function TabelaItens({ itens, mostrarConfirmacao }: { itens: ItemExibido[]; most
                   ))}
                 </tbody>
               </table>
-              {i.confirmacao?.status === "contestado" && i.confirmacao.motivo && (
-                <p className="mt-2 rounded-md bg-[#fdeceb] px-3 py-2 text-[12px] text-[#b5392a]">
-                  <strong>Motivo da contestação:</strong> {i.confirmacao.motivo}
-                </p>
-              )}
             </td>
           </tr>
         )}
@@ -197,7 +178,6 @@ function TabelaItens({ itens, mostrarConfirmacao }: { itens: ItemExibido[]; most
       <th className="px-3 py-2.5">Lançamentos</th>
       <th className="px-3 py-2.5">Horas</th>
       <th className="px-3 py-2.5">Valor a repassar</th>
-      {mostrarConfirmacao && <th className="px-3 py-2.5">Conferência do consultor</th>}
       <th />
     </tr>
   );
@@ -205,17 +185,44 @@ function TabelaItens({ itens, mostrarConfirmacao }: { itens: ItemExibido[]; most
 
   return (
     <div className="space-y-4">
-      {[{ titulo: "Recursos próprios", lista: grupos.proprios }, ...grupos.parceiras.map(([nome, lista]) => ({ titulo: `Terceiros — ${nome}`, lista }))].map(
-        ({ titulo, lista }) => {
+      {[{ titulo: "Recursos próprios", lista: grupos.proprios, parceiro: undefined as FechamentoParceiro | undefined }, ...grupos.parceiras.map(([nome, lista]) => ({
+          titulo: `Terceiros — ${nome}`,
+          lista,
+          parceiro: parceirosSalvos.find((x) => x.parceiraId === (lista[0]?.parceiraId ?? "sem_parceira")),
+        }))].map(
+        ({ titulo, lista, parceiro }) => {
           const s = subtotal(lista);
+          const ciente = !!parceiro?.ciencia?.em;
+          const conf = parceiro ? CONFIRMACAO[parceiro.confirmacao.status] : null;
           return (
             <div key={titulo} className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-border-soft px-4 py-3">
-                <p className="text-[13.5px] font-extrabold text-brand-navy-2">{titulo}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[13.5px] font-extrabold text-brand-navy-2">{titulo}</p>
+                  {mostrarConfirmacao && parceiro && conf && (
+                    <>
+                      <span
+                        className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+                        style={ciente ? { backgroundColor: "#e3f5ea", color: "#15754c" } : { backgroundColor: "#fff2de", color: "#a4650d" }}
+                        title={ciente && parceiro.ciencia.em ? `Recebido e lido por ${parceiro.ciencia.porNome ?? "—"} em ${dataHora(parceiro.ciencia.em)}` : "O responsável ainda não confirmou o recebimento"}
+                      >
+                        {ciente ? "Recebimento confirmado" : "Aguardando ciência"}
+                      </span>
+                      <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: conf.bg, color: conf.text }}>
+                        {parceiro.confirmacao.status === "pendente" ? "Valores a confirmar" : conf.label}
+                      </span>
+                    </>
+                  )}
+                </div>
                 <p className="text-[12.5px] text-brand-muted">
                   {lista.length} consultor{lista.length === 1 ? "" : "es"} · {formatarHoras(s.h)} · <strong className="text-brand-navy-2">{moeda(s.v)}</strong>
                 </p>
               </div>
+              {parceiro?.confirmacao.status === "contestado" && parceiro.confirmacao.motivo && (
+                <p className="border-b border-brand-border-soft bg-[#fdeceb] px-4 py-2.5 text-[12.5px] text-[#b5392a]">
+                  <strong>Contestado por {parceiro.confirmacao.porNome ?? "—"}:</strong> {parceiro.confirmacao.motivo}
+                </p>
+              )}
               <table className="w-full text-[13px]">
                 <thead>{cabecalho}</thead>
                 <tbody>
@@ -249,6 +256,7 @@ function FechamentosPageContent() {
   const hojeIso = format(new Date(), "yyyy-MM-dd");
   const [mesAno, setMesAno] = useState(() => format(subMonths(new Date(), 1), "yyyy-MM"));
   const { data: itensSalvos } = useCollection<ItemFechamento>("fechamentoItens", [where("mesAno", "==", mesAno)], true, [mesAno]);
+  const { data: parceirosSalvos } = useCollection<FechamentoParceiro>("fechamentoParceiros", [where("mesAno", "==", mesAno)], true, [mesAno]);
   const { data: historico } = useCollection<HistoricoFechamento>(`fechamentos/${mesAno}/historico`, [orderBy("em", "desc")], true, [mesAno]);
 
   const [acao, setAcao] = useState<Acao | null>(null);
@@ -273,10 +281,11 @@ function FechamentosPageContent() {
     [congelado, itensSalvos, itensVivos]
   );
   const totais = useMemo(() => totaisPorTipo(itensExibidos), [itensExibidos]);
+  const parceirosVivos = useMemo(() => montarParceiros(itensVivos, parceiras, mesAno), [itensVivos, parceiras, mesAno]);
   const totaisVivos = useMemo(() => totaisPorTipo(itensVivos), [itensVivos]);
   const divergencias = useMemo(
-    () => calcularDivergencias({ eventos, recursos, projetos, clientes, linhas: linhasVivas, mesAno, hojeIso }),
-    [eventos, recursos, projetos, clientes, linhasVivas, mesAno, hojeIso]
+    () => calcularDivergencias({ eventos, recursos, projetos, clientes, linhas: linhasVivas, mesAno }),
+    [eventos, recursos, projetos, clientes, linhasVivas, mesAno]
   );
   const bloqueantes = divergencias.filter((d) => d.severidade === "bloqueante");
 
@@ -287,10 +296,13 @@ function FechamentosPageContent() {
   const valorVivo = totaisVivos.proprio.valor + totaisVivos.terceiro.valor;
   const desatualizado = congelado && (Math.abs(totalCongelado - totalVivo) > 0.01 || Math.abs(valorCongelado - valorVivo) > 0.01);
 
-  const podeEnviarRevisao = mesTerminou(mesAno, hojeIso) && itensVivos.length > 0;
-  const terceirosPendentes = itensExibidos.filter((i) => i.tipoBox === "terceiro" && i.confirmacao?.status === "pendente").length;
-  const terceirosContestados = itensExibidos.filter((i) => i.confirmacao?.status === "contestado").length;
-  const terceirosConfirmados = itensExibidos.filter((i) => i.confirmacao?.status === "confirmado").length;
+  const podeEnviarRevisao = itensVivos.length > 0;
+  const prazo = prazoFechamento(mesAno);
+  const prazoVencido = hojeIso > prazo && status !== "faturado";
+  const parceirosAguardandoCiencia = parceirosSalvos.filter((x) => !x.ciencia?.em).length;
+  const parceirosPendentes = parceirosSalvos.filter((x) => !!x.ciencia?.em && x.confirmacao.status === "pendente").length;
+  const parceirosContestados = parceirosSalvos.filter((x) => x.confirmacao.status === "contestado").length;
+  const parceirosConfirmados = parceirosSalvos.filter((x) => x.confirmacao.status === "confirmado").length;
 
   async function executar(texto: string) {
     if (!acao || !ator) return;
@@ -298,7 +310,7 @@ function FechamentosPageContent() {
     setErro("");
     try {
       if (acao.tipo === "revisao" || acao.tipo === "atualizar") {
-        await enviarParaRevisao({ mesAno, atual: fechamento, itens: itensVivos, ator, motivo: texto });
+        await enviarParaRevisao({ mesAno, atual: fechamento, itens: itensVivos, parceiros: parceirosVivos, ator, motivo: texto });
       } else if (acao.tipo === "rascunho") await voltarParaRascunho({ mesAno, ator, motivo: texto });
       else if (acao.tipo === "fechar") await fechar({ mesAno, ator, justificativa: texto });
       else if (acao.tipo === "liberar") await liberarFaturamento({ mesAno, ator, observacao: texto });
@@ -392,6 +404,13 @@ function FechamentosPageContent() {
             <Input type="month" value={mesAno} onChange={(e) => e.target.value && setMesAno(e.target.value)} className="w-44" />
           </div>
           <Etapas status={status} />
+          <span
+            className={`rounded-full px-3 py-1 text-[12px] font-bold ${prazoVencido ? "bg-[#fdeceb] text-[#b5392a]" : "bg-brand-hover text-brand-muted"}`}
+            title="O fechamento do mês acontece do dia 1 ao dia 10 do mês seguinte (referência; nada é bloqueado por data)"
+          >
+            Prazo: {dataBR(prazo)}
+            {prazoVencido ? " · vencido" : ""}
+          </span>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" disabled={itensExibidos.length === 0 || !!exportando} onClick={() => exportar("pdf")} className="h-9 px-3.5 text-[13px]">
@@ -416,11 +435,7 @@ function FechamentosPageContent() {
               Enviar para revisão
             </Button>
             <span className="text-[12.5px] text-brand-muted">
-              {!mesTerminou(mesAno, hojeIso)
-                ? "Disponível depois que o mês terminar."
-                : itensVivos.length === 0
-                  ? "Nenhuma hora aprovada neste período."
-                  : "Congela o valor de cada consultor para conferência."}
+              {itensVivos.length === 0 ? "Nenhuma hora aprovada neste período." : "Congela o valor de cada consultor e de cada parceira para conferência."}
             </span>
           </>
         )}
@@ -485,11 +500,12 @@ function FechamentosPageContent() {
           {status === "em_revisao" ? " Use “Atualizar valores” para refletir a mudança." : " Reabra o fechamento se for preciso corrigir."}
         </p>
       )}
-      {status === "faturado" && itensExibidos.some((i) => i.tipoBox === "terceiro") && (
+      {status === "faturado" && parceirosSalvos.length > 0 && (
         <p className="mb-4 text-[12.5px] text-brand-muted">
-          Conferência dos terceiros: <strong className="text-[#15754c]">{terceirosConfirmados} confirmado(s)</strong> ·{" "}
-          <strong className="text-[#a4650d]">{terceirosPendentes} aguardando</strong> ·{" "}
-          <strong className="text-[#b5392a]">{terceirosContestados} contestado(s)</strong>. A nota fiscal só é solicitada depois da confirmação.
+          Conferência das parceiras: <strong className="text-[#a4650d]">{parceirosAguardandoCiencia} aguardando ciência</strong> ·{" "}
+          <strong className="text-[#a4650d]">{parceirosPendentes} a confirmar valores</strong> ·{" "}
+          <strong className="text-[#15754c]">{parceirosConfirmados} confirmada(s)</strong> ·{" "}
+          <strong className="text-[#b5392a]">{parceirosContestados} contestada(s)</strong>. A nota fiscal só é solicitada depois da confirmação.
         </p>
       )}
 
@@ -552,7 +568,7 @@ function FechamentosPageContent() {
         </div>
       </div>
 
-      <TabelaItens itens={itensExibidos} mostrarConfirmacao={status === "faturado"} />
+      <TabelaItens itens={itensExibidos} parceirosSalvos={parceirosSalvos} mostrarConfirmacao={status === "faturado"} />
 
       {/* Auditoria */}
       <div className="mt-6 rounded-2xl border border-brand-border bg-white p-4 shadow-card">
