@@ -14,7 +14,7 @@ import {
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { where } from "firebase/firestore";
-import { Plus, Repeat } from "lucide-react";
+import { CalendarOff, Plus, Repeat } from "lucide-react";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { CalendarioTabs } from "@/components/layout/CalendarioTabs";
@@ -30,6 +30,7 @@ import { previstosDoCronograma, type PrevistoCronograma } from "@/lib/agendaPrev
 import type { Cliente, EventoCalendario, Projeto, Recurso } from "@/types";
 
 const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const OCULTAR_FIM_DE_SEMANA_KEY = "gp_calendario_sem_fim_de_semana";
 
 function CalendarioPageContent() {
   const { usuario } = useAuth();
@@ -62,11 +63,34 @@ function CalendarioPageContent() {
     descricao: string;
   } | null>(null);
 
+  // Ícone "sem fim de semana": mostra só de segunda a sexta. A escolha fica lembrada neste navegador.
+  const [ocultarFimDeSemana, setOcultarFimDeSemana] = useState(() => {
+    try {
+      return localStorage.getItem(OCULTAR_FIM_DE_SEMANA_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  function alternarFimDeSemana() {
+    setOcultarFimDeSemana((atual) => {
+      const novo = !atual;
+      try {
+        localStorage.setItem(OCULTAR_FIM_DE_SEMANA_KEY, novo ? "1" : "0");
+      } catch {
+        // sem armazenamento: só não lembra da escolha
+      }
+      return novo;
+    });
+  }
+
   const dias = useMemo(() => {
     const inicio = startOfWeek(startOfMonth(mesBase), { weekStartsOn: 1 });
     const fim = endOfWeek(endOfMonth(mesBase), { weekStartsOn: 1 });
-    return eachDayOfInterval({ start: inicio, end: fim });
-  }, [mesBase]);
+    const todos = eachDayOfInterval({ start: inicio, end: fim });
+    return ocultarFimDeSemana ? todos.filter((d) => d.getDay() !== 0 && d.getDay() !== 6) : todos;
+  }, [mesBase, ocultarFimDeSemana]);
+  const diasCabecalho = ocultarFimDeSemana ? DIAS_SEMANA.slice(0, 5) : DIAS_SEMANA;
+  const colunasGrade = { gridTemplateColumns: `repeat(${diasCabecalho.length}, minmax(0, 1fr))` };
 
   // O consultor só enxerga a própria agenda (apontamentos e previsto do cronograma); gestores filtram por recurso.
   const recursosVisiveis = souConsultor
@@ -179,6 +203,20 @@ function CalendarioPageContent() {
                 ›
               </button>
             </div>
+            <button
+              type="button"
+              onClick={alternarFimDeSemana}
+              aria-pressed={ocultarFimDeSemana}
+              aria-label={ocultarFimDeSemana ? "Mostrar sábado e domingo" : "Ocultar sábado e domingo"}
+              title={ocultarFimDeSemana ? "Mostrar sábado e domingo" : "Ocultar sábado e domingo"}
+              className={`flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors ${
+                ocultarFimDeSemana
+                  ? "border-brand-accent bg-brand-accent-soft text-brand-accent"
+                  : "border-brand-border bg-white text-brand-muted hover:bg-brand-hover"
+              }`}
+            >
+              <CalendarOff size={17} />
+            </button>
             <Button onClick={() => abrirNovo(hojeISO, "08:00", "12:00")}>
               <Plus size={16} /> Novo lançamento
             </Button>
@@ -186,8 +224,8 @@ function CalendarioPageContent() {
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
-          <div className="grid grid-cols-7 border-b border-brand-border bg-brand-hover text-center">
-            {DIAS_SEMANA.map((d) => (
+          <div className="grid border-b border-brand-border bg-brand-hover text-center" style={colunasGrade}>
+            {diasCabecalho.map((d) => (
               <div
                 key={d}
                 className="border-r border-brand-border py-2.5 text-[11px] font-bold tracking-[.1em] text-brand-faint uppercase last:border-r-0"
@@ -197,7 +235,7 @@ function CalendarioPageContent() {
             ))}
           </div>
 
-          <div className="grid grid-cols-7">
+          <div className="grid" style={colunasGrade}>
             {dias.map((d) => {
               const diaISO = format(d, "yyyy-MM-dd");
               const eventosDia = eventosDoDia(diaISO);
