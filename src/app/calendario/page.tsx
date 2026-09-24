@@ -25,6 +25,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { formatarHoras } from "@/lib/horas";
 import { STATUS_HORA_CONFIG, statusEfetivo } from "@/lib/statusHora";
+import { HORARIO_PERIODO, PERIODO_LABEL } from "@/lib/cronograma";
+import { previstosDoCronograma, type PrevistoCronograma } from "@/lib/agendaPrevista";
 import type { Cliente, EventoCalendario, Projeto, Recurso } from "@/types";
 
 const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -53,6 +55,12 @@ function CalendarioPageContent() {
     evento: EventoCalendario | null;
   } | null>(null);
   const [ocorrenciaSelecionada, setOcorrenciaSelecionada] = useState<EventoCalendario | null>(null);
+  const [preenchimento, setPreenchimento] = useState<{
+    projetoId: string;
+    recursoId: string;
+    atividadesMarcadas: string[];
+    descricao: string;
+  } | null>(null);
 
   const dias = useMemo(() => {
     const inicio = startOfWeek(startOfMonth(mesBase), { weekStartsOn: 1 });
@@ -75,7 +83,34 @@ function CalendarioPageContent() {
       .sort((a, b) => (a.horaInicio ?? "").localeCompare(b.horaInicio ?? ""));
   }
 
+  // "Previsto" do cronograma: as tarefas que os projetos já alocaram para o recurso, turno a turno.
+  // É calculado na hora (não vira apontamento): quando o cronograma muda de versão a agenda acompanha.
+  const previstosPorDia = useMemo(() => {
+    const itens = previstosDoCronograma({
+      projetos,
+      eventos,
+      hojeIso: format(new Date(), "yyyy-MM-dd"),
+      recursoIds: new Set(recursosVisiveis.map((r) => r.id)),
+    }).filter((g) => g.situacao !== "apontada");
+    const porDia = new Map<string, PrevistoCronograma[]>();
+    itens.forEach((g) => porDia.set(g.data, [...(porDia.get(g.data) ?? []), g]));
+    porDia.forEach((lista) => lista.sort((a, b) => a.periodo.localeCompare(b.periodo)));
+    return porDia;
+  }, [eventos, projetos, recursosVisiveis]);
+
+  function abrirPrevisto(g: { data: string; periodo: "manha" | "tarde"; projetoId: string; recursoId: string; atividadeIds: string[]; nomes: string[] }) {
+    setPreenchimento({
+      projetoId: g.projetoId,
+      recursoId: g.recursoId,
+      atividadesMarcadas: g.atividadeIds,
+      descricao: g.nomes.join("; "),
+    });
+    const h = HORARIO_PERIODO[g.periodo];
+    setModalInfo({ data: g.data, horaInicioPadrao: h.horaInicio, horaFimPadrao: h.horaFim, evento: null });
+  }
+
   function abrirEvento(ev: EventoCalendario, diaISO: string) {
+    setPreenchimento(null);
     if (ev.origem === "recorrencia" && statusEfetivo(ev) === "previsto") {
       setOcorrenciaSelecionada(ev);
       return;
@@ -84,6 +119,7 @@ function CalendarioPageContent() {
   }
 
   function abrirNovo(diaISO: string, horaInicio: string, horaFim: string) {
+    setPreenchimento(null);
     setModalInfo({ data: diaISO, horaInicioPadrao: horaInicio, horaFimPadrao: horaFim, evento: null });
   }
 
@@ -201,6 +237,25 @@ function CalendarioPageContent() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-0.5 overflow-y-auto">
+                    {(previstosPorDia.get(diaISO) ?? []).map((g) => {
+                      const proj = projetos.find((p) => p.id === g.projetoId);
+                      const cli = clientes.find((c) => c.id === proj?.clienteId);
+                      const rec = recursos.find((r) => r.id === g.recursoId);
+                      return (
+                        <button
+                          key={`prev-${g.recursoId}-${g.projetoId}-${g.periodo}`}
+                          onClick={() => abrirPrevisto(g)}
+                          className="flex items-center gap-1 truncate rounded border border-dashed border-[#9db8f1] bg-[#eef3ff] px-1.5 py-[3px] text-left text-[10.5px] leading-tight text-[#2f5fc0] hover:brightness-95"
+                          title={`Previsto no cronograma (${PERIODO_LABEL[g.periodo]}, ${g.horas}h): ${g.nomes.join(", ")} — clique para apontar`}
+                        >
+                          <span className="truncate">
+                            <strong>{g.periodo === "manha" ? "M" : "T"}</strong> Previsto ·{" "}
+                            {!souConsultor && rec ? `${rec.nomeCompleto.split(" ")[0]} · ` : ""}
+                            {nomeExibicaoCliente(cli)} · {g.nomes.length === 1 ? g.nomes[0] : `${g.nomes.length} tarefas`}
+                          </span>
+                        </button>
+                      );
+                    })}
                     {eventosDia.map((ev) => {
                       const recurso = recursos.find((r) => r.id === ev.recursoId);
                       const projeto = projetos.find((p) => p.id === ev.projetoId);
@@ -293,6 +348,10 @@ function CalendarioPageContent() {
         <div className="rounded-2xl border border-brand-border bg-white p-4 shadow-card">
           <p className="mb-3 text-[11px] font-bold tracking-[.1em] text-brand-faint uppercase">Legenda</p>
           <div className="flex flex-col gap-2.5 text-[12.5px] text-brand-muted">
+            <div className="flex items-center gap-2.5">
+              <span className="h-3.5 w-3.5 shrink-0 rounded border border-dashed border-[#9db8f1] bg-[#eef3ff]" />
+              Previsto no cronograma
+            </div>
             {(Object.keys(STATUS_HORA_CONFIG) as Array<keyof typeof STATUS_HORA_CONFIG>).map((s) => (
               <div key={s} className="flex items-center gap-2.5">
                 <span
@@ -319,6 +378,7 @@ function CalendarioPageContent() {
           recursos={recursos}
           usuario={usuario}
           eventos={eventos}
+          preenchimento={preenchimento}
         />
       )}
 

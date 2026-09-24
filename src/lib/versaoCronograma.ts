@@ -145,7 +145,7 @@ export interface ResultadoPreservacao {
 }
 
 function agendaIgual(a: EscopoAtividade, b: EscopoAtividade) {
-  return (a.dataInicio ?? null) === (b.dataInicio ?? null) && (a.periodo ?? null) === (b.periodo ?? null) && (a.recursoId ?? null) === (b.recursoId ?? null);
+  return (a.dataInicio ?? null) === (b.dataInicio ?? null) && (a.dataFim ?? null) === (b.dataFim ?? null) && (a.periodo ?? null) === (b.periodo ?? null) && (a.recursoId ?? null) === (b.recursoId ?? null);
 }
 
 /**
@@ -176,7 +176,7 @@ export function preservarRealizado(
       caminho: caminhosNovos[j],
       detalhe: `arquivo novo: ${textoAgenda(a, nomeRecurso) || "sem agenda"} — mantido: ${textoAgenda(antiga, nomeRecurso) || "sem agenda"}`,
     });
-    return { ...a, dataInicio: antiga.dataInicio ?? null, periodo: antiga.periodo ?? null, recursoId: antiga.recursoId ?? null };
+    return { ...a, dataInicio: antiga.dataInicio ?? null, dataFim: antiga.dataFim ?? null, periodo: antiga.periodo ?? null, recursoId: antiga.recursoId ?? null };
   });
 
   const idsNovos = new Set(novas.map((a) => a.id));
@@ -239,6 +239,7 @@ function foraDaMaiorSubsequenciaCrescente(seq: number[]): Set<number> {
 function textoAgenda(a: EscopoAtividade, nomeRecurso: (id: string) => string): string {
   const partes = [
     a.dataInicio ? formatarDataCurta(a.dataInicio) : "sem data",
+    a.dataInicio && a.dataFim && a.dataFim !== a.dataInicio ? `até ${formatarDataCurta(a.dataFim)}` : null,
     a.periodo ? PERIODO_LABEL[a.periodo] : null,
     a.recursoId ? nomeRecurso(a.recursoId) : null,
   ].filter(Boolean);

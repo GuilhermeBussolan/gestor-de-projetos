@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { collection, doc, orderBy, serverTimestamp, where, writeBatch } from "firebase/firestore";
+import { orderBy, where } from "firebase/firestore";
 import { AlertTriangle, CheckCircle2, Upload } from "lucide-react";
-import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Field";
@@ -20,7 +19,8 @@ import { ehCronogramaGantt, lerCronogramaGantt } from "@/lib/importarCronogramaG
 import { aplicarCorrecoesDuracao, atividadesSemDuracao } from "@/lib/importarEscopo";
 import { idsFolhas, normalizarNiveis, numerarAtividades } from "@/lib/escopo";
 import { calcularProgressoFolhas } from "@/lib/progressoEscopo";
-import { casarAtividades, compararVersoes, preservarRealizado, totalMinutosFolhas } from "@/lib/versaoCronograma";
+import { casarAtividades, compararVersoes, preservarRealizado } from "@/lib/versaoCronograma";
+import { gravarNovaVersaoCronograma } from "@/lib/versaoCronogramaDb";
 import { ConferenciaVersao } from "@/components/importacao/ConferenciaVersao";
 import { PERIODO_LABEL, idsAtividadesSobrepostas, todasAlocacoes } from "@/lib/cronograma";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
@@ -38,6 +38,8 @@ function CronogramaImportForm({
   outrosProjetos,
   onClose,
   onImportado,
+  rascunho = false,
+  onRascunho,
 }: {
   projeto: Projeto;
   recursos: Recurso[];
@@ -45,6 +47,9 @@ function CronogramaImportForm({
   outrosProjetos: Projeto[];
   onClose: () => void;
   onImportado: (atividades: EscopoAtividade[]) => void;
+  /** true: o projeto ainda não existe (cadastro) — não grava nada, só devolve o cronograma via onRascunho. */
+  rascunho?: boolean;
+  onRascunho?: (dados: { atividades: EscopoAtividade[]; arquivoNome: string; observacao: string }) => void;
 }) {
   const [etapa, setEtapa] = useState<Etapa>("form");
   const [atividades, setAtividades] = useState<AtividadeCronogramaBruta[]>([]);
@@ -59,15 +64,15 @@ function CronogramaImportForm({
   const versoesCol = useCollection<VersaoCronograma>(
     `projetos/${projeto.id}/versoesCronograma`,
     [orderBy("numero", "asc")],
-    true,
-    [projeto.id]
+    !rascunho,
+    [projeto.id, rascunho]
   );
   const versoes = versoesCol.data;
   const { data: eventosProjeto } = useCollection<EventoCalendario>(
     "eventosCalendario",
     [where("projetoId", "==", projeto.id)],
-    true,
-    [projeto.id]
+    !rascunho,
+    [projeto.id, rascunho]
   );
 
   const faltando = useMemo(() => atividadesSemDuracao(atividades), [atividades]);
@@ -163,64 +168,23 @@ function CronogramaImportForm({
     if (!usuario) return;
     setEtapa("importando");
     try {
-      // Remove qualquer campo `undefined` residual (o Firestore rejeita a gravação se algum
-      // sobrar, ex: uma atividade sem data/recurso lida do arquivo).
-      const limpar = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
-      const atividadesSemUndefined = limpar(atividadesSalvar);
-      const anteriores = projeto.escopoAtividades ?? [];
-      const col = collection(db, "projetos", projeto.id, "versoesCronograma");
-      const batch = writeBatch(db);
-      const autor = { usuarioId: usuario.uid, usuarioNome: usuario.nomeCompleto };
-      let numero = ultimaVersao ?? 0;
-
-      if (versoes.length === 0 && anteriores.length > 0) {
-        // Primeira importação num projeto que já tinha escopo: guarda esse escopo como versão 1.
-        numero += 1;
-        batch.set(
-          doc(col),
-          limpar({
-            numero,
-            criadoEm: Date.now() - 1,
-            ...autor,
-            origem: "escopo_inicial",
-            arquivoNome: "",
-            observacao: "Escopo do projeto antes da primeira importação de cronograma.",
-            atividades: anteriores,
-            totalMinutos: totalMinutosFolhas(anteriores),
-            totalTarefas: idsFolhas(anteriores).size,
-            resumo: compararVersoes([], anteriores).resumo,
-            mudancas: [],
-            horasSemVinculo: 0,
-          })
-        );
+      const atividadesSemUndefined = JSON.parse(JSON.stringify(atividadesSalvar)) as EscopoAtividade[];
+      if (rascunho) {
+        // Projeto ainda não criado: só devolve o cronograma (a versão 1 é gravada junto com o projeto).
+        onRascunho?.({ atividades: atividadesSemUndefined, arquivoNome, observacao: observacao.trim() });
+        setEtapa("concluido");
+        return;
       }
-      numero += 1;
-      batch.set(
-        doc(col),
-        limpar({
-          numero,
-          criadoEm: Date.now(),
-          ...autor,
-          origem: "importacao",
-          arquivoNome,
-          observacao: observacao.trim(),
-          atividades: atividadesSemUndefined,
-          totalMinutos: totalMinutosFolhas(atividadesSemUndefined),
-          totalTarefas: idsFolhas(atividadesSemUndefined).size,
-          resumo: comparacao.resumo,
-          mudancas: comparacao.mudancas.slice(0, 400),
-          horasSemVinculo: 0,
-        })
-      );
-      batch.update(doc(db, "projetos", projeto.id), {
-        escopoId: null,
-        escopoNome: null,
-        escopoAtividades: atividadesSemUndefined,
-        escopoExclusoes: null,
-        cronogramaVersao: numero,
-        updatedAt: serverTimestamp(),
+      await gravarNovaVersaoCronograma({
+        projetoId: projeto.id,
+        escopoAnterior: projeto.escopoAtividades ?? [],
+        versoes,
+        atividades: atividadesSemUndefined,
+        arquivoNome,
+        observacao,
+        usuario,
+        comparacao,
       });
-      await batch.commit();
       onImportado(atividadesSemUndefined);
       setEtapa("concluido");
     } catch (err) {
@@ -454,7 +418,9 @@ function CronogramaImportForm({
               placeholder="Ex.: Cliente pediu para antecipar os itens de segurança; treinamento movido para a semana 3."
             />
             <p className="text-[11.5px] text-brand-faint">
-              Fica registrada no histórico do cronograma junto com quem importou e o que mudou.
+              {rascunho
+                ? "Fica registrada como versão 1 no histórico do cronograma do projeto."
+                : "Fica registrada no histórico do cronograma junto com quem importou e o que mudou."}
             </p>
           </div>
           {versoesCol.erro && (
@@ -473,7 +439,7 @@ function CronogramaImportForm({
               onClick={confirmar}
               disabled={observacao.trim().length < 3 || versoesCol.erro || versoesCol.loading || !usuario}
             >
-              Importar como versão {(ultimaVersao ?? (temEscopoAtual ? 1 : 0)) + 1}
+              {rascunho ? "Usar este cronograma" : `Importar como versão ${(ultimaVersao ?? (temEscopoAtual ? 1 : 0)) + 1}`}
             </Button>
           </div>
         </div>
@@ -508,6 +474,8 @@ export function ImportarCronogramaModal({
   outrosProjetos,
   onClose,
   onImportado,
+  rascunho = false,
+  onRascunho,
 }: {
   open: boolean;
   projeto: Projeto | null;
@@ -515,6 +483,8 @@ export function ImportarCronogramaModal({
   outrosProjetos: Projeto[];
   onClose: () => void;
   onImportado: (atividades: EscopoAtividade[]) => void;
+  rascunho?: boolean;
+  onRascunho?: (dados: { atividades: EscopoAtividade[]; arquivoNome: string; observacao: string }) => void;
 }) {
   return (
     <Modal open={open && !!projeto} onClose={onClose} title="Importar cronograma" wide>
@@ -526,6 +496,8 @@ export function ImportarCronogramaModal({
           outrosProjetos={outrosProjetos}
           onClose={onClose}
           onImportado={onImportado}
+          rascunho={rascunho}
+          onRascunho={onRascunho}
         />
       )}
     </Modal>

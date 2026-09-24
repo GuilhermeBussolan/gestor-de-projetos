@@ -72,6 +72,7 @@ interface NoBruto {
   isGroup: boolean;
   minutos?: number;
   dataInicio: string | null;
+  dataFim: string | null;
   periodo: ReturnType<typeof parsePeriodoCronograma>;
   recursoNome?: string;
   filhos: number[];
@@ -137,12 +138,13 @@ export async function lerCronogramaGantt(file: File): Promise<ResultadoImportaca
     }
 
     const dataInicio = colunas.inicio ? dataDaCelula(row.getCell(colunas.inicio).value) : null;
+    const dataFim = colunas.fim ? dataDaCelula(row.getCell(colunas.fim).value) : null;
     const periodoValor = colunas.periodo ? row.getCell(colunas.periodo).value : null;
     const periodo = typeof periodoValor === "string" ? parsePeriodoCronograma(periodoValor) : null;
     const recursoValor = colunas.recurso ? row.getCell(colunas.recurso).value : null;
     const recursoNome = typeof recursoValor === "string" && recursoValor.trim() ? recursoValor.trim() : undefined;
 
-    nos.set(r, { linha: r, texto, isGroup, minutos, dataInicio, periodo, recursoNome, filhos });
+    nos.set(r, { linha: r, texto, isGroup, minutos, dataInicio, dataFim, periodo, recursoNome, filhos });
     if (!isGroup) {
       linhasValidadas++;
       if (minutos === undefined) erros.push({ linha: r, descricao: texto });
@@ -180,6 +182,7 @@ export async function lerCronogramaGantt(file: File): Promise<ResultadoImportaca
         duracao: no.minutos !== undefined && no.minutos % 30 === 0 ? no.minutos / 60 : no.minutos,
         unidadeDuracao: no.minutos !== undefined && no.minutos % 30 === 0 ? "horas" : "minutos",
         dataInicio: no.dataInicio,
+        dataFim: no.dataFim,
         periodo: no.periodo,
         recursoNome: no.recursoNome,
       });

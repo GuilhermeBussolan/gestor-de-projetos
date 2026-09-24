@@ -1,7 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, orderBy, serverTimestamp } from "firebase/firestore";
+import { CheckCircle2, Upload } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCollection } from "@/lib/useCollection";
+import { ImportarCronogramaModal } from "@/components/importacao/ImportarCronogramaModal";
+import { gravarVersaoInicialCronograma } from "@/lib/versaoCronogramaDb";
 import { db } from "@/lib/firebase";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -12,7 +17,7 @@ import { EscopoSelector } from "@/components/projetos/EscopoSelector";
 import { QrhFields } from "@/components/projetos/QrhFields";
 import { FinanceiroFields, type FinanceiroFieldsHandle } from "@/components/projetos/FinanceiroFields";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
-import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type DetalhesQRH, type EnvolvidoChave, type Escopo, type EscopoAtividade, type ExclusaoEscopo, type Modulo, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
+import { MODULOS, TIPOS_ATENDIMENTO, type Cliente, type DetalhesQRH, type EnvolvidoChave, type Escopo, type EscopoAtividade, type ExclusaoEscopo, type Modulo, type Projeto, type Recurso, type TipoAtendimento, type TipoDocumento } from "@/types";
 
 function ProjetoForm({
   onClose,
@@ -53,6 +58,11 @@ function ProjetoForm({
   const [escopoAtividades, setEscopoAtividades] = useState<EscopoAtividade[]>([]);
   const [escopoExclusoes, setEscopoExclusoes] = useState<ExclusaoEscopo[]>([]);
   const [salvando, setSalvando] = useState(false);
+  const { usuario } = useAuth();
+  // Cronograma importado já no cadastro (o projeto ainda não existe: a versão 1 é gravada junto com ele).
+  const [cronogramaRascunho, setCronogramaRascunho] = useState<{ atividades: EscopoAtividade[]; arquivoNome: string; observacao: string } | null>(null);
+  const [cronogramaAberto, setCronogramaAberto] = useState(false);
+  const { data: todosProjetos } = useCollection<Projeto>("projetos", [orderBy("createdAt", "asc")], cronogramaAberto, [cronogramaAberto]);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
 
   function selecionarEscopo(escopo: Escopo, atividades: EscopoAtividade[], exclusoes: ExclusaoEscopo[]) {
@@ -60,6 +70,19 @@ function ProjetoForm({
     setEscopoNome(escopo.nome);
     setEscopoAtividades(atividades);
     setEscopoExclusoes(exclusoes);
+  }
+
+  function usarCronograma(dados: { atividades: EscopoAtividade[]; arquivoNome: string; observacao: string }) {
+    setCronogramaRascunho(dados);
+    setEscopoId(null);
+    setEscopoNome(null);
+    setEscopoAtividades(dados.atividades);
+    setEscopoExclusoes([]);
+  }
+
+  function removerCronograma() {
+    setCronogramaRascunho(null);
+    setEscopoAtividades([]);
   }
 
   function removerEscopo() {
@@ -95,7 +118,7 @@ function ProjetoForm({
           status: "A_INICIAR" as const,
         }));
 
-      await addDoc(collection(db, "projetos"), {
+      const ref = await addDoc(collection(db, "projetos"), {
         clienteId,
         codigoProposta,
         modulo,
@@ -121,6 +144,7 @@ function ProjetoForm({
         escopoId,
         escopoNome,
         escopoAtividades: escopoAtividades.length > 0 ? escopoAtividades : null,
+        cronogramaVersao: cronogramaRascunho ? 1 : null,
         escopoExclusoes: escopoExclusoes.length > 0 ? escopoExclusoes : null,
         principaisEnvolvidos:
           envolvidos.filter((e) => e.nome.trim()).length > 0
@@ -139,6 +163,15 @@ function ProjetoForm({
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      if (cronogramaRascunho && usuario) {
+        await gravarVersaoInicialCronograma({
+          projetoId: ref.id,
+          atividades: cronogramaRascunho.atividades,
+          arquivoNome: cronogramaRascunho.arquivoNome,
+          observacao: cronogramaRascunho.observacao,
+          usuario,
+        });
+      }
       onClose();
     } finally {
       setSalvando(false);
@@ -231,15 +264,71 @@ function ProjetoForm({
       </div>
 
       <div>
-        <p className="mb-1 text-sm font-medium text-brand-navy-2">Escopo do projeto (opcional)</p>
-        <EscopoSelector
-          escopos={escopos}
-          escopoIdAtual={escopoId}
-          escopoNomeAtual={escopoNome}
-          onSelecionar={selecionarEscopo}
-          onRemover={removerEscopo}
-          persisteAoConfirmar={false}
-          exclusoesAtuais={escopoExclusoes}
+        <p className="mb-1 text-sm font-medium text-brand-navy-2">Cronograma do projeto (opcional)</p>
+        {cronogramaRascunho ? (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-[#b9e2cb] bg-[#f1faf5] px-3.5 py-3 text-sm">
+            <span className="flex items-center gap-2 text-[#15754c]">
+              <CheckCircle2 size={16} />
+              <span>
+                <strong>Cronograma importado</strong> — {cronogramaRascunho.atividades.length} atividades
+                <span className="text-[12px] text-brand-faint"> ({cronogramaRascunho.arquivoNome})</span>
+              </span>
+            </span>
+            <span className="flex shrink-0 gap-3 text-[12.5px] font-semibold">
+              <button type="button" onClick={() => setCronogramaAberto(true)} className="text-brand-accent hover:underline">
+                Trocar
+              </button>
+              <button type="button" onClick={removerCronograma} className="text-red-600 hover:underline">
+                Remover
+              </button>
+            </span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {!escopoId && (
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" onClick={() => setCronogramaAberto(true)} className="h-9 px-3.5 text-[13px]">
+                  <Upload size={15} />
+                  Importar cronograma
+                </Button>
+                <span className="text-[12.5px] text-brand-faint">
+                  A planilha traz as tarefas, durações e a agenda; vira a versão 1 do histórico do projeto.
+                </span>
+              </div>
+            )}
+            <div>
+              <p className="mb-1 text-[12px] font-semibold text-brand-faint">
+                {escopoId ? "Escopo-padrão vinculado" : "Ou parta de um escopo-padrão"}
+              </p>
+              <EscopoSelector
+                escopos={escopos}
+                escopoIdAtual={escopoId}
+                escopoNomeAtual={escopoNome}
+                onSelecionar={selecionarEscopo}
+                onRemover={removerEscopo}
+                persisteAoConfirmar={false}
+                exclusoesAtuais={escopoExclusoes}
+              />
+            </div>
+          </div>
+        )}
+        <ImportarCronogramaModal
+          open={cronogramaAberto}
+          rascunho
+          projeto={
+            {
+              id: "novo-projeto",
+              codigoProposta: codigoProposta || "Novo projeto",
+              consultorIds,
+              status: "ativo",
+              escopoAtividades: null,
+            } as unknown as Projeto
+          }
+          recursos={recursos}
+          outrosProjetos={todosProjetos}
+          onClose={() => setCronogramaAberto(false)}
+          onImportado={() => {}}
+          onRascunho={usarCronograma}
         />
       </div>
 

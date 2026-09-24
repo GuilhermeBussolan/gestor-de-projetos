@@ -309,7 +309,7 @@ export function ProjetoDrawerConteudo({
               className="mb-2 flex w-full items-center justify-between gap-3 text-left"
             >
               <span className="text-sm font-extrabold text-brand-navy-2">
-                Escopo do projeto — {projeto.escopoNome}
+                {projeto.escopoNome ? `Escopo do projeto — ${projeto.escopoNome}` : "Cronograma do projeto"}
               </span>
               <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-bold text-brand-faint">
                 {folhasEscopo.feitas}/{folhasEscopo.total} concluídas

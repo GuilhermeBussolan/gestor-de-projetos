@@ -215,6 +215,11 @@ export interface EscopoAtividade {
    */
   recursoId?: string | null;
   dataInicio?: string | null;
+  /**
+   * Último dia da tarefa (coluna "Fim" do cronograma). Com período informado, a tarefa ocupa UM turno
+   * por dia útil de dataInicio a dataFim — só o que o cronograma diz, sem estender pela duração.
+   */
+  dataFim?: string | null;
   periodo?: PeriodoDia | null;
   /**
    * true = a tarefa saiu do arquivo de uma nova versão do cronograma, mas já tinha horas apontadas;

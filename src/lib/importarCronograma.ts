@@ -52,13 +52,14 @@ export function converterLinhasEmCronograma(linhas: LinhaImportada[]): Resultado
     const duracao = parseDuracao(pegarCampo(l.valores, "Duração", "Duracao", "Tempo Previsto", "Horas"));
     const unidadeDuracao = normalizarUnidade(pegarCampo(l.valores, "Unidade", "Unidade Duração", "Unidade Duracao"));
     const dataInicio = parseDataCronograma(pegarCampo(l.valores, "Data de Início", "Data Inicio", "Data"));
+    const dataFim = parseDataCronograma(pegarCampo(l.valores, "Data de Fim", "Data Fim", "Fim", "Data Término", "Data Termino"));
     const periodo = parsePeriodoCronograma(pegarCampo(l.valores, "Período", "Periodo", "Turno"));
     const recursoNome = pegarCampo(l.valores, "Recurso", "Recurso Responsável", "Recurso Responsavel").trim();
-    return { duracao, unidadeDuracao, dataInicio, periodo, recursoNome: recursoNome || undefined };
+    return { duracao, unidadeDuracao, dataInicio, dataFim, periodo, recursoNome: recursoNome || undefined };
   }
 
   function adicionarTarefa(descricao: string, nivel: number, l: LinhaImportada) {
-    const { duracao, unidadeDuracao, dataInicio, periodo, recursoNome } = lerCamposFolha(l);
+    const { duracao, unidadeDuracao, dataInicio, dataFim, periodo, recursoNome } = lerCamposFolha(l);
     linhasValidadas++;
     if (duracao === null) erros.push({ linha: l.linha, descricao });
     atividades.push({
@@ -68,6 +69,7 @@ export function converterLinhasEmCronograma(linhas: LinhaImportada[]): Resultado
       duracao: duracao ?? undefined,
       unidadeDuracao,
       dataInicio,
+      dataFim,
       periodo,
       recursoNome,
     });

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { KpisHoras } from "@/components/apontamento/KpisHoras";
 import { AbaPrevistoRealizado } from "@/components/apontamento/AbaPrevistoRealizado";
+import { AgendaCronograma } from "@/components/apontamento/AgendaCronograma";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { ImportarHorasRetroativasModal } from "@/components/importacao/ImportarHorasRetroativasModal";
@@ -676,6 +677,41 @@ function AbaAprovadas({
   );
 }
 
+/** "Horas previstas": a agenda que os cronogramas preveem (padrão) ou os lançamentos ainda a confirmar. */
+function AbaHorasPrevistas(props: {
+  usuario: Usuario;
+  eventos: EventoCalendario[];
+  projetos: Projeto[];
+  clientes: Cliente[];
+  recursos: Recurso[];
+}) {
+  const [visao, setVisao] = useState<"agenda" | "confirmar">("agenda");
+  const opcoes = [
+    { id: "agenda", label: "Agenda do cronograma" },
+    { id: "confirmar", label: "Lançamentos a confirmar" },
+  ] as const;
+  return (
+    <div>
+      <div className="mb-4 inline-flex rounded-[10px] border border-brand-border bg-white p-0.5">
+        {opcoes.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => setVisao(o.id)}
+            aria-pressed={visao === o.id}
+            className={`rounded-[8px] px-4 py-1.5 text-[13px] font-semibold transition-colors ${
+              visao === o.id ? "bg-brand-accent-soft text-brand-accent" : "text-brand-muted hover:bg-brand-hover"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {visao === "agenda" ? <AgendaCronograma {...props} /> : <AbaPrevistas {...props} />}
+    </div>
+  );
+}
+
 const ABAS_BASE = [
   { id: "previstas", label: "Horas previstas" },
   { id: "aprovacao", label: "Aprovação de horas" },
@@ -784,7 +820,7 @@ function ApontamentoPageContent() {
       </div>
 
       {aba === "previstas" && (
-        <AbaPrevistas
+        <AbaHorasPrevistas
           usuario={usuario}
           eventos={eventosFiltrados}
           projetos={projetos}

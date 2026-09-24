@@ -1,6 +1,7 @@
 import { duracaoEmMinutos, idsFolhas, nivelAtividade } from "@/lib/escopo";
 import { horaParaMinutos } from "@/lib/horas";
-import type { EscopoAtividade, PeriodoDia, Projeto, Recurso } from "@/types";
+import { statusEfetivo } from "@/lib/statusHora";
+import type { EscopoAtividade, EventoCalendario, PeriodoDia, Projeto, Recurso } from "@/types";
 
 /** Mesma janela usada nos botões +M/+T do calendário. */
 export const HORARIO_PERIODO: Record<PeriodoDia, { horaInicio: string; horaFim: string }> = {
@@ -13,7 +14,19 @@ export const PERIODO_LABEL: Record<PeriodoDia, string> = {
   tarde: "Tarde",
 };
 
-/** Uma atividade do cronograma com alocação completa (folha, recurso, data e período definidos). */
+/** Cada turno (manhã ou tarde) comporta 4h de trabalho. */
+export const HORAS_POR_TURNO = 4;
+
+export const TURNOS: PeriodoDia[] = ["manha", "tarde"];
+
+/** Um pedaço da alocação de uma atividade dentro de um turno. Atividades longas ocupam turnos seguidos. */
+export interface BlocoTurno {
+  data: string;
+  periodo: PeriodoDia;
+  horas: number;
+}
+
+/** Uma atividade do cronograma com alocação (folha com recurso e data; sem período assume manhã). */
 export interface AlocacaoAtividade {
   projetoId: string;
   projetoNome: string;
@@ -24,9 +37,50 @@ export interface AlocacaoAtividade {
   recursoId: string;
   data: string;
   periodo: PeriodoDia;
+  /** true quando o cronograma não trazia o período e a manhã foi assumida. */
+  periodoAssumido: boolean;
   horaInicio: string;
   horaFim: string;
   horasPrevistas: number;
+  /** Os turnos que a atividade ocupa (a partir de data/período, em sequência). */
+  blocos: BlocoTurno[];
+}
+
+export function ehFimDeSemana(iso: string): boolean {
+  const dia = new Date(`${iso}T12:00:00`).getDay();
+  return dia === 0 || dia === 6;
+}
+
+/** O turno seguinte: manhã -> tarde -> manhã do próximo dia útil (fins de semana só se pedido). */
+export function proximoTurno(
+  data: string,
+  periodo: PeriodoDia,
+  incluirFimDeSemana = false
+): { data: string; periodo: PeriodoDia } {
+  if (periodo === "manha") return { data, periodo: "tarde" };
+  let proximo = somarDiasIso(data, 1);
+  if (!incluirFimDeSemana) while (ehFimDeSemana(proximo)) proximo = somarDiasIso(proximo, 1);
+  return { data: proximo, periodo: "manha" };
+}
+
+/** Os turnos ocupados por uma atividade de `horas` que começa em data/período: 4h por turno, em sequência. */
+export function blocosDaAtividade(
+  data: string,
+  periodo: PeriodoDia,
+  horas: number,
+  incluirFimDeSemana = false
+): BlocoTurno[] {
+  if (horas <= 0) return [{ data, periodo, horas: 0 }];
+  const blocos: BlocoTurno[] = [];
+  let restante = horas;
+  let atual = { data, periodo };
+  while (restante > 1e-9 && blocos.length < 400) {
+    const h = Math.min(HORAS_POR_TURNO, restante);
+    blocos.push({ data: atual.data, periodo: atual.periodo, horas: h });
+    restante -= h;
+    atual = proximoTurno(atual.data, atual.periodo, incluirFimDeSemana);
+  }
+  return blocos;
 }
 
 /** Índice do "grupo de rotina" (ancestral de nível 0) ao qual a atividade em `indice` pertence. */
@@ -41,14 +95,79 @@ function horasDaAtividade(a: Pick<EscopoAtividade, "duracao" | "unidadeDuracao">
   return duracaoEmMinutos(a) / 60;
 }
 
-/** Todas as alocações previstas de um projeto — só atividades-folha com recurso, data e período. */
+/**
+ * Turnos ocupados por uma atividade sem período definido: ela entra no dia logo depois do que o mesmo
+ * recurso já tinha nesse dia (`horasJaNoDia`), enchendo a manhã (4h) e passando para a tarde e para os
+ * dias úteis seguintes. É o caso dos cronogramas que trazem só recurso e data de início.
+ */
+export function blocosSequenciais(data: string, horasJaNoDia: number, horas: number): BlocoTurno[] {
+  if (horas <= 0) {
+    const turno: PeriodoDia = horasJaNoDia < HORAS_POR_TURNO ? "manha" : "tarde";
+    return [{ data, periodo: turno, horas: 0 }];
+  }
+  const blocos: BlocoTurno[] = [];
+  let restante = horas;
+  let dia = data;
+  let turnoIndice = Math.min(1, Math.floor(horasJaNoDia / HORAS_POR_TURNO));
+  let usadoNoTurno = horasJaNoDia >= HORAS_POR_TURNO * 2 ? 0 : horasJaNoDia % HORAS_POR_TURNO;
+  if (horasJaNoDia >= HORAS_POR_TURNO * 2) {
+    // o dia já está cheio: começa no dia útil seguinte
+    let proximo = somarDiasIso(dia, 1);
+    while (ehFimDeSemana(proximo)) proximo = somarDiasIso(proximo, 1);
+    dia = proximo;
+    turnoIndice = 0;
+  }
+  while (restante > 1e-9 && blocos.length < 400) {
+    const cabe = HORAS_POR_TURNO - usadoNoTurno;
+    const h = Math.min(cabe, restante);
+    blocos.push({ data: dia, periodo: turnoIndice === 0 ? "manha" : "tarde", horas: h });
+    restante -= h;
+    usadoNoTurno = 0;
+    if (turnoIndice === 0) turnoIndice = 1;
+    else {
+      let proximo = somarDiasIso(dia, 1);
+      while (ehFimDeSemana(proximo)) proximo = somarDiasIso(proximo, 1);
+      dia = proximo;
+      turnoIndice = 0;
+    }
+  }
+  return blocos;
+}
+
+/**
+ * Alocação exatamente como o cronograma diz: um turno por dia útil de início a fim, no período
+ * informado. Se a duração é maior que isso, NÃO estende (o que vale é o cronograma; quem errou corrige
+ * o cronograma e lança o certo). Cada turno leva no máximo 4h — a duração é dividida entre os dias.
+ */
+export function blocosPorIntervalo(inicio: string, fim: string, periodo: PeriodoDia, horas: number): BlocoTurno[] {
+  const dias = diasDoIntervalo(inicio, fim).filter((d) => d === inicio || !ehFimDeSemana(d));
+  const porDia = Math.min(HORAS_POR_TURNO, horas / dias.length);
+  return dias.map((data) => ({ data, periodo, horas: Math.max(0, porDia) }));
+}
+
+/** Todas as alocações previstas de um projeto — só atividades-folha com recurso e data. */
 export function alocacoesDoProjeto(projeto: Pick<Projeto, "id" | "codigoProposta" | "escopoAtividades">): AlocacaoAtividade[] {
   const atividades = projeto.escopoAtividades ?? [];
   const folhas = idsFolhas(atividades);
   const alocacoes: AlocacaoAtividade[] = [];
+  // Horas que o mesmo recurso já tem, neste projeto, nas tarefas sem período de cada dia.
+  const horasSemPeriodoNoDia = new Map<string, number>();
   atividades.forEach((a, i) => {
-    if (!folhas.has(a.id) || !a.recursoId || !a.dataInicio || !a.periodo) return;
-    const { horaInicio, horaFim } = HORARIO_PERIODO[a.periodo];
+    if (!folhas.has(a.id) || !a.recursoId || !a.dataInicio) return;
+    const horas = horasDaAtividade(a);
+    let blocos: BlocoTurno[];
+    if (a.periodo && a.dataFim && a.dataFim >= a.dataInicio) {
+      blocos = blocosPorIntervalo(a.dataInicio, a.dataFim, a.periodo, horas);
+    } else if (a.periodo) {
+      blocos = blocosDaAtividade(a.dataInicio, a.periodo, horas);
+    } else {
+      const chaveDia = `${a.recursoId}|${a.dataInicio}`;
+      const ja = horasSemPeriodoNoDia.get(chaveDia) ?? 0;
+      blocos = blocosSequenciais(a.dataInicio, ja, horas);
+      horasSemPeriodoNoDia.set(chaveDia, ja + horas);
+    }
+    const periodo: PeriodoDia = a.periodo ?? blocos[0].periodo;
+    const { horaInicio, horaFim } = HORARIO_PERIODO[periodo];
     alocacoes.push({
       projetoId: projeto.id,
       projetoNome: projeto.codigoProposta,
@@ -56,11 +175,13 @@ export function alocacoesDoProjeto(projeto: Pick<Projeto, "id" | "codigoProposta
       atividadeDescricao: a.descricao,
       grupoDescricao: atividades[indiceGrupoDaAtividade(atividades, i)]?.descricao ?? a.descricao,
       recursoId: a.recursoId,
-      data: a.dataInicio,
-      periodo: a.periodo,
+      data: blocos[0].data,
+      periodo,
+      periodoAssumido: !a.periodo,
       horaInicio,
       horaFim,
-      horasPrevistas: horasDaAtividade(a),
+      horasPrevistas: horas,
+      blocos,
     });
   });
   return alocacoes;
@@ -125,31 +246,45 @@ export function todasAlocacoes(
   return projetos.flatMap((p) => alocacoesDoProjeto(p));
 }
 
-function sobrepoe(a: AlocacaoAtividade, b: AlocacaoAtividade): boolean {
-  return a.recursoId === b.recursoId && a.data === b.data && horaParaMinutos(a.horaInicio) < horaParaMinutos(b.horaFim) && horaParaMinutos(b.horaInicio) < horaParaMinutos(a.horaFim);
+export function chaveTurno(recursoId: string, data: string, periodo: PeriodoDia): string {
+  return `${recursoId}|${data}|${periodo}`;
 }
 
+export interface CargaTurno {
+  horas: number;
+  itens: { alocacao: AlocacaoAtividade; horas: number }[];
+}
+
+/** Horas previstas em cada (recurso, dia, turno), somando todas as atividades e projetos. */
+export function cargaPorTurno(alocacoes: AlocacaoAtividade[]): Map<string, CargaTurno> {
+  const cargas = new Map<string, CargaTurno>();
+  for (const alocacao of alocacoes) {
+    for (const bloco of alocacao.blocos) {
+      const chave = chaveTurno(alocacao.recursoId, bloco.data, bloco.periodo);
+      const atual = cargas.get(chave) ?? { horas: 0, itens: [] };
+      atual.horas += bloco.horas;
+      atual.itens.push({ alocacao, horas: bloco.horas });
+      cargas.set(chave, atual);
+    }
+  }
+  return cargas;
+}
+
+const TOLERANCIA = 0.01;
+
 /**
- * IDs das atividades cuja alocação prevista colide com a de outra atividade do mesmo recurso, no
- * mesmo dia (mesmo entre projetos diferentes) — a "Sobreposição de agenda" da seção 2.
+ * IDs das atividades que estouram a capacidade de um turno (mais de 4h previstas para o mesmo
+ * recurso no mesmo dia e turno, mesmo entre projetos diferentes) — a "Sobreposição de agenda".
  */
 export function idsAtividadesSobrepostas(alocacoes: AlocacaoAtividade[]): Set<string> {
   const sobrepostas = new Set<string>();
-  for (let i = 0; i < alocacoes.length; i++) {
-    for (let j = i + 1; j < alocacoes.length; j++) {
-      if (alocacoes[i].atividadeId === alocacoes[j].atividadeId) continue;
-      if (sobrepoe(alocacoes[i], alocacoes[j])) {
-        sobrepostas.add(alocacoes[i].atividadeId);
-        sobrepostas.add(alocacoes[j].atividadeId);
-      }
-    }
-  }
+  cargaPorTurno(alocacoes).forEach((carga) => {
+    if (carga.horas <= HORAS_POR_TURNO + TOLERANCIA) return;
+    carga.itens.forEach((item) => {
+      if (item.horas > 0) sobrepostas.add(item.alocacao.atividadeId);
+    });
+  });
   return sobrepostas;
-}
-
-/** As outras alocações que colidem com `alocacao` — para explicar o conflito ao usuário. */
-export function conflitosDe(alocacao: AlocacaoAtividade, todas: AlocacaoAtividade[]): AlocacaoAtividade[] {
-  return todas.filter((outra) => outra.atividadeId !== alocacao.atividadeId && sobrepoe(alocacao, outra));
 }
 
 export function nomeRecurso(recursoId: string, recursos: Pick<Recurso, "id" | "nomeCompleto">[]): string {
@@ -183,30 +318,108 @@ export function diasDoMes(ano: number, mes1a12: number): string[] {
   return diasDoIntervalo(inicio, fim);
 }
 
-export type StatusCelulaMapa = "livre" | "alocado" | "sobreposicao";
+export type StatusTurno = "livre" | "parcial" | "cheio" | "sobreposicao" | "realizado";
 
-export interface CelulaMapaAlocacao {
-  status: StatusCelulaMapa;
-  alocacoes: AlocacaoAtividade[];
+export interface CelulaTurno {
+  status: StatusTurno;
+  horasPrevistas: number;
+  horasRealizadas: number;
+  itens: { alocacao: AlocacaoAtividade; horas: number }[];
 }
 
-/** A matriz recurso x dia do Mapa de Alocação (seção 7). */
+export type DiaMapa = Record<PeriodoDia, CelulaTurno>;
+
+/** Turno de um apontamento pela hora de início (antes das 12h30 = manhã). */
+export function turnoDaHora(horaInicio: string): PeriodoDia {
+  return horaParaMinutos(horaInicio) < 12 * 60 + 30 ? "manha" : "tarde";
+}
+
+/** Horas já realizadas (apontamentos aprovados ou aguardando aprovação) em cada (recurso, dia, turno). */
+export function horasRealizadasPorTurno(eventos: EventoCalendario[]): Map<string, number> {
+  const mapa = new Map<string, number>();
+  for (const ev of eventos) {
+    if (ev.retroativo) continue;
+    const status = statusEfetivo(ev);
+    if (status !== "aprovado" && status !== "aguardando_aprovacao") continue;
+    const chave = chaveTurno(ev.recursoId, ev.data, turnoDaHora(ev.horaInicio));
+    mapa.set(chave, (mapa.get(chave) ?? 0) + (ev.totalHoras ?? 0));
+  }
+  return mapa;
+}
+
+function statusDoTurno(previstas: number, realizadas: number): StatusTurno {
+  if (previstas > HORAS_POR_TURNO + TOLERANCIA) return "sobreposicao";
+  if (previstas >= HORAS_POR_TURNO - TOLERANCIA) return "cheio";
+  if (previstas > 0) return "parcial";
+  return realizadas > 0 ? "realizado" : "livre";
+}
+
+/** A matriz recurso x dia x turno do Mapa de Alocação. */
 export function montarMapaAlocacao(
   alocacoes: AlocacaoAtividade[],
-  sobrepostas: Set<string>,
   recursoIds: string[],
-  dias: string[]
-): Map<string, Map<string, CelulaMapaAlocacao>> {
-  const mapa = new Map<string, Map<string, CelulaMapaAlocacao>>();
+  dias: string[],
+  realizadas: Map<string, number> = new Map()
+): Map<string, Map<string, DiaMapa>> {
+  const cargas = cargaPorTurno(alocacoes);
+  const mapa = new Map<string, Map<string, DiaMapa>>();
   for (const recursoId of recursoIds) {
-    const porDia = new Map<string, CelulaMapaAlocacao>();
+    const porDia = new Map<string, DiaMapa>();
     for (const dia of dias) {
-      const doDia = alocacoes.filter((a) => a.recursoId === recursoId && a.data === dia);
-      const status: StatusCelulaMapa =
-        doDia.length === 0 ? "livre" : doDia.some((a) => sobrepostas.has(a.atividadeId)) ? "sobreposicao" : "alocado";
-      porDia.set(dia, { status, alocacoes: doDia });
+      const celula = (periodo: PeriodoDia): CelulaTurno => {
+        const chave = chaveTurno(recursoId, dia, periodo);
+        const carga = cargas.get(chave);
+        const horasPrevistas = carga?.horas ?? 0;
+        const horasRealizadas = realizadas.get(chave) ?? 0;
+        return { status: statusDoTurno(horasPrevistas, horasRealizadas), horasPrevistas, horasRealizadas, itens: carga?.itens ?? [] };
+      };
+      porDia.set(dia, { manha: celula("manha"), tarde: celula("tarde") });
     }
     mapa.set(recursoId, porDia);
   }
   return mapa;
+}
+
+/** Horas ocupadas de um turno: o que estiver previsto, ou o que já foi realizado se for maior. */
+export function horasOcupadas(celula: CelulaTurno): number {
+  return Math.max(celula.horasPrevistas, celula.horasRealizadas);
+}
+
+/** % de ocupação de um recurso no período: horas ocupadas / (dias úteis x 8h). */
+export function ocupacaoDoRecurso(porDia: Map<string, DiaMapa> | undefined, dias: string[]): number {
+  const uteis = dias.filter((d) => !ehFimDeSemana(d));
+  if (!porDia || uteis.length === 0) return 0;
+  let ocupadas = 0;
+  for (const dia of uteis) {
+    const d = porDia.get(dia);
+    if (d) ocupadas += Math.min(horasOcupadas(d.manha), HORAS_POR_TURNO) + Math.min(horasOcupadas(d.tarde), HORAS_POR_TURNO);
+  }
+  return ocupadas / (uteis.length * HORAS_POR_TURNO * 2);
+}
+
+export interface TurnoLivre {
+  data: string;
+  periodo: PeriodoDia;
+  horasLivres: number;
+}
+
+/** Turnos com folga (menos de 4h ocupadas) de um recurso — só dias úteis, salvo se pedido. */
+export function turnosLivresDoRecurso(
+  porDia: Map<string, DiaMapa> | undefined,
+  dias: string[],
+  turnos: PeriodoDia[],
+  incluirFimDeSemana = false
+): TurnoLivre[] {
+  const livres: TurnoLivre[] = [];
+  if (!porDia) return livres;
+  for (const dia of dias) {
+    if (!incluirFimDeSemana && ehFimDeSemana(dia)) continue;
+    const d = porDia.get(dia);
+    if (!d) continue;
+    for (const periodo of turnos) {
+      const folga = HORAS_POR_TURNO - horasOcupadas(d[periodo]);
+      if (folga > TOLERANCIA) livres.push({ data: dia, periodo, horasLivres: folga });
+    }
+  }
+  return livres;
 }

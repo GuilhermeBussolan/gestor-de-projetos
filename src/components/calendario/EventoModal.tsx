@@ -33,7 +33,10 @@ export function EventoModal({
   recursos,
   usuario,
   eventos,
+  preenchimento,
 }: {
+  /** Ao apontar a partir de um "previsto" do cronograma: já vem com projeto, recurso e tarefas marcadas. */
+  preenchimento?: { projetoId: string; recursoId: string; atividadesMarcadas: string[]; descricao: string } | null;
   aberto: boolean;
   onClose: () => void;
   data: string;
@@ -49,9 +52,9 @@ export function EventoModal({
   const souConsultorEditandoMeuEvento = usuario.perfil === "consultor";
   const meuRecursoId = usuario.recursoId ?? "";
 
-  const [projetoId, setProjetoId] = useState(eventoEditando?.projetoId ?? "");
+  const [projetoId, setProjetoId] = useState(eventoEditando?.projetoId ?? preenchimento?.projetoId ?? "");
   const [recursoId, setRecursoId] = useState(
-    eventoEditando?.recursoId ?? (souConsultorEditandoMeuEvento ? meuRecursoId : "")
+    eventoEditando?.recursoId ?? (souConsultorEditandoMeuEvento ? meuRecursoId : (preenchimento?.recursoId ?? ""))
   );
   const [dataEvento, setDataEvento] = useState(eventoEditando?.data ?? data);
   const [horaInicio, setHoraInicio] = useState(
@@ -59,9 +62,9 @@ export function EventoModal({
   );
   const [horaFim, setHoraFim] = useState(eventoEditando?.horaFim ?? horaFimPadrao ?? "12:00");
   const [horaDesconto, setHoraDesconto] = useState(eventoEditando?.horaDesconto ?? "00:00");
-  const [descricao, setDescricao] = useState(eventoEditando?.descricao ?? "");
+  const [descricao, setDescricao] = useState(eventoEditando?.descricao ?? preenchimento?.descricao ?? "");
   const [atividadesMarcadas, setAtividadesMarcadas] = useState<string[]>(
-    eventoEditando?.atividadesRealizadas ?? []
+    eventoEditando?.atividadesRealizadas ?? preenchimento?.atividadesMarcadas ?? []
   );
   // "Em andamento" = ainda haverá outros apontamentos nas atividades marcadas; desligado = finalizadas.
   const [emAndamento, setEmAndamento] = useState(
