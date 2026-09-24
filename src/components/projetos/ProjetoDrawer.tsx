@@ -8,6 +8,7 @@ import { useCollection } from "@/lib/useCollection";
 import { Button } from "@/components/ui/Button";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import { CronogramaAcoes } from "@/components/projetos/CronogramaAcoes";
+import { useAuth } from "@/contexts/AuthContext";
 import { EnvolvidosProjeto } from "@/components/projetos/EnvolvidosProjeto";
 import {
   CODIGO_TERMO_ENCERRAMENTO,
@@ -100,6 +101,9 @@ export function ProjetoDrawerConteudo({
   onAlterarTermometro: () => void;
 }) {
   const [escopoAberto, setEscopoAberto] = useState(false);
+  // Consultor não vê os dados comerciais da proposta (ex: data de assinatura).
+  const { usuario } = useAuth();
+  const ehConsultor = souConsultor || usuario?.perfil === "consultor";
 
   const { data: atualizacoesRecentes } = useCollection<ContatoProjeto>(
     `projetos/${projeto.id}/contatos`,
@@ -560,7 +564,7 @@ export function ProjetoDrawerConteudo({
           </div>
         )}
 
-        {projeto.dataAssinaturaProposta && (
+        {projeto.dataAssinaturaProposta && !ehConsultor && (
           <div className="mb-5.5">
             <p className="mb-2.5 text-sm font-extrabold text-brand-navy-2">Dados da proposta</p>
             <div className="rounded-xl border border-brand-border bg-white px-4 py-3 text-[12.5px] text-brand-muted shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
