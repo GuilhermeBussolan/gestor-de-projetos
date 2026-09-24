@@ -29,6 +29,7 @@ import {
 import { TIPO_BOX_CONFIG } from "@/lib/constants";
 import { idsFolhas } from "@/lib/escopo";
 import { gerarOrdemServicoPdf } from "@/lib/ordemServico";
+import { ParticipantesOsModal } from "@/components/apontamento/ParticipantesOsModal";
 import { BolinhaContagem } from "@/components/ui/BolinhaContagem";
 import type { Cliente, EventoCalendario, Projeto, Recurso, StatusHora, TipoBox, Usuario } from "@/types";
 
@@ -59,6 +60,7 @@ function LinhaHora({
 }) {
   const [expandido, setExpandido] = useState(false);
   const [gerandoOS, setGerandoOS] = useState(false);
+  const [escolhendoParticipantes, setEscolhendoParticipantes] = useState(false);
   const projeto = projetos.find((p) => p.id === ev.projetoId);
   const cliente = clientes.find((c) => c.id === projeto?.clienteId);
   const recurso = recursos.find((r) => r.id === ev.recursoId);
@@ -147,6 +149,11 @@ function LinhaHora({
               disabled={gerandoOS}
               title="Gerar PDF da Ordem de Serviço com as atividades deste apontamento, para enviar ao cliente e pedir confirmação"
               onClick={async () => {
+                // Com principais envolvidos cadastrados, o consultor marca quem participou da agenda.
+                if ((projeto.principaisEnvolvidos ?? []).length > 0) {
+                  setEscolhendoParticipantes(true);
+                  return;
+                }
                 setGerandoOS(true);
                 try {
                   await gerarOrdemServicoPdf(ev, projeto, cliente, recurso, atividadesFeitas);
@@ -163,6 +170,23 @@ function LinhaHora({
           {children}
         </div>
       </div>
+      {escolhendoParticipantes && projeto && (
+        <ParticipantesOsModal
+          open
+          envolvidos={projeto.principaisEnvolvidos ?? []}
+          gerando={gerandoOS}
+          onClose={() => setEscolhendoParticipantes(false)}
+          onGerar={async (participantes) => {
+            setGerandoOS(true);
+            try {
+              await gerarOrdemServicoPdf(ev, projeto, cliente, recurso, atividadesFeitas, participantes);
+              setEscolhendoParticipantes(false);
+            } finally {
+              setGerandoOS(false);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

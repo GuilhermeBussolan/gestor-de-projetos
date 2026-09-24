@@ -8,6 +8,7 @@ import { useCollection } from "@/lib/useCollection";
 import { Button } from "@/components/ui/Button";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import { CronogramaAcoes } from "@/components/projetos/CronogramaAcoes";
+import { EnvolvidosProjeto } from "@/components/projetos/EnvolvidosProjeto";
 import {
   CODIGO_TERMO_ENCERRAMENTO,
   STATUS_DOCUMENTO_CONFIG,
@@ -569,29 +570,7 @@ export function ProjetoDrawerConteudo({
           </div>
         )}
 
-        {projeto.principaisEnvolvidos && projeto.principaisEnvolvidos.length > 0 && (
-          <div className="mb-5.5">
-            <p className="mb-2.5 text-sm font-extrabold text-brand-navy-2">Principais envolvidos</p>
-            <div className="overflow-hidden rounded-xl border border-brand-border bg-white shadow-[0_8px_20px_rgba(21,40,73,0.05)]">
-              {projeto.principaisEnvolvidos.map((env, i) => (
-                <div
-                  key={i}
-                  className="flex flex-wrap items-baseline gap-x-3 border-t border-brand-border-soft px-4 py-2.5 first:border-t-0"
-                >
-                  <span className="text-[12.5px] font-semibold text-brand-navy-2">{env.nome}</span>
-                  {env.cargo && <span className="text-[12px] text-brand-muted">{env.cargo}</span>}
-                  {env.vinculo && (
-                    <span className="rounded-full bg-brand-accent-soft px-2 py-0.5 text-[10px] font-bold text-[#2456b8]">
-                      {env.vinculo}
-                    </span>
-                  )}
-                  {env.email && <span className="text-[12px] text-brand-muted">{env.email}</span>}
-                  {env.telefone && <span className="text-[12px] text-brand-muted">{env.telefone}</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <EnvolvidosProjeto projeto={projeto} />
 
         <div className="mb-5.5">
           <div className="mb-2.5 flex items-center justify-between">

@@ -7,7 +7,7 @@ import {
   NG_INFORMATICA,
 } from "@/lib/relatorioFechamento";
 import { nomeExibicaoCliente } from "@/lib/cliente";
-import type { Cliente, EventoCalendario, Projeto, Recurso } from "@/types";
+import type { Cliente, EnvolvidoChave, EventoCalendario, Projeto, Recurso } from "@/types";
 
 const dataBR = (iso: string) => iso.split("-").reverse().join("/");
 
@@ -34,6 +34,8 @@ export async function gerarOrdemServicoPdf(
   cliente: Cliente | undefined,
   recurso: Recurso | undefined,
   atividades: string[],
+  /** Principais envolvidos que participaram desta agenda (marcados pelo consultor); vazio = sem a lista. */
+  participantes: EnvolvidoChave[] = [],
   logoUrl = "/logo-white.png"
 ) {
   const pdf = new jsPDF();
@@ -104,6 +106,48 @@ export async function gerarOrdemServicoPdf(
   pdf.line(MARGEM, y, largura - MARGEM, y);
   y += 12;
 
+  const garantirEspaco = (necessario: number) => {
+    if (y + necessario > altura - 20) {
+      pdf.addPage();
+      y = MARGEM + 4;
+    }
+  };
+
+  // --- Participantes da agenda ---
+  if (participantes.length > 0) {
+    garantirEspaco(24);
+    pdf.setFillColor(...ACCENT);
+    pdf.roundedRect(MARGEM, y - 4, 3, 3, 0.5, 0.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(12);
+    pdf.setTextColor(...NAVY);
+    pdf.text("Participantes", MARGEM + 6, y - 1.3);
+    y += 8;
+
+    participantes.forEach((p, i) => {
+      const detalhe = [p.cargo, p.vinculo].filter(Boolean).join(" · ");
+      garantirEspaco(9);
+      if (i % 2 === 1) {
+        pdf.setFillColor(...HOVER);
+        pdf.rect(MARGEM, y - 5, largura - MARGEM * 2, 9, "F");
+      }
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10.5);
+      pdf.setTextColor(...NAVY);
+      pdf.text(`${i + 1}. ${p.nome}`, MARGEM + 3, y);
+      if (detalhe) {
+        const xNome = MARGEM + 3 + pdf.getTextWidth(`${i + 1}. ${p.nome}`);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(...MUTED);
+        pdf.text(`  —  ${detalhe}`, xNome, y);
+      }
+      y += 9;
+    });
+  }
+
+  if (participantes.length > 0) y += 6;
+
   // --- Atividades realizadas ---
   pdf.setFillColor(...ACCENT);
   pdf.roundedRect(MARGEM, y - 4, 3, 3, 0.5, 0.5, "F");
@@ -113,12 +157,6 @@ export async function gerarOrdemServicoPdf(
   pdf.text("Atividades realizadas", MARGEM + 6, y - 1.3);
   y += 8;
 
-  const garantirEspaco = (necessario: number) => {
-    if (y + necessario > altura - 20) {
-      pdf.addPage();
-      y = MARGEM + 4;
-    }
-  };
 
   const larguraTexto = largura - MARGEM * 2 - 14;
   atividades.forEach((descricao, i) => {
@@ -166,8 +204,8 @@ export async function gerarOrdemServicoPdf(
     y += alturaCaixa + 6;
   }
 
-  // --- Confirmação do cliente ---
-  const alturaConfirmacao = 40;
+  // --- Confirmação do cliente (só o texto: ao receber a OS o cliente já a considera confirmada) ---
+  const alturaConfirmacao = 24;
   garantirEspaco(alturaConfirmacao + 6);
   y += 6;
   pdf.setDrawColor(...BORDER);
@@ -181,16 +219,14 @@ export async function gerarOrdemServicoPdf(
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
   pdf.setTextColor(...NAVY);
-  pdf.text("Declaro que as atividades acima foram realizadas conforme descrito.", MARGEM + 6, y + 15.5);
-
-  const linhaAssinaturaY = y + 32;
-  pdf.setDrawColor(...NAVY);
-  pdf.line(MARGEM + 6, linhaAssinaturaY, MARGEM + 100, linhaAssinaturaY);
-  pdf.setFontSize(8);
-  pdf.setTextColor(...FAINT);
-  pdf.text("Assinatura / nome", MARGEM + 6, linhaAssinaturaY + 4.5);
-  pdf.line(largura - MARGEM - 60, linhaAssinaturaY, largura - MARGEM - 6, linhaAssinaturaY);
-  pdf.text("Data", largura - MARGEM - 60, linhaAssinaturaY + 4.5);
+  pdf.text(
+    pdf.splitTextToSize(
+      "Caso não haja nenhuma objeção nas próximas 48 horas, o conteúdo será considerado aprovado automaticamente.",
+      largura - MARGEM * 2 - 12
+    ),
+    MARGEM + 6,
+    y + 16
+  );
 
   pdf.save(`ordem-servico-${nomeArquivoSeguro(nomeCliente)}-${evento.data}.pdf`);
 }

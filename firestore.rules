@@ -122,13 +122,13 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoContato'])) ||
         (isFinanceiro() &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['financeiro'])) ||
-        // O consultor alocado (em projeto não finalizado) também atualiza o cronograma: importar
-        // uma nova versão troca só os campos do escopo/cronograma.
+        // O consultor alocado (em projeto não finalizado) também atualiza o cronograma (importar uma
+        // nova versão troca só os campos do escopo/cronograma) e os principais envolvidos (key users).
         (isSignedIn() &&
           meuRecursoId() in resource.data.consultorIds &&
           resource.data.get('status', 'ativo') != 'finalizado' &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-            ['escopoId', 'escopoNome', 'escopoAtividades', 'escopoExclusoes', 'cronogramaVersao', 'updatedAt']));
+            ['escopoId', 'escopoNome', 'escopoAtividades', 'escopoExclusoes', 'cronogramaVersao', 'principaisEnvolvidos', 'updatedAt']));
 
       // Contato pode ser registrado por admin/coordenador, ou pelo consultor
       // alocado naquele projeto (mas nunca editado/apagado depois).
