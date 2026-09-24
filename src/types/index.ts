@@ -415,3 +415,80 @@ export interface EventoCalendario {
   atividadesFinalizadas?: boolean | null;
   createdAt: number;
 }
+
+/** Fechamento mensal de horas: rascunho (cálculo ao vivo) -> em revisão (valores congelados) -> fechado -> faturado (liberado). */
+export type StatusFechamento = "rascunho" | "em_revisao" | "fechado" | "faturado";
+
+export interface TotaisFechamento {
+  horas: number;
+  valor: number;
+  recursos: number;
+}
+
+/** Um por mês (id = "YYYY-MM"), coleção "fechamentos". */
+export interface Fechamento {
+  id: string;
+  mesAno: string;
+  status: StatusFechamento;
+  criadoEm: number;
+  criadoPorNome: string;
+  atualizadoEm: number;
+  /** Totais congelados ao enviar para revisão, por tipo de recurso. */
+  totais?: { proprio: TotaisFechamento; terceiro: TotaisFechamento } | null;
+  fechadoEm?: number | null;
+  fechadoPorNome?: string | null;
+  /** Justificativa de quem fechou com divergências bloqueantes em aberto. */
+  justificativaDivergencias?: string | null;
+  liberadoEm?: number | null;
+  liberadoPorId?: string | null;
+  liberadoPorNome?: string | null;
+  observacaoLiberacao?: string | null;
+}
+
+/** Auditoria: cada mudança de status (subcoleção "fechamentos/{id}/historico"). Nunca editada. */
+export interface HistoricoFechamento {
+  id: string;
+  de: StatusFechamento | null;
+  para: StatusFechamento;
+  /** Ex.: "Enviado para revisão", "Reaberto", "Liberado o faturamento". */
+  acao: string;
+  usuarioId: string;
+  usuarioNome: string;
+  em: number;
+  motivo?: string | null;
+}
+
+export type StatusConfirmacaoFechamento = "nao_aplicavel" | "pendente" | "confirmado" | "contestado";
+
+export interface ConfirmacaoFechamento {
+  status: StatusConfirmacaoFechamento;
+  porNome?: string | null;
+  em?: number | null;
+  motivo?: string | null;
+}
+
+/** Fechamento de um recurso no mês (coleção "fechamentoItens", id = "YYYY-MM_recursoId"): o que o terceiro confere e confirma. */
+export interface ItemFechamento {
+  id: string;
+  mesAno: string;
+  recursoId: string;
+  recursoNome: string;
+  tipoBox: TipoBox;
+  parceiraId: string | null;
+  parceiraNome: string | null;
+  horas: number;
+  valorRepasse: number;
+  lancamentos: {
+    data: string;
+    cliente: string;
+    projeto: string;
+    horaInicio: string;
+    horaFim: string;
+    horaDesconto: string;
+    totalHoras: number;
+    valorRepasse: number;
+  }[];
+  /** true depois de "Liberar faturamento" — só então o consultor terceiro enxerga o item. */
+  liberado: boolean;
+  confirmacao: ConfirmacaoFechamento;
+}
