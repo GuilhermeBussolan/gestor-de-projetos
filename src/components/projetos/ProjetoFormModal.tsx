@@ -64,6 +64,8 @@ function ProjetoForm({
   const [cronogramaAberto, setCronogramaAberto] = useState(false);
   const { data: todosProjetos } = useCollection<Projeto>("projetos", [orderBy("createdAt", "asc")], cronogramaAberto, [cronogramaAberto]);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
+  // O coordenador não vê nada de financeiro: o projeto nasce com faturamento por apontamento e o financeiro ajusta depois.
+  const veFinanceiro = usuario?.perfil !== "coordenador";
 
   function selecionarEscopo(escopo: Escopo, atividades: EscopoAtividade[], exclusoes: ExclusaoEscopo[]) {
     setEscopoId(escopo.id);
@@ -105,7 +107,7 @@ function ProjetoForm({
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
-    if (!clienteId || !financeiroRef.current) return;
+    if (!clienteId || (veFinanceiro && !financeiroRef.current)) return;
     setSalvando(true);
     try {
       const documentos = tiposDocumento
@@ -158,7 +160,9 @@ function ProjetoForm({
           emailNF: contatoEmailNF,
           memo: contatoMemo,
         },
-        financeiro: financeiroRef.current.obterFinanceiro(),
+        financeiro: financeiroRef.current
+          ? financeiroRef.current.obterFinanceiro()
+          : { tipoFaturamento: "apontamento_horas", valorTotal: 0, numeroParcelas: 0, parcelas: [] },
         ultimoContato: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -383,39 +387,43 @@ function ProjetoForm({
         </FormRow>
       </div>
 
-      <FinanceiroFields ref={financeiroRef} tiposDocumento={tiposDocumento} />
-
-      <div>
-        <p className="mb-1 text-sm font-medium text-brand-navy-2">
-          Contato de faturamento (opcional)
-        </p>
-        <div className="grid grid-cols-2 gap-4 rounded-md border border-brand-border p-3">
-          <FormRow label="Contato (nome)">
-            <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} />
-          </FormRow>
-          <FormRow label="CNPJ de faturamento">
-            <Input value={contatoCnpj} onChange={(e) => setContatoCnpj(e.target.value)} />
-          </FormRow>
-          <FormRow label="E-mail">
-            <Input type="email" value={contatoEmail} onChange={(e) => setContatoEmail(e.target.value)} />
-          </FormRow>
-          <FormRow label="Telefone">
-            <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} />
-          </FormRow>
-          <FormRow label="E-mail para envio da NF">
-            <Input
-              type="email"
-              value={contatoEmailNF}
-              onChange={(e) => setContatoEmailNF(e.target.value)}
-            />
-          </FormRow>
-          <div className="col-span-2">
-            <FormRow label="Observações sobre faturamento">
-              <Textarea rows={2} value={contatoMemo} onChange={(e) => setContatoMemo(e.target.value)} />
+      {veFinanceiro && (
+        <>
+        <FinanceiroFields ref={financeiroRef} tiposDocumento={tiposDocumento} />
+  
+        <div>
+          <p className="mb-1 text-sm font-medium text-brand-navy-2">
+            Contato de faturamento (opcional)
+          </p>
+          <div className="grid grid-cols-2 gap-4 rounded-md border border-brand-border p-3">
+            <FormRow label="Contato (nome)">
+              <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} />
             </FormRow>
+            <FormRow label="CNPJ de faturamento">
+              <Input value={contatoCnpj} onChange={(e) => setContatoCnpj(e.target.value)} />
+            </FormRow>
+            <FormRow label="E-mail">
+              <Input type="email" value={contatoEmail} onChange={(e) => setContatoEmail(e.target.value)} />
+            </FormRow>
+            <FormRow label="Telefone">
+              <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} />
+            </FormRow>
+            <FormRow label="E-mail para envio da NF">
+              <Input
+                type="email"
+                value={contatoEmailNF}
+                onChange={(e) => setContatoEmailNF(e.target.value)}
+              />
+            </FormRow>
+            <div className="col-span-2">
+              <FormRow label="Observações sobre faturamento">
+                <Textarea rows={2} value={contatoMemo} onChange={(e) => setContatoMemo(e.target.value)} />
+              </FormRow>
+            </div>
           </div>
         </div>
-      </div>
+        </>
+      )}
 
       <EnvolvidosFields envolvidos={envolvidos} onChange={setEnvolvidos} />
 

@@ -191,6 +191,9 @@ function EditarProjetoForm({
   const [salvando, setSalvando] = useState(false);
   const [erroSalvar, setErroSalvar] = useState("");
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
+  const { usuario: eu } = useAuth();
+  // O coordenador não vê nada de financeiro: os dados financeiros do projeto ficam como estão.
+  const veFinanceiro = eu?.perfil !== "coordenador";
 
   async function selecionarEscopo(escopo: Escopo, atividades: EscopoAtividade[], exclusoes: ExclusaoEscopo[]) {
     await updateDoc(doc(db, "projetos", projeto.id), {
@@ -233,7 +236,7 @@ function EditarProjetoForm({
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
-    if (!financeiroRef.current) return;
+    if (veFinanceiro && !financeiroRef.current) return;
     setSalvando(true);
     setErroSalvar("");
     try {
@@ -250,10 +253,9 @@ function EditarProjetoForm({
         };
       });
 
-      const financeiro = financeiroComStatusPreservado(
-        projeto.financeiro,
-        financeiroRef.current.obterFinanceiro()
-      );
+      const financeiro = financeiroRef.current
+        ? financeiroComStatusPreservado(projeto.financeiro, financeiroRef.current.obterFinanceiro())
+        : null;
 
       const dados = {
         codigoProposta,
@@ -284,15 +286,19 @@ function EditarProjetoForm({
           envolvidos.filter((e) => e.nome.trim()).length > 0
             ? envolvidos.filter((e) => e.nome.trim())
             : null,
-        contatoFaturamento: {
-          nome: contatoNome,
-          cnpj: contatoCnpj,
-          email: contatoEmail,
-          telefone: contatoTelefone,
-          emailNF: contatoEmailNF,
-          memo: contatoMemo,
-        },
-        financeiro,
+        ...(financeiro
+          ? {
+              contatoFaturamento: {
+                nome: contatoNome,
+                cnpj: contatoCnpj,
+                email: contatoEmail,
+                telefone: contatoTelefone,
+                emailNF: contatoEmailNF,
+                memo: contatoMemo,
+              },
+              financeiro,
+            }
+          : {}),
       };
       // Remove qualquer campo `undefined` residual — o Firestore rejeita a gravação inteira se
       // algum sobrar (ex: uma parcela financeira sem uma das datas ainda preenchida).
@@ -481,43 +487,47 @@ function EditarProjetoForm({
         </FormRow>
       </div>
 
-      <FinanceiroFields
-        ref={financeiroRef}
-        financeiroInicial={projeto.financeiro}
-        tiposDocumento={tiposDocumento}
-      />
-
-      <div>
-        <p className="mb-1 text-sm font-medium text-brand-navy-2">
-          Contato de faturamento (opcional)
-        </p>
-        <div className="grid grid-cols-2 gap-4 rounded-md border border-brand-border p-3">
-          <FormRow label="Contato (nome)">
-            <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} />
-          </FormRow>
-          <FormRow label="CNPJ de faturamento">
-            <Input value={contatoCnpj} onChange={(e) => setContatoCnpj(e.target.value)} />
-          </FormRow>
-          <FormRow label="E-mail">
-            <Input type="email" value={contatoEmail} onChange={(e) => setContatoEmail(e.target.value)} />
-          </FormRow>
-          <FormRow label="Telefone">
-            <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} />
-          </FormRow>
-          <FormRow label="E-mail para envio da NF">
-            <Input
-              type="email"
-              value={contatoEmailNF}
-              onChange={(e) => setContatoEmailNF(e.target.value)}
-            />
-          </FormRow>
-          <div className="col-span-2">
-            <FormRow label="Observações sobre faturamento">
-              <Textarea rows={2} value={contatoMemo} onChange={(e) => setContatoMemo(e.target.value)} />
+      {veFinanceiro && (
+        <>
+        <FinanceiroFields
+          ref={financeiroRef}
+          financeiroInicial={projeto.financeiro}
+          tiposDocumento={tiposDocumento}
+        />
+  
+        <div>
+          <p className="mb-1 text-sm font-medium text-brand-navy-2">
+            Contato de faturamento (opcional)
+          </p>
+          <div className="grid grid-cols-2 gap-4 rounded-md border border-brand-border p-3">
+            <FormRow label="Contato (nome)">
+              <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} />
             </FormRow>
+            <FormRow label="CNPJ de faturamento">
+              <Input value={contatoCnpj} onChange={(e) => setContatoCnpj(e.target.value)} />
+            </FormRow>
+            <FormRow label="E-mail">
+              <Input type="email" value={contatoEmail} onChange={(e) => setContatoEmail(e.target.value)} />
+            </FormRow>
+            <FormRow label="Telefone">
+              <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} />
+            </FormRow>
+            <FormRow label="E-mail para envio da NF">
+              <Input
+                type="email"
+                value={contatoEmailNF}
+                onChange={(e) => setContatoEmailNF(e.target.value)}
+              />
+            </FormRow>
+            <div className="col-span-2">
+              <FormRow label="Observações sobre faturamento">
+                <Textarea rows={2} value={contatoMemo} onChange={(e) => setContatoMemo(e.target.value)} />
+              </FormRow>
+            </div>
           </div>
         </div>
-      </div>
+        </>
+      )}
 
       <EnvolvidosFields envolvidos={envolvidos} onChange={setEnvolvidos} />
 

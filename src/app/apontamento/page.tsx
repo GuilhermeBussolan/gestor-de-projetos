@@ -519,6 +519,8 @@ function AbaAprovadas({
   clientes: Cliente[];
   recursos: Recurso[];
 }) {
+  // Valor/hora e valor a repassar são financeiros: coordenador e consultor não veem.
+  const verValores = usuario.perfil === "administrador" || usuario.perfil === "financeiro";
   const souConsultor = usuario.perfil === "consultor";
   const [recursoFiltro, setRecursoFiltro] = useState("");
   const [filtroProjetoId, setFiltroProjetoId] = useState("");
@@ -639,14 +641,14 @@ function AbaAprovadas({
             <Button
               variant="secondary"
               disabled={relatorio.length === 0}
-              onClick={() => exportarRelatorioWord(relatorio)}
+              onClick={() => exportarRelatorioWord(relatorio, verValores)}
             >
               Exportar Word
             </Button>
             <Button
               variant="secondary"
               disabled={relatorio.length === 0}
-              onClick={() => exportarRelatorioPdf(relatorio)}
+              onClick={() => exportarRelatorioPdf(relatorio, verValores)}
             >
               Exportar PDF
             </Button>
@@ -659,13 +661,16 @@ function AbaAprovadas({
                   {r.recurso.nomeCompleto} ({r.recurso.codigo})
                 </p>
                 <p className="mb-3.5 text-sm text-brand-muted">
-                  Total: <strong className="text-brand-navy-2">{formatarHoras(r.totalHoras)}</strong> ·
-                  Valor/hora:{" "}
-                  {r.recurso.valorHora.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} ·
-                  Valor a repassar:{" "}
-                  <strong className="text-brand-navy-2">
-                    {r.valorTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                  </strong>
+                  Total: <strong className="text-brand-navy-2">{formatarHoras(r.totalHoras)}</strong>
+                  {verValores && (
+                    <>
+                      {" "}
+                      · Valor/hora: {r.recurso.valorHora.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} · Valor a repassar:{" "}
+                      <strong className="text-brand-navy-2">
+                        {r.valorTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      </strong>
+                    </>
+                  )}
                 </p>
                 <table className="w-full text-[13px]">
                   <thead>

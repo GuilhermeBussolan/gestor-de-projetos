@@ -50,7 +50,8 @@ function formatarDataHora(timestamp: number): string {
 function DashboardPageContent() {
   const { usuario } = useAuth();
   const souConsultor = usuario?.perfil === "consultor";
-  const podeVerFinanceiro = !souConsultor;
+  // Valores, parcelas e contato de faturamento: só administrador e financeiro (o coordenador não vê nada de financeiro).
+  const podeVerFinanceiro = usuario?.perfil === "administrador" || usuario?.perfil === "financeiro";
   const meuRecursoId = usuario?.recursoId ?? null;
   const hojeIso = new Date().toISOString().slice(0, 10);
 

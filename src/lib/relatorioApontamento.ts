@@ -63,7 +63,7 @@ export function montarRelatorio(
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export async function exportarRelatorioWord(relatorio: RelatorioRecurso[]) {
+export async function exportarRelatorioWord(relatorio: RelatorioRecurso[], comValores = true) {
   const children: (Paragraph | Table)[] = [
     new Paragraph({ text: "Relatório Analítico de Apontamento", heading: HeadingLevel.HEADING_1 }),
   ];
@@ -77,9 +77,11 @@ export async function exportarRelatorioWord(relatorio: RelatorioRecurso[]) {
       new Paragraph({
         children: [
           new TextRun(
-            `Total de horas: ${formatarHoras(r.totalHoras)}   ·   Valor/hora: ${moeda(
-              r.recurso.valorHora
-            )}   ·   Valor a repassar: ${moeda(r.valorTotal)}`
+            comValores
+              ? `Total de horas: ${formatarHoras(r.totalHoras)}   ·   Valor/hora: ${moeda(
+                  r.recurso.valorHora
+                )}   ·   Valor a repassar: ${moeda(r.valorTotal)}`
+              : `Total de horas: ${formatarHoras(r.totalHoras)}`
           ),
         ],
       }),
@@ -115,7 +117,7 @@ export async function exportarRelatorioWord(relatorio: RelatorioRecurso[]) {
   saveAs(blob, "relatorio-apontamento.docx");
 }
 
-export function exportarRelatorioPdf(relatorio: RelatorioRecurso[]) {
+export function exportarRelatorioPdf(relatorio: RelatorioRecurso[], comValores = true) {
   const pdf = new jsPDF();
   pdf.setFontSize(14);
   pdf.text("Relatório Analítico de Apontamento", 14, 16);
@@ -131,9 +133,11 @@ export function exportarRelatorioPdf(relatorio: RelatorioRecurso[]) {
     y += 5;
     pdf.setFontSize(9);
     pdf.text(
-      `Total: ${formatarHoras(r.totalHoras)}  ·  Valor/hora: ${moeda(r.recurso.valorHora)}  ·  A repassar: ${moeda(
-        r.valorTotal
-      )}`,
+      comValores
+        ? `Total: ${formatarHoras(r.totalHoras)}  ·  Valor/hora: ${moeda(r.recurso.valorHora)}  ·  A repassar: ${moeda(
+            r.valorTotal
+          )}`
+        : `Total: ${formatarHoras(r.totalHoras)}`,
       14,
       y
     );

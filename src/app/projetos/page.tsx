@@ -228,7 +228,7 @@ function ProjetosPageContent() {
             eventos={eventos}
             recursos={recursos}
             podeEditar={!!podeEditar}
-            podeVerFinanceiro={!!podeEditar}
+            podeVerFinanceiro={usuario?.perfil === "administrador" || usuario?.perfil === "financeiro"}
             telaCheia
             onEditar={() => setEditando(projetoDetalhe)}
             onExcluir={() => excluir(projetoDetalhe)}
