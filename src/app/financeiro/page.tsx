@@ -5,14 +5,8 @@ import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { AlterarStatusParcelaModal } from "@/components/financeiro/AlterarStatusParcelaModal";
-import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
-import {
-  STATUS_PARCELA_CONFIG,
-  STATUS_PARCELA_ORDEM,
-  TIPO_FATURAMENTO_CONFIG,
-  TIPO_RECURSO_CONFIG,
-} from "@/lib/constants";
-import { nomeExibicaoCliente } from "@/lib/cliente";
+import { CartaoParcelasProjeto } from "@/components/financeiro/CartaoParcelasProjeto";
+import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
 import { alterarStatusParcela, type DadosStatusParcela } from "@/lib/parcela";
 import { statusEfetivo } from "@/lib/statusHora";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,6 +22,17 @@ function FinanceiroPageContent() {
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: recursos } = useCollection<Recurso>("recursos");
   const { data: eventos } = useCollection<EventoCalendario>("eventosCalendario", []);
+  // Cards de projeto recolhidos por padrão (a tela fica compacta); o usuário abre o que precisa.
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const todosAbertos = projetos.length > 0 && abertos.size >= projetos.length;
+  function alternarCartao(id: string) {
+    setAbertos((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  }
   const [alterando, setAlterando] = useState<{
     projeto: Projeto;
     numero: number;
@@ -158,78 +163,29 @@ function FinanceiroPageContent() {
         ))}
       </div>
 
-      <div className="mb-4 text-[15px] font-extrabold text-brand-navy-2">Parcelas por projeto</div>
-      <div className="flex flex-col gap-4">
-        {projetos.map((p) => {
-          const cliente = clientes.find((c) => c.id === p.clienteId);
-          return (
-            <div key={p.id} className="rounded-2xl border border-brand-border bg-white p-5 shadow-card">
-              <div className="mb-4 flex flex-wrap items-baseline justify-between gap-4">
-                <div>
-                  <p className="text-base font-extrabold tracking-[-0.02em] text-brand-navy-2">
-                    {nomeExibicaoCliente(cliente)}
-                  </p>
-                  <p className="text-[12.5px] text-brand-faint">
-                    {TIPO_FATURAMENTO_CONFIG[p.financeiro?.tipoFaturamento ?? "parcelado"].label}
-                  </p>
-                  <PeriodoBadge
-                    dataInicio={p.dataInicio}
-                    dataFim={p.dataFim}
-                    className="mt-1 text-[11px] text-brand-faint"
-                  />
-                </div>
-                {p.financeiro?.tipoFaturamento !== "apontamento_horas" && (
-                  <p className="text-[15px] font-extrabold text-brand-navy-2">
-                    {moeda(p.financeiro?.valorTotal ?? 0)} · {p.financeiro?.numeroParcelas ?? 0}x
-                  </p>
-                )}
-              </div>
-              {p.financeiro?.tipoFaturamento === "apontamento_horas" ? (
-                <p className="text-sm text-brand-faint">
-                  Faturamento por apontamento de horas — sem parcelas fixas.
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-2.5">
-                  {(p.financeiro?.parcelas ?? []).map((parc) => (
-                    <div
-                      key={parc.numero}
-                      className="flex min-w-[190px] flex-col gap-2 rounded-xl border border-brand-border-soft bg-brand-input px-3.5 py-3"
-                    >
-                      <span className="text-[11.5px] text-brand-faint">
-                        {parc.descricao ? parc.descricao : `Parcela ${parc.numero}`}
-                      </span>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-[14.5px] font-extrabold text-brand-navy-2">
-                          {moeda(parc.valor)}
-                        </span>
-                        <select
-                          value={parc.status}
-                          onChange={(e) =>
-                            aoMudarStatus(p, parc.numero, e.target.value as StatusParcela)
-                          }
-                          style={{
-                            backgroundColor: STATUS_PARCELA_CONFIG[parc.status].bg,
-                            color: STATUS_PARCELA_CONFIG[parc.status].text,
-                          }}
-                          className="rounded-full border-0 px-2.5 py-1 text-[10.5px] font-bold"
-                        >
-                          {STATUS_PARCELA_ORDEM.map((s) => (
-                            <option key={s} value={s}>
-                              {STATUS_PARCELA_CONFIG[s].label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  ))}
-                  {(p.financeiro?.parcelas ?? []).length === 0 && (
-                    <p className="text-sm text-brand-faint">Nenhuma parcela cadastrada.</p>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="text-[15px] font-extrabold text-brand-navy-2">Parcelas por projeto</div>
+        {projetos.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setAbertos(todosAbertos ? new Set() : new Set(projetos.map((p) => p.id)))}
+            className="text-[12.5px] font-semibold text-brand-accent hover:underline"
+          >
+            {todosAbertos ? "Recolher todos" : "Expandir todos"}
+          </button>
+        )}
+      </div>
+      <div className="flex flex-col gap-3">
+        {projetos.map((p) => (
+          <CartaoParcelasProjeto
+            key={p.id}
+            projeto={p}
+            cliente={clientes.find((c) => c.id === p.clienteId)}
+            aberto={abertos.has(p.id)}
+            onAlternar={() => alternarCartao(p.id)}
+            onMudarStatus={aoMudarStatus}
+          />
+        ))}
         {projetos.length === 0 && (
           <p className="rounded-2xl border border-dashed border-brand-border bg-white p-8 text-center text-brand-faint">
             Nenhum projeto cadastrado ainda.
