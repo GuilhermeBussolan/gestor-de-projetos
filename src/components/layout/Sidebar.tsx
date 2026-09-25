@@ -23,6 +23,7 @@ import { BolinhaContagem } from "@/components/ui/BolinhaContagem";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePendenciasAprovacao } from "@/lib/usePendenciasAprovacao";
 import { useFechamentoParceira } from "@/lib/useFechamentoParceira";
+import { useMeuFechamento } from "@/lib/useMeuFechamento";
 import type { Perfil } from "@/types";
 
 interface NavItem {
@@ -76,6 +77,13 @@ const OPERACAO: NavItem[] = [
     perfis: ["responsavel_parceira"],
   },
   {
+    // Consultor terceiro: confere e confirma as próprias horas do fechamento mensal (só aparece se ele tiver algum liberado).
+    href: "/meu-fechamento",
+    label: "Meu fechamento",
+    icon: Receipt,
+    perfis: ["consultor"],
+  },
+  {
     href: "/financeiro",
     label: "Financeiro",
     icon: Wallet,
@@ -91,6 +99,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const pendenciasAprovacao = usePendenciasAprovacao(usuario?.perfil);
   const fechamentoParceira = useFechamentoParceira(usuario);
+  const meuFechamento = useMeuFechamento(usuario);
   const [colapsada, setColapsada] = useState(
     () => localStorage.getItem(SIDEBAR_COLAPSADA_KEY) === "1"
   );
@@ -116,14 +125,22 @@ export function Sidebar() {
 
   if (!usuario) return null;
 
-  const podeVer = (item: NavItem) => item.perfis.includes(usuario.perfil);
+  const podeVer = (item: NavItem) =>
+    item.perfis.includes(usuario.perfil) && (item.href !== "/meu-fechamento" || meuFechamento.itens.length > 0);
   const cadastrosVisiveis = CADASTROS.filter(podeVer);
 
   function NavLink({ item }: { item: NavItem }) {
     const ativo = pathname === item.href;
     const Icone = item.icon;
-    const ehFechamento = item.href === "/fechamento-parceira";
-    const pendencias = item.href === "/apontamento" ? pendenciasAprovacao : ehFechamento ? fechamentoParceira.pendentes : 0;
+    const ehFechamento = item.href === "/fechamento-parceira" || item.href === "/meu-fechamento";
+    const pendencias =
+      item.href === "/apontamento"
+        ? pendenciasAprovacao
+        : item.href === "/fechamento-parceira"
+          ? fechamentoParceira.pendentes
+          : item.href === "/meu-fechamento"
+            ? meuFechamento.pendentes
+            : 0;
     const tituloPendencias = ehFechamento
       ? `${pendencias} fechamento${pendencias === 1 ? "" : "s"} aguardando sua resposta`
       : `${pendencias} apontamento${pendencias === 1 ? "" : "s"} aguardando aprovação`;

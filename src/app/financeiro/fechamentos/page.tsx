@@ -14,7 +14,7 @@ import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal
 import { LinkArquivo } from "@/components/financeiro/LinkArquivo";
 import { PainelParceiroFinanceiro } from "@/components/financeiro/PainelParceiroFinanceiro";
 import { enviarArquivo, MENSAGEM_ERRO_ARQUIVO } from "@/lib/arquivosFechamento";
-import { SITUACAO_PARCEIRO_CONFIG, situacaoDaParceira, type SituacaoParceiro } from "@/lib/fechamentoNf";
+import { SITUACAO_PARCEIRO_CONFIG, confirmacaoDaParceira, situacaoDaParceira, type SituacaoParceiro } from "@/lib/fechamentoNf";
 import { exportarNfsPendentes, exportarPagamentosAtrasados } from "@/lib/relatorioPendencias";
 import { Select } from "@/components/ui/Field";
 import { formatarHoras } from "@/lib/horas";
@@ -32,7 +32,7 @@ import {
   prazoFechamento,
   totaisPorTipo,
 } from "@/lib/fechamento";
-import { enviarParceiraParaRevisao, fecharParceira, liberarParceira, reabrirParceira, voltarParceiraParaRascunho } from "@/lib/fechamentoDb";
+import { enviarParceiraParaRevisao, responderConfirmacaoConsultor, fecharParceira, liberarParceira, reabrirParceira, voltarParceiraParaRascunho } from "@/lib/fechamentoDb";
 import { tipoBoxEfetivo } from "@/lib/relatorioFechamento";
 import {
   descreverEscopo,
@@ -102,6 +102,7 @@ function TabelaItens({
   filtroSituacao,
   onDocumento,
   onAcao,
+  onConfirmarEmNome,
 }: {
   proprios: ItemExibido[];
   grupos: GrupoParceira[];
@@ -110,6 +111,7 @@ function TabelaItens({
   filtroSituacao: "" | SituacaoParceiro;
   onDocumento: (parceiro: FechamentoParceiro) => void;
   onAcao: (tipo: TipoAcao, parceiraId: string) => void;
+  onConfirmarEmNome: (item: ItemExibido, g: GrupoParceira) => void;
 }) {
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
   const alternar = (id: string) =>
@@ -121,7 +123,10 @@ function TabelaItens({
     });
 
   const cols = 5;
-  const linhaItem = (i: ItemExibido) => {
+  const linhaItem = (i: ItemExibido, g?: GrupoParceira) => {
+    // Confirmação do próprio consultor terceiro (só existe depois de liberado o faturamento da parceira).
+    const statusC = g?.etapa === "faturado" ? g.salvo?.statusConsultores?.[i.recursoId] : undefined;
+    const cfgC = statusC ? CONFIRMACAO[statusC] : null;
     const aberto = abertos.has(i.id);
     return (
       <Fragment key={i.id}>
@@ -135,8 +140,40 @@ function TabelaItens({
           <td className="px-3 py-2.5 text-brand-muted">{i.lancamentos.length}</td>
           <td className="px-3 py-2.5 text-brand-navy-2">{formatarHoras(i.horas)}</td>
           <td className="px-3 py-2.5 font-bold text-brand-navy-2">{moeda(i.valorRepasse)}</td>
-          <td className="w-2" />
+          <td className="px-3 py-2.5 text-right whitespace-nowrap">
+            {cfgC && statusC && (
+              <span className="inline-flex items-center gap-2">
+                <span
+                  className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+                  style={{ backgroundColor: cfgC.bg, color: cfgC.text }}
+                  title={i.confirmacao?.porNome ? `${i.confirmacao.porNome}${i.confirmacao.em ? ` em ${dataHora(i.confirmacao.em)}` : ""}` : undefined}
+                >
+                  {statusC === "pendente" ? "Não confirmou" : cfgC.label}
+                </span>
+                {statusC !== "confirmado" && g && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onConfirmarEmNome(i, g);
+                    }}
+                    className="text-[11.5px] font-semibold text-brand-accent hover:underline"
+                    title="Registrar a confirmação em nome do consultor (ex.: ele não tem acesso ao sistema)"
+                  >
+                    Confirmar em nome
+                  </button>
+                )}
+              </span>
+            )}
+          </td>
         </tr>
+        {aberto && i.confirmacao?.status === "contestado" && i.confirmacao.motivo && (
+          <tr className="bg-[#fdeceb]">
+            <td colSpan={cols + 1} className="px-4 py-2 text-[12.5px] text-[#b5392a]">
+              <strong>Contestação de {i.recursoNome}:</strong> {i.confirmacao.motivo}
+            </td>
+          </tr>
+        )}
         {aberto && (
           <tr className="bg-brand-hover/60">
             <td colSpan={cols + 1} className="px-4 py-2">
@@ -171,7 +208,7 @@ function TabelaItens({
       <th className="px-3 py-2.5">Lançamentos</th>
       <th className="px-3 py-2.5">Horas</th>
       <th className="px-3 py-2.5">Valor a repassar</th>
-      <th />
+      <th className="px-3 py-2.5 text-right">Confirmação do consultor</th>
     </tr>
   );
   const subtotal = (lista: ItemExibido[]) => ({ h: lista.reduce((s, i) => s + i.horas, 0), v: lista.reduce((s, i) => s + i.valorRepasse, 0) });
@@ -209,7 +246,34 @@ function TabelaItens({
                     {cfgEtapa.label}
                   </span>
                 )}
-                {liberada && parceiro && conf && (
+                {liberada && parceiro?.statusConsultores && (
+                  <>
+                    {(() => {
+                      const valores = Object.values(parceiro.statusConsultores);
+                      const ok = valores.filter((v) => v === "confirmado").length;
+                      const contestou = valores.filter((v) => v === "contestado").length;
+                      const cor =
+                        contestou > 0 ? { bg: "#fdeceb", text: "#b5392a" } : ok === valores.length ? { bg: "#e3f5ea", text: "#15754c" } : { bg: "#fff2de", text: "#a4650d" };
+                      return (
+                        <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: cor.bg, color: cor.text }}>
+                          {ok} de {valores.length} consultor{valores.length === 1 ? "" : "es"} confirmaram{contestou > 0 ? ` · ${contestou} contestou` : ""}
+                        </span>
+                      );
+                    })()}
+                    {confirmacaoDaParceira(parceiro).status === "confirmado" && (
+                      <span
+                        className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+                        style={{
+                          backgroundColor: SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].bg,
+                          color: SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].text,
+                        }}
+                      >
+                        {SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].label}
+                      </span>
+                    )}
+                  </>
+                )}
+                {liberada && parceiro && conf && !parceiro.statusConsultores && (
                   <>
                     <span
                       className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
@@ -321,7 +385,7 @@ function TabelaItens({
                 {g.etapa === "em_revisao" ? " Use “Atualizar valores” para refletir a mudança." : " Reabra o fechamento desta parceira se for preciso corrigir."}
               </p>
             )}
-            {parceiro?.confirmacao.status === "contestado" && parceiro.confirmacao.motivo && (
+            {!parceiro?.statusConsultores && parceiro?.confirmacao.status === "contestado" && parceiro.confirmacao.motivo && (
               <p className="border-b border-brand-border-soft bg-[#fdeceb] px-4 py-2.5 text-[12.5px] text-[#b5392a]">
                 <strong>Contestado por {parceiro.confirmacao.porNome ?? "—"}:</strong> {parceiro.confirmacao.motivo}
               </p>
@@ -329,7 +393,7 @@ function TabelaItens({
             <table className="w-full text-[13px]">
               <thead>{cabecalho}</thead>
               <tbody>
-                {lista.map(linhaItem)}
+                {lista.map((i) => linhaItem(i, g))}
                 {lista.length === 0 && (
                   <tr>
                     <td colSpan={cols + 1} className="px-4 py-6 text-center text-brand-faint">
@@ -366,6 +430,7 @@ function FechamentosPageContent() {
   const [filtroTipo, setFiltroTipo] = useState<"" | "proprio" | "terceiro">("");
   const [filtroSituacao, setFiltroSituacao] = useState<"" | SituacaoParceiro>("");
   const [acao, setAcao] = useState<Acao | null>(null);
+  const [emNome, setEmNome] = useState<{ item: ItemExibido; g: GrupoParceira } | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
   const [exportando, setExportando] = useState<"pdf" | "excel" | null>(null);
@@ -474,6 +539,30 @@ function FechamentosPageContent() {
       console.error("Erro na ação do fechamento:", err);
       setErro(err instanceof Error && (err.message === MENSAGEM_ERRO_ARQUIVO || err.message.includes("3 MB") || err.message.includes("parceira")) ? err.message : "Não foi possível concluir a ação. Confira se as regras do Firestore foram publicadas e tente de novo.");
       setAcao(null);
+    } finally {
+      setProcessando(false);
+    }
+  }
+
+  /** O Financeiro registra a confirmação em nome de um consultor (ex.: sem acesso ao sistema). Fica gravado quem fez. */
+  async function confirmarEmNome(motivo: string) {
+    if (!emNome || !ator) return;
+    setProcessando(true);
+    setErro("");
+    try {
+      await responderConfirmacaoConsultor({
+        mesAno,
+        recursoId: emNome.item.recursoId,
+        parceiraDocId: emNome.g.salvo?.id ?? `${mesAno}_${emNome.g.parceiraId}`,
+        decisao: "confirmado",
+        nome: `${ator.nomeCompleto} (Financeiro, em nome do consultor)`,
+        motivo,
+      });
+      setEmNome(null);
+    } catch (err) {
+      console.error("Erro ao confirmar em nome do consultor:", err);
+      setErro("Não foi possível registrar a confirmação. Confira se as regras do Firestore foram publicadas e tente de novo.");
+      setEmNome(null);
     } finally {
       setProcessando(false);
     }
@@ -741,7 +830,20 @@ function FechamentosPageContent() {
         filtroSituacao={filtroSituacao}
         onDocumento={gerarDocumentoParceira}
         onAcao={(tipo, parceiraId) => setAcao({ tipo, parceiraId })}
+        onConfirmarEmNome={(item, g) => setEmNome({ item, g })}
       />
+      {emNome && (
+        <AcaoFechamentoModal
+          titulo={`Confirmar em nome de ${emNome.item.recursoNome}`}
+          descricao="Use quando o consultor não consegue confirmar no sistema (por exemplo, sem acesso). Fica registrado que a confirmação foi feita pelo Financeiro."
+          rotulo="Motivo / como foi combinado"
+          obrigatorio
+          confirmar="Confirmar em nome"
+          processando={processando}
+          onCancelar={() => setEmNome(null)}
+          onConfirmar={(texto) => confirmarEmNome(texto)}
+        />
+      )}
 
       {/* Auditoria */}
       <div className="mt-6 rounded-2xl border border-brand-border bg-white p-4 shadow-card">

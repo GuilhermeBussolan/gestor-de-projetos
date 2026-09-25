@@ -1,5 +1,5 @@
 import { calcularVencimentoFechamento } from "@/lib/feriados";
-import type { FechamentoParceiro } from "@/types";
+import type { ConfirmacaoFechamento, FechamentoParceiro } from "@/types";
 
 /** Onde cada parceira está no caminho: confirmação -> NF -> pagamento -> encerrado. */
 export type SituacaoParceiro =
@@ -15,7 +15,7 @@ export type SituacaoParceiro =
 
 export const SITUACAO_PARCEIRO_CONFIG: Record<SituacaoParceiro, { label: string; bg: string; text: string }> = {
   aguardando_ciencia: { label: "Aguardando ciência", bg: "#fff2de", text: "#a4650d" },
-  aguardando_confirmacao: { label: "Valores a confirmar", bg: "#fff2de", text: "#a4650d" },
+  aguardando_confirmacao: { label: "Consultores a confirmar", bg: "#fff2de", text: "#a4650d" },
   contestado: { label: "Contestado", bg: "#fdeceb", text: "#b5392a" },
   aguardando_nf: { label: "Aguardando NF", bg: "#e8efff", text: "#2456b8" },
   nf_enviada: { label: "NF a validar", bg: "#e0f3f9", text: "#0f7d9e" },
@@ -36,10 +36,24 @@ export function diferencaPagamento(f: Pick<FechamentoParceiro, "pagamentos" | "v
   return arredondar(totalPago(f) - f.valor);
 }
 
+/**
+ * Confirmação da parceira. No fluxo atual ela é a soma da confirmação de cada consultor (statusConsultores): qualquer
+ * contestação trava; só confirma quando todos confirmaram. Documentos antigos usam a confirmação do responsável.
+ */
+export function confirmacaoDaParceira(f: FechamentoParceiro): ConfirmacaoFechamento {
+  const mapa = f.statusConsultores;
+  if (!mapa) return f.confirmacao;
+  const valores = Object.values(mapa);
+  if (valores.includes("contestado")) return { status: "contestado" };
+  if (valores.length > 0 && valores.every((v) => v === "confirmado")) return { status: "confirmado" };
+  return { status: "pendente" };
+}
+
 export function situacaoDaParceira(f: FechamentoParceiro): SituacaoParceiro {
-  if (!f.ciencia?.em) return "aguardando_ciencia";
-  if (f.confirmacao.status === "contestado") return "contestado";
-  if (f.confirmacao.status !== "confirmado") return "aguardando_confirmacao";
+  const conf = confirmacaoDaParceira(f).status;
+  if (!f.statusConsultores && !f.ciencia?.em) return "aguardando_ciencia";
+  if (conf === "contestado") return "contestado";
+  if (conf !== "confirmado") return "aguardando_confirmacao";
   if (!f.nf) return "aguardando_nf";
   if (f.nf.status === "enviada") return "nf_enviada";
   if (f.nf.status === "rejeitada") return "nf_rejeitada";

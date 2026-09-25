@@ -69,10 +69,15 @@ papaparse para relatórios e importações, lucide-react (ícones), date-fns. Va
 
 ## Fechamento mensal do financeiro (Fase 1 pronta)
 
-Fluxo: rascunho → em revisão (valores congelados) → fechado → faturamento liberado. Coleções: `fechamentos/{YYYY-MM}`
-(+ subcoleção `historico`, auditoria com quem/quando/motivo), `fechamentoItens` (detalhe por consultor) e
-`fechamentoParceiros/{YYYY-MM_parceiraId}` (um por empresa parceira, com os recursos dentro). Após "Liberar
-faturamento", o **responsável da parceira** confirma que recebeu/leu (ciência) e depois confirma ou contesta os valores.
+Fluxo **por parceira** (cada uma tem botões próprios; próprios não têm etapas, só relatório): rascunho → em revisão
+(valores congelados) → fechado → faturamento liberado (`FechamentoParceiro.etapa`; `etapaDaParceira` cobre docs antigos
+do mês inteiro). Coleções: `fechamentos/{YYYY-MM}` (só a subcoleção `historico`, auditoria com quem/quando/motivo/parceira),
+`fechamentoItens` (detalhe por consultor) e `fechamentoParceiros/{YYYY-MM_parceiraId}` (um por empresa parceira, com os
+recursos dentro). Após "Liberar faturamento" da parceira, **cada consultor terceiro confirma/contesta as próprias horas**
+no login dele (perfil `consultor`, tela `/meu-fechamento`, só aparece se ele tiver item liberado); o status fica em
+`FechamentoParceiro.statusConsultores` (recursoId → status) e a parceira só segue para a NF quando todos confirmam
+(`confirmacaoDaParceira`); uma contestação trava até o Financeiro reabrir/ajustar. O Financeiro pode "Confirmar em nome"
+de quem não tem acesso. O responsável da parceira só acompanha e envia a NF (docs antigos ainda usam ciência + confirmação dele).
 Divergências: bloqueantes (lançamentos sem aprovação) e alertas. O prazo "dia 1 a 10 do mês seguinte" é só referência
 visual: **não existe regra de data limite**. Lógica em `src/lib/fechamento.ts` e `fechamentoDb.ts`; tela em
 `src/app/financeiro/fechamentos`.

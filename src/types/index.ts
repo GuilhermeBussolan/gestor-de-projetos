@@ -525,7 +525,13 @@ export interface FechamentoParceiro {
   anexos?: ArquivoFechamento[];
   /** true depois de "Liberar faturamento" — só então o responsável da parceira enxerga. */
   liberado: boolean;
-  /** Confirmação de que o responsável recebeu e leu o fechamento. */
+  /**
+   * Confirmação de cada consultor terceiro da parceira (recursoId -> status), feita por ele mesmo no login dele.
+   * A parceira só segue para a nota fiscal quando todos confirmam; se qualquer um contestar, ela trava até o
+   * Financeiro resolver. Documentos antigos não têm o campo (a confirmação era do responsável, em "confirmacao").
+   */
+  statusConsultores?: Record<string, StatusConfirmacaoFechamento>;
+  /** Confirmação de que o responsável recebeu e leu o fechamento (fluxo antigo). */
   ciencia: { em: number | null; porNome?: string | null };
   /** Confirmação (ou contestação) dos valores; só depois da ciência. */
   confirmacao: ConfirmacaoFechamento;

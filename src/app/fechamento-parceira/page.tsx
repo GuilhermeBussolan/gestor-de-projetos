@@ -9,6 +9,7 @@ import { NotaFiscalParceira } from "@/components/financeiro/NotaFiscalParceira";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFechamentoParceira } from "@/lib/useFechamentoParceira";
 import { registrarCiencia, responderConfirmacao } from "@/lib/fechamentoDb";
+import { confirmacaoDaParceira } from "@/lib/fechamentoNf";
 import { dataBR } from "@/lib/fechamento";
 import { formatarHoras } from "@/lib/horas";
 import type { FechamentoParceiro } from "@/types";
@@ -20,23 +21,35 @@ const nomeMes = (mesAno: string) => {
   return t.charAt(0).toUpperCase() + t.slice(1);
 };
 
+const CHIP_CONSULTOR = {
+  pendente: { label: "Aguardando", bg: "#fff2de", text: "#a4650d" },
+  confirmado: { label: "Confirmou", bg: "#e3f5ea", text: "#15754c" },
+  contestado: { label: "Contestou", bg: "#fdeceb", text: "#b5392a" },
+  nao_aplicavel: { label: "—", bg: "transparent", text: "#8b94ad" },
+} as const;
+
 function situacao(f: FechamentoParceiro): { label: string; bg: string; text: string } {
-  if (f.confirmacao.status === "confirmado") return { label: "Confirmado", bg: "#e3f5ea", text: "#15754c" };
-  if (f.confirmacao.status === "contestado") return { label: "Contestado — em análise", bg: "#fdeceb", text: "#b5392a" };
+  const conf = confirmacaoDaParceira(f).status;
+  if (conf === "confirmado") return { label: f.statusConsultores ? "Todos confirmaram" : "Confirmado", bg: "#e3f5ea", text: "#15754c" };
+  if (conf === "contestado") return { label: "Contestado — em análise", bg: "#fdeceb", text: "#b5392a" };
+  if (f.statusConsultores) return { label: "Aguardando os consultores confirmarem", bg: "#fff2de", text: "#a4650d" };
   if (!f.ciencia?.em) return { label: "Aguardando confirmar o recebimento", bg: "#fff2de", text: "#a4650d" };
   return { label: "Aguardando confirmar os valores", bg: "#fff2de", text: "#a4650d" };
 }
 
 function CartaoMes({ f }: { f: FechamentoParceiro }) {
   const { usuario } = useAuth();
-  const ciente = !!f.ciencia?.em;
-  const [aberto, setAberto] = useState(f.confirmacao.status === "pendente");
+  // Fluxo atual: cada consultor confirma as próprias horas (statusConsultores); aqui o responsável só acompanha e envia a NF.
+  const porConsultor = !!f.statusConsultores;
+  const ciente = porConsultor || !!f.ciencia?.em;
+  const conf = confirmacaoDaParceira(f);
+  const [aberto, setAberto] = useState(conf.status === "pendente" || conf.status === "confirmado");
   const [recursosAbertos, setRecursosAbertos] = useState<Set<string>>(new Set());
   const [acao, setAcao] = useState<"confirmar" | "contestar" | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
   const cfg = situacao(f);
-  const podeResponder = ciente && (f.confirmacao.status === "pendente" || f.confirmacao.status === "contestado");
+  const podeResponder = !porConsultor && ciente && (conf.status === "pendente" || conf.status === "contestado");
 
   async function confirmarRecebimento() {
     if (!usuario) return;
@@ -90,8 +103,8 @@ function CartaoMes({ f }: { f: FechamentoParceiro }) {
 
       {aberto && (
         <div className="space-y-4 border-t border-brand-border-soft px-5 py-4">
-          {/* Passo 1 — recebimento */}
-          <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${ciente ? "border-[#b9e2cb] bg-[#f1faf5]" : "border-[#f0c48a] bg-[#fff8ec]"}`}>
+          {/* Passo 1 — recebimento (fluxo antigo: o responsável confirmava pela empresa) */}
+          {!porConsultor && <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${ciente ? "border-[#b9e2cb] bg-[#f1faf5]" : "border-[#f0c48a] bg-[#fff8ec]"}`}>
             <div className="text-[13px]">
               <p className={`font-bold ${ciente ? "text-[#15754c]" : "text-[#a4650d]"}`}>1. Recebimento e leitura</p>
               <p className="text-brand-muted">
@@ -106,11 +119,13 @@ function CartaoMes({ f }: { f: FechamentoParceiro }) {
                 {processando ? "Registrando..." : "Recebi e li"}
               </Button>
             )}
-          </div>
+          </div>}
 
           {/* Consultores da parceira */}
           <div>
-            <p className="mb-2 text-[13px] font-bold text-brand-navy-2">2. Confira as horas e os valores</p>
+            <p className="mb-2 text-[13px] font-bold text-brand-navy-2">
+              {porConsultor ? "Confirmação de cada consultor (cada um confirma as próprias horas no login dele)" : "2. Confira as horas e os valores"}
+            </p>
             <div className="divide-y divide-brand-border-soft overflow-hidden rounded-xl border border-brand-border">
               {f.recursos.map((r) => {
                 const abertoR = recursosAbertos.has(r.recursoId);
@@ -131,6 +146,17 @@ function CartaoMes({ f }: { f: FechamentoParceiro }) {
                       <span className="flex items-center gap-1.5 text-[13px] font-semibold text-brand-navy-2">
                         {abertoR ? <ChevronDown size={14} className="text-brand-faint" /> : <ChevronRight size={14} className="text-brand-faint" />}
                         {r.recursoNome}
+                        {f.statusConsultores && (
+                          <span
+                            className="ml-2 rounded-full px-2 py-0.5 text-[10.5px] font-bold"
+                            style={{
+                              backgroundColor: CHIP_CONSULTOR[f.statusConsultores[r.recursoId] ?? "pendente"].bg,
+                              color: CHIP_CONSULTOR[f.statusConsultores[r.recursoId] ?? "pendente"].text,
+                            }}
+                          >
+                            {CHIP_CONSULTOR[f.statusConsultores[r.recursoId] ?? "pendente"].label}
+                          </span>
+                        )}
                       </span>
                       <span className="text-[12.5px] text-brand-muted">
                         {r.lancamentos.length} lançamento{r.lancamentos.length === 1 ? "" : "s"} · {formatarHoras(r.horas)} ·{" "}
@@ -171,14 +197,21 @@ function CartaoMes({ f }: { f: FechamentoParceiro }) {
             </div>
           </div>
 
-          {f.confirmacao.status === "confirmado" && (
+          {conf.status === "confirmado" && (
             <p className="text-[12.5px] text-[#15754c]">
-              Valores confirmados por {f.confirmacao.porNome ?? "você"}
-              {f.confirmacao.em ? ` em ${dataHora(f.confirmacao.em)}` : ""}. O próximo passo é enviar a nota fiscal.
+              {porConsultor ? "Todos os consultores confirmaram as horas." : `Valores confirmados por ${conf.porNome ?? "você"}${conf.em ? ` em ${dataHora(conf.em)}` : ""}.`} O próximo passo é enviar a nota fiscal.
+            </p>
+          )}
+          {porConsultor && conf.status === "pendente" && (
+            <p className="text-[12.5px] text-brand-muted">A nota fiscal poderá ser enviada assim que todos os consultores confirmarem as próprias horas.</p>
+          )}
+          {porConsultor && conf.status === "contestado" && (
+            <p className="rounded-md bg-[#fdeceb] px-3 py-2 text-[12.5px] text-[#b5392a]">
+              Um consultor contestou as horas. O Financeiro vai analisar e, se preciso, reabrir e reenviar o fechamento.
             </p>
           )}
           <NotaFiscalParceira f={f} />
-          {f.confirmacao.status === "contestado" && f.confirmacao.motivo && (
+          {!porConsultor && conf.status === "contestado" && f.confirmacao.motivo && (
             <p className="rounded-md bg-[#fdeceb] px-3 py-2 text-[12.5px] text-[#b5392a]">
               <strong>Sua contestação:</strong> {f.confirmacao.motivo}
             </p>
@@ -186,7 +219,7 @@ function CartaoMes({ f }: { f: FechamentoParceiro }) {
           {erro && <p className="text-[12.5px] font-semibold text-red-600">{erro}</p>}
 
           <div className="flex flex-wrap items-center justify-end gap-2.5">
-            {!ciente && <span className="mr-auto text-[12.5px] text-brand-faint">Confirme o recebimento (passo 1) para poder confirmar ou contestar os valores.</span>}
+            {!ciente && !porConsultor && <span className="mr-auto text-[12.5px] text-brand-faint">Confirme o recebimento (passo 1) para poder confirmar ou contestar os valores.</span>}
             {podeResponder && (
               <>
                 <span className="mr-auto text-[12.5px] text-brand-muted">Se estiver de acordo, confirme; se houver erro, conteste explicando.</span>
@@ -196,7 +229,7 @@ function CartaoMes({ f }: { f: FechamentoParceiro }) {
                 </Button>
                 <Button onClick={() => setAcao("confirmar")}>
                   <CheckCircle2 size={15} />
-                  {f.confirmacao.status === "contestado" ? "Confirmar mesmo assim" : "Confirmar valores"}
+                  {conf.status === "contestado" ? "Confirmar mesmo assim" : "Confirmar valores"}
                 </Button>
               </>
             )}
@@ -233,8 +266,8 @@ function FechamentoParceiraContent() {
     <div>
       <h1 className="mb-1 text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Fechamento da parceira</h1>
       <p className="mb-5 text-sm text-brand-muted">
-        Quando o faturamento do mês é liberado, você confirma que recebeu e leu, confere as horas e os valores dos consultores da sua empresa e
-        confirma (ou contesta). Depois da confirmação, o Financeiro solicita a nota fiscal.
+        Quando o faturamento do mês é liberado, cada consultor da sua empresa confere e confirma as próprias horas no login dele. Você acompanha quem
+        já confirmou e, quando todos confirmarem, envia a nota fiscal.
       </p>
       {pendentes > 0 && (
         <p className="mb-4 rounded-md bg-[#fff2de] p-3 text-[13px] font-semibold text-[#a4650d]">

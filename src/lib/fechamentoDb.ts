@@ -30,6 +30,9 @@ function registrar(
 const CIENCIA_VAZIA = { em: null };
 const CONFIRMACAO_PENDENTE = { status: "pendente" };
 
+/** Todos os consultores da parceira aguardando a própria confirmação (recursoId -> "pendente"). */
+const todosPendentes = (recursos: { recursoId: string }[]) => Object.fromEntries(recursos.map((r) => [r.recursoId, "pendente"]));
+
 /** Ids dos itens (um por consultor) que já estão gravados para a parceira. */
 const idsDosItens = (mesAno: string, f: FechamentoParceiro | null | undefined) => (f?.recursos ?? []).map((r) => idItemFechamento(mesAno, r.recursoId));
 
@@ -56,8 +59,8 @@ export async function enviarParceiraParaRevisao({
   const lote = writeBatch(db);
   idsDosItens(mesAno, atual).forEach((id) => lote.delete(doc(db, "fechamentoItens", id)));
   for (const item of itens) {
-    // A conferência é da parceira (grupo), não de cada consultor: o item só guarda o detalhe.
-    lote.set(doc(db, "fechamentoItens", item.id), limpar({ ...item, liberado: false, confirmacao: { status: "nao_aplicavel" } }));
+    // Cada consultor terceiro confirma as próprias horas (depois de liberado): o item guarda o detalhe e a resposta dele.
+    lote.set(doc(db, "fechamentoItens", item.id), limpar({ ...item, liberado: false, confirmacao: CONFIRMACAO_PENDENTE }));
   }
   const de: StatusFechamento | null = atual ? (atual.etapa ?? "em_revisao") : null;
   lote.set(
@@ -65,6 +68,7 @@ export async function enviarParceiraParaRevisao({
     limpar({
       ...parceiro,
       etapa: "em_revisao",
+      statusConsultores: todosPendentes(parceiro.recursos),
       liberado: false,
       ciencia: CIENCIA_VAZIA,
       confirmacao: CONFIRMACAO_PENDENTE,
@@ -121,11 +125,12 @@ export async function reabrirParceira({
   motivo: string;
 }) {
   const lote = writeBatch(db);
-  idsDosItens(mesAno, atual).forEach((id) => lote.set(doc(db, "fechamentoItens", id), { liberado: false }, { merge: true }));
+  idsDosItens(mesAno, atual).forEach((id) => lote.set(doc(db, "fechamentoItens", id), { liberado: false, confirmacao: CONFIRMACAO_PENDENTE }, { merge: true }));
   lote.update(
     doc(db, "fechamentoParceiros", atual.id),
     limpar({
       etapa: "em_revisao",
+      statusConsultores: todosPendentes(atual.recursos),
       liberado: false,
       ciencia: CIENCIA_VAZIA,
       confirmacao: CONFIRMACAO_PENDENTE,
@@ -193,4 +198,33 @@ export async function responderConfirmacao({
   await updateDoc(doc(db, "fechamentoParceiros", id), {
     confirmacao: limpar({ status: decisao, porNome: nome, em: Date.now(), motivo: motivo?.trim() || null }),
   });
+}
+
+/**
+ * O consultor terceiro confirma (ou contesta, com motivo) as próprias horas do mês, no login dele. Grava a resposta no
+ * item dele e o status na parceira (que só avança para a nota fiscal quando todos confirmam; uma contestação trava).
+ * O Financeiro pode registrar a confirmação em nome de um consultor que não tem login (`nome` traz quem fez isso).
+ */
+export async function responderConfirmacaoConsultor({
+  mesAno,
+  recursoId,
+  parceiraDocId,
+  decisao,
+  nome,
+  motivo,
+}: {
+  mesAno: string;
+  recursoId: string;
+  /** Id do documento da parceira ("YYYY-MM_parceiraId"). */
+  parceiraDocId: string;
+  decisao: "confirmado" | "contestado";
+  nome: string;
+  motivo?: string;
+}) {
+  const lote = writeBatch(db);
+  lote.update(doc(db, "fechamentoItens", idItemFechamento(mesAno, recursoId)), {
+    confirmacao: limpar({ status: decisao, porNome: nome, em: Date.now(), motivo: motivo?.trim() || null }),
+  });
+  lote.update(doc(db, "fechamentoParceiros", parceiraDocId), { [`statusConsultores.${recursoId}`]: decisao });
+  await lote.commit();
 }

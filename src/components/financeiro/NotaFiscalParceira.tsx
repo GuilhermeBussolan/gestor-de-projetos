@@ -8,7 +8,7 @@ import { LinkArquivo } from "@/components/financeiro/LinkArquivo";
 import { useAuth } from "@/contexts/AuthContext";
 import { enviarNotaFiscal } from "@/lib/fechamentoNfDb";
 import { MENSAGEM_ERRO_ARQUIVO, TAMANHO_MAXIMO_BYTES } from "@/lib/arquivosFechamento";
-import { situacaoDaParceira, totalPago } from "@/lib/fechamentoNf";
+import { confirmacaoDaParceira, situacaoDaParceira, totalPago } from "@/lib/fechamentoNf";
 import type { FechamentoParceiro } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -29,7 +29,7 @@ export function NotaFiscalParceira({ f }: { f: FechamentoParceiro }) {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
 
-  if (f.confirmacao.status !== "confirmado") return null;
+  if (confirmacaoDaParceira(f).status !== "confirmado") return null;
   const situacao = situacaoDaParceira(f);
   const podeEnviar = !f.nf || f.nf.status === "rejeitada";
   const pagamentos = f.pagamentos ?? [];

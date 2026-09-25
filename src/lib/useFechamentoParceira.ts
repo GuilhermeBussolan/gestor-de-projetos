@@ -18,7 +18,12 @@ export function useFechamentoParceira(usuario: Usuario | null) {
     [ativo, usuario?.parceiraId]
   );
   const itens = ativo ? [...data].sort((a, b) => b.mesAno.localeCompare(a.mesAno)) : [];
-  // Pede uma ação dele: ciência/confirmação dos valores, ou enviar (ou reenviar) a nota fiscal.
-  const pendentes = itens.filter((i) => ["aguardando_ciencia", "aguardando_confirmacao", "aguardando_nf", "nf_rejeitada"].includes(situacaoDaParceira(i))).length;
+  // Pede uma ação dele: enviar (ou reenviar) a nota fiscal. Nos fechamentos antigos, também a ciência e a confirmação dos valores
+  // (no fluxo atual quem confirma é cada consultor, e o responsável só acompanha).
+  const pendentes = itens.filter((i) => {
+    const s = situacaoDaParceira(i);
+    if (s === "aguardando_nf" || s === "nf_rejeitada") return true;
+    return !i.statusConsultores && (s === "aguardando_ciencia" || s === "aguardando_confirmacao");
+  }).length;
   return { itens, pendentes, loading, erro };
 }

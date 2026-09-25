@@ -8,7 +8,7 @@ import { LinkArquivo } from "@/components/financeiro/LinkArquivo";
 import { RegistrarPagamentoModal } from "@/components/financeiro/RegistrarPagamentoModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatarHoras } from "@/lib/horas";
-import { diferencaPagamento, pagamentoAtrasado, situacaoDaParceira, totalPago, vencimentoDoMes } from "@/lib/fechamentoNf";
+import { confirmacaoDaParceira, diferencaPagamento, pagamentoAtrasado, situacaoDaParceira, totalPago, vencimentoDoMes } from "@/lib/fechamentoNf";
 import { rejeitarNotaFiscal, removerPagamento, validarNotaFiscal } from "@/lib/fechamentoNfDb";
 import type { FechamentoParceiro } from "@/types";
 
@@ -40,7 +40,7 @@ export function PainelParceiroFinanceiro({ f, hojeIso, onDocumentoFaturamento }:
   const atrasado = pagamentoAtrasado(f, hojeIso);
   const conciliar = pagamentos.length > 0 && Math.abs(dif) > 0.005 && situacao === "encerrado";
 
-  if (!f.liberado || f.confirmacao.status !== "confirmado") {
+  if (!f.liberado || confirmacaoDaParceira(f).status !== "confirmado") {
     return (
       <div className="border-t border-brand-border-soft px-4 py-2.5 text-[12px] text-brand-faint">
         A nota fiscal só é solicitada depois que a parceira confirmar os valores.
