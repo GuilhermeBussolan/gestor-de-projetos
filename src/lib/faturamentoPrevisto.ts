@@ -13,11 +13,11 @@ export type TipoItemFaturamento = "previsto" | "liberado" | "faturado" | "recebi
 export const TIPOS_ITEM_ORDEM: TipoItemFaturamento[] = ["previsto", "liberado", "faturado", "recebido", "cancelado"];
 
 export const TIPO_ITEM_CONFIG: Record<TipoItemFaturamento, { label: string; cor: string; bg: string; text: string }> = {
-  // Previsto em cinza claro; o realizado (liberado, faturado e recebido) fica na família do azul.
+  // Previsto em cinza claro; Liberado #00B0F0 e Recebido #00B050 (cores definidas pelo usuário); Faturado em azul escuro.
   previsto: { label: "Previsto", cor: "#D9D9D9", bg: "#f1f1f1", text: "#6b6b6b" },
-  liberado: { label: "Liberado", cor: "#2f6fe4", bg: "#e8efff", text: "#2456b8" },
+  liberado: { label: "Liberado", cor: "#00B0F0", bg: "#e0f6fe", text: "#0079a8" },
   faturado: { label: "Faturado", cor: "#1f4fae", bg: "#dfe8fb", text: "#1c4a9e" },
-  recebido: { label: "Recebido", cor: "#152849", bg: "#e6eaf2", text: "#152849" },
+  recebido: { label: "Recebido", cor: "#00B050", bg: "#e0f7ea", text: "#007a38" },
   cancelado: { label: "Cancelado", cor: "#b5392a", bg: "#fdeceb", text: "#b5392a" },
 };
 
