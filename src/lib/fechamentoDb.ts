@@ -1,7 +1,7 @@
 import { collection, doc, getDocs, query, updateDoc, where, writeBatch, type WriteBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { totaisPorTipo, type ItemBase, type ParceiroBase } from "@/lib/fechamento";
-import type { Fechamento, StatusFechamento } from "@/types";
+import type { ArquivoFechamento, Fechamento, StatusFechamento } from "@/types";
 
 export interface Ator {
   uid: string;
@@ -148,7 +148,18 @@ export async function reabrir({ mesAno, de, ator, motivo }: { mesAno: string; de
 }
 
 /** Fechado -> faturado: libera o faturamento e o item de cada terceiro para a conferência dele. */
-export async function liberarFaturamento({ mesAno, ator, observacao }: { mesAno: string; ator: Ator; observacao?: string }) {
+export async function liberarFaturamento({
+  mesAno,
+  ator,
+  observacao,
+  anexos,
+}: {
+  mesAno: string;
+  ator: Ator;
+  observacao?: string;
+  /** Documentos complementares já enviados ao Storage. */
+  anexos?: ArquivoFechamento[];
+}) {
   const lote = writeBatch(db);
   (await itensDoMes(mesAno)).forEach((d) => lote.update(d.ref, { liberado: true }));
   (await parceirosDoMes(mesAno)).forEach((d) => lote.update(d.ref, { liberado: true }));
@@ -160,6 +171,7 @@ export async function liberarFaturamento({ mesAno, ator, observacao }: { mesAno:
       liberadoPorId: ator.uid,
       liberadoPorNome: ator.nomeCompleto,
       observacaoLiberacao: observacao?.trim() || null,
+      anexos: anexos ?? [],
       atualizadoEm: Date.now(),
     }),
     { merge: true }

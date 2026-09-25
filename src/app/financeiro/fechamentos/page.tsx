@@ -11,6 +11,12 @@ import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal";
+import { LinkArquivo } from "@/components/financeiro/LinkArquivo";
+import { PainelParceiroFinanceiro } from "@/components/financeiro/PainelParceiroFinanceiro";
+import { enviarArquivo, MENSAGEM_ERRO_ARQUIVO } from "@/lib/arquivosFechamento";
+import { SITUACAO_PARCEIRO_CONFIG, situacaoDaParceira, type SituacaoParceiro } from "@/lib/fechamentoNf";
+import { exportarNfsPendentes, exportarPagamentosAtrasados } from "@/lib/relatorioPendencias";
+import { Select } from "@/components/ui/Field";
 import { formatarHoras } from "@/lib/horas";
 import {
   ETAPAS_FECHAMENTO,
@@ -104,7 +110,23 @@ function CartaoTotais({ titulo, horas, valor, detalhe, destaque }: { titulo: str
 /** Item do fechamento: congelado (com confirmação) ou calculado ao vivo (sem). */
 type ItemExibido = ItemBase & Partial<Pick<ItemFechamento, "liberado" | "confirmacao">>;
 
-function TabelaItens({ itens, parceirosSalvos, mostrarConfirmacao }: { itens: ItemExibido[]; parceirosSalvos: FechamentoParceiro[]; mostrarConfirmacao: boolean }) {
+function TabelaItens({
+  itens,
+  parceirosSalvos,
+  mostrarConfirmacao,
+  hojeIso,
+  filtroTipo,
+  filtroSituacao,
+  onDocumento,
+}: {
+  itens: ItemExibido[];
+  parceirosSalvos: FechamentoParceiro[];
+  mostrarConfirmacao: boolean;
+  hojeIso: string;
+  filtroTipo: "" | "proprio" | "terceiro";
+  filtroSituacao: "" | SituacaoParceiro;
+  onDocumento: (parceiro: FechamentoParceiro) => void;
+}) {
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
   const alternar = (id: string) =>
     setAbertos((p) => {
@@ -191,6 +213,10 @@ function TabelaItens({ itens, parceirosSalvos, mostrarConfirmacao }: { itens: It
           parceiro: parceirosSalvos.find((x) => x.parceiraId === (lista[0]?.parceiraId ?? "sem_parceira")),
         }))].map(
         ({ titulo, lista, parceiro }) => {
+          // Filtros: tipo de consultor (próprio/terceiro) e situação de NF/pagamento (só faz sentido para terceiros).
+          if (!parceiro && filtroTipo === "terceiro") return null;
+          if (parceiro && filtroTipo === "proprio") return null;
+          if (filtroSituacao && (!parceiro || situacaoDaParceira(parceiro) !== filtroSituacao)) return null;
           const s = subtotal(lista);
           const ciente = !!parceiro?.ciencia?.em;
           const conf = parceiro ? CONFIRMACAO[parceiro.confirmacao.status] : null;
@@ -211,6 +237,17 @@ function TabelaItens({ itens, parceirosSalvos, mostrarConfirmacao }: { itens: It
                       <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: conf.bg, color: conf.text }}>
                         {parceiro.confirmacao.status === "pendente" ? "Valores a confirmar" : conf.label}
                       </span>
+                      {parceiro.confirmacao.status === "confirmado" && (
+                        <span
+                          className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+                          style={{
+                            backgroundColor: SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].bg,
+                            color: SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].text,
+                          }}
+                        >
+                          {SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].label}
+                        </span>
+                      )}
                     </>
                   )}
                 </div>
@@ -236,6 +273,7 @@ function TabelaItens({ itens, parceirosSalvos, mostrarConfirmacao }: { itens: It
                   )}
                 </tbody>
               </table>
+              {mostrarConfirmacao && parceiro && <PainelParceiroFinanceiro f={parceiro} hojeIso={hojeIso} onDocumentoFaturamento={() => onDocumento(parceiro)} />}
             </div>
           );
         }
@@ -259,6 +297,9 @@ function FechamentosPageContent() {
   const { data: parceirosSalvos } = useCollection<FechamentoParceiro>("fechamentoParceiros", [where("mesAno", "==", mesAno)], true, [mesAno]);
   const { data: historico } = useCollection<HistoricoFechamento>(`fechamentos/${mesAno}/historico`, [orderBy("em", "desc")], true, [mesAno]);
 
+  const { data: todosParceiros } = useCollection<FechamentoParceiro>("fechamentoParceiros", []);
+  const [filtroTipo, setFiltroTipo] = useState<"" | "proprio" | "terceiro">("");
+  const [filtroSituacao, setFiltroSituacao] = useState<"" | SituacaoParceiro>("");
   const [acao, setAcao] = useState<Acao | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
@@ -304,7 +345,7 @@ function FechamentosPageContent() {
   const parceirosContestados = parceirosSalvos.filter((x) => x.confirmacao.status === "contestado").length;
   const parceirosConfirmados = parceirosSalvos.filter((x) => x.confirmacao.status === "confirmado").length;
 
-  async function executar(texto: string) {
+  async function executar(texto: string, arquivos: File[] = []) {
     if (!acao || !ator) return;
     setProcessando(true);
     setErro("");
@@ -313,12 +354,21 @@ function FechamentosPageContent() {
         await enviarParaRevisao({ mesAno, atual: fechamento, itens: itensVivos, parceiros: parceirosVivos, ator, motivo: texto });
       } else if (acao.tipo === "rascunho") await voltarParaRascunho({ mesAno, ator, motivo: texto });
       else if (acao.tipo === "fechar") await fechar({ mesAno, ator, justificativa: texto });
-      else if (acao.tipo === "liberar") await liberarFaturamento({ mesAno, ator, observacao: texto });
+      else if (acao.tipo === "liberar") {
+        let anexos: Awaited<ReturnType<typeof enviarArquivo>>[] = [];
+        try {
+          anexos = await Promise.all(arquivos.map((a) => enviarArquivo({ mesAno, parceiraId: null, tipo: "anexo", autorUid: ator.uid }, a)));
+        } catch (err) {
+          console.error("Erro ao anexar documentos:", err);
+          throw new Error(err instanceof Error && err.message.includes("3 MB") ? err.message : MENSAGEM_ERRO_ARQUIVO);
+        }
+        await liberarFaturamento({ mesAno, ator, observacao: texto, anexos });
+      }
       else await reabrir({ mesAno, de: status, ator, motivo: texto });
       setAcao(null);
     } catch (err) {
       console.error("Erro na ação do fechamento:", err);
-      setErro("Não foi possível concluir a ação. Confira se as regras do Firestore foram publicadas e tente de novo.");
+      setErro(err instanceof Error && (err.message === MENSAGEM_ERRO_ARQUIVO || err.message.includes("3 MB")) ? err.message : "Não foi possível concluir a ação. Confira se as regras do Firestore foram publicadas e tente de novo.");
       setAcao(null);
     } finally {
       setProcessando(false);
@@ -338,6 +388,24 @@ function FechamentosPageContent() {
       setErro("Não foi possível gerar o arquivo. Tente de novo.");
     } finally {
       setExportando(null);
+    }
+  }
+
+  /** Documento de faturamento de uma parceira: os lançamentos dos recursos dela no mês (PDF). */
+  async function gerarDocumentoParceira(parceiro: FechamentoParceiro) {
+    setErro("");
+    try {
+      const doParceiro = linhasDosItens(itensSalvos).filter((l) => parceiro.recursos.some((r) => r.recursoId === l.recursoId));
+      const escopo = {
+        rotulo: parceiro.parceiraNome,
+        cnpj: parceiras.find((p) => p.id === parceiro.parceiraId)?.cnpj,
+        incluirVinculo: false,
+        incluirDesconto: temDesconto(doParceiro),
+      };
+      await exportarFechamentoPdf(doParceiro, escopo, mesAno, "/logo-navy.png");
+    } catch (err) {
+      console.error("Erro ao gerar o documento de faturamento:", err);
+      setErro("Não foi possível gerar o documento. Tente de novo.");
     }
   }
 
@@ -375,12 +443,13 @@ function FechamentosPageContent() {
       rotulo={
         { revisao: "Observação (opcional)", atualizar: "Observação (opcional)", rascunho: "Motivo", fechar: bloqueantes.length > 0 ? "Justificativa" : "Observação (opcional)", liberar: "Observação da liberação (opcional)", reabrir: "Motivo da reabertura" }[acao.tipo]
       }
+      permitirAnexos={acao.tipo === "liberar"}
       obrigatorio={acao.tipo === "rascunho" || acao.tipo === "reabrir" || (acao.tipo === "fechar" && bloqueantes.length > 0)}
       confirmar={{ revisao: "Enviar para revisão", atualizar: "Atualizar valores", rascunho: "Voltar para rascunho", fechar: "Fechar", liberar: "Liberar faturamento", reabrir: "Reabrir" }[acao.tipo]}
       perigo={acao.tipo === "reabrir" || acao.tipo === "rascunho"}
       processando={processando}
       onCancelar={() => setAcao(null)}
-      onConfirmar={executar}
+      onConfirmar={(texto, arquivos) => executar(texto, arquivos)}
     />
   );
 
@@ -509,6 +578,17 @@ function FechamentosPageContent() {
         </p>
       )}
 
+      {status === "faturado" && fechamento?.anexos && fechamento.anexos.length > 0 && (
+        <div className="mb-4 rounded-md bg-brand-hover p-3 text-[12.5px] text-brand-muted">
+          <strong className="text-brand-navy-2">Documentos complementares:</strong>
+          <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
+            {fechamento.anexos.map((a) => (
+              <LinkArquivo key={a.path} arquivo={a} />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <CartaoTotais
           titulo={`Total — ${mes}/${ano}`}
@@ -568,7 +648,61 @@ function FechamentosPageContent() {
         </div>
       </div>
 
-      <TabelaItens itens={itensExibidos} parceirosSalvos={parceirosSalvos} mostrarConfirmacao={status === "faturado"} />
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-end gap-2.5">
+          <div className="w-44">
+            <label className="mb-1 block text-[12px] font-bold text-brand-navy-2">Tipo de consultor</label>
+            <Select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value as "" | "proprio" | "terceiro")}>
+              <option value="">Todos</option>
+              <option value="proprio">Próprios</option>
+              <option value="terceiro">Terceiros</option>
+            </Select>
+          </div>
+          <div className="w-56">
+            <label className="mb-1 block text-[12px] font-bold text-brand-navy-2">Situação da NF / pagamento</label>
+            <Select value={filtroSituacao} onChange={(e) => setFiltroSituacao(e.target.value as "" | SituacaoParceiro)}>
+              <option value="">Todas</option>
+              {(Object.keys(SITUACAO_PARCEIRO_CONFIG) as SituacaoParceiro[]).map((s) => (
+                <option key={s} value={s}>
+                  {SITUACAO_PARCEIRO_CONFIG[s].label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {(filtroTipo || filtroSituacao) && (
+            <button
+              type="button"
+              onClick={() => {
+                setFiltroTipo("");
+                setFiltroSituacao("");
+              }}
+              className="mb-2.5 text-[12.5px] font-semibold text-brand-accent hover:underline"
+            >
+              Limpar filtros
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" disabled={todosParceiros.length === 0} onClick={() => exportarNfsPendentes(todosParceiros)} className="h-9 px-3.5 text-[13px]">
+            <FileDown size={15} />
+            NFs pendentes
+          </Button>
+          <Button variant="secondary" disabled={todosParceiros.length === 0} onClick={() => exportarPagamentosAtrasados(todosParceiros, hojeIso)} className="h-9 px-3.5 text-[13px]">
+            <FileDown size={15} />
+            Pagamentos atrasados
+          </Button>
+        </div>
+      </div>
+
+      <TabelaItens
+        itens={itensExibidos}
+        parceirosSalvos={parceirosSalvos}
+        mostrarConfirmacao={status === "faturado"}
+        hojeIso={hojeIso}
+        filtroTipo={filtroTipo}
+        filtroSituacao={filtroSituacao}
+        onDocumento={gerarDocumentoParceira}
+      />
 
       {/* Auditoria */}
       <div className="mt-6 rounded-2xl border border-brand-border bg-white p-4 shadow-card">

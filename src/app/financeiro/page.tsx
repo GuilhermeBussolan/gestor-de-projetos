@@ -6,6 +6,10 @@ import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { AlterarStatusParcelaModal } from "@/components/financeiro/AlterarStatusParcelaModal";
 import { CartaoParcelasProjeto } from "@/components/financeiro/CartaoParcelasProjeto";
+import { GraficoPizzaLiotNg } from "@/components/financeiro/GraficoPizzaLiotNg";
+import { gerarParcelaBancoDeHoras, horasApontadasNoMes } from "@/lib/bancoHoras";
+import { segmentarLiotNg } from "@/lib/segmentacaoLiotNg";
+import { Input } from "@/components/ui/Field";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
 import { alterarStatusParcela, type DadosStatusParcela } from "@/lib/parcela";
 import { statusEfetivo } from "@/lib/statusHora";
@@ -22,6 +26,14 @@ function FinanceiroPageContent() {
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: recursos } = useCollection<Recurso>("recursos");
   const { data: eventos } = useCollection<EventoCalendario>("eventosCalendario", []);
+  // Mês de referência do banco de horas (padrão: o mês anterior, que é o que se fatura agora).
+  const [mesBanco, setMesBanco] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const segmentacao = useMemo(() => segmentarLiotNg(projetos), [projetos]);
   // Cards de projeto recolhidos por padrão (a tela fica compacta); o usuário abre o que precisa.
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
   const todosAbertos = projetos.length > 0 && abertos.size >= projetos.length;
@@ -145,6 +157,8 @@ function FinanceiroPageContent() {
         </div>
       </div>
 
+      <GraficoPizzaLiotNg dados={segmentacao} />
+
       <div className="mb-4 text-[15px] font-extrabold text-brand-navy-2">Recebido × pago aos recursos</div>
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-brand-border bg-white p-4 shadow-card">
@@ -164,7 +178,15 @@ function FinanceiroPageContent() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-[15px] font-extrabold text-brand-navy-2">Parcelas por projeto</div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="text-[15px] font-extrabold text-brand-navy-2">Parcelas por projeto</div>
+          {projetos.some((p) => p.financeiro?.tipoFaturamento === "banco_horas") && (
+            <label className="flex items-center gap-2 text-[12.5px] font-semibold text-brand-muted">
+              Mês do banco de horas
+              <Input type="month" value={mesBanco} onChange={(e) => e.target.value && setMesBanco(e.target.value)} className="w-40" />
+            </label>
+          )}
+        </div>
         {projetos.length > 0 && (
           <button
             type="button"
@@ -182,6 +204,22 @@ function FinanceiroPageContent() {
             projeto={p}
             cliente={clientes.find((c) => c.id === p.clienteId)}
             aberto={abertos.has(p.id)}
+            banco={
+              p.financeiro?.tipoFaturamento === "banco_horas"
+                ? {
+                    mes: mesBanco,
+                    horas: horasApontadasNoMes(eventos, p.id, mesBanco),
+                    onGerarParcela: (valor) =>
+                      gerarParcelaBancoDeHoras({
+                        projeto: p,
+                        mes: mesBanco,
+                        horas: horasApontadasNoMes(eventos, p.id, mesBanco),
+                        valorHora: p.financeiro?.valorHora ?? 0,
+                        valor,
+                      }),
+                  }
+                : undefined
+            }
             onAlternar={() => alternarCartao(p.id)}
             onMudarStatus={aoMudarStatus}
           />

@@ -60,12 +60,17 @@ export const TIPO_FATURAMENTO_CONFIG: Record<TipoFaturamento, { label: string; d
     label: "Marco de faturamento",
     descricao: "Cada parcela tem uma descrição e um valor definidos manualmente.",
   },
+  banco_horas: {
+    label: "Banco de horas",
+    descricao: "Fatura as horas apontadas no mês multiplicadas pelo valor da hora contratado.",
+  },
 };
 
 export const TIPO_FATURAMENTO_ORDEM: TipoFaturamento[] = [
   "apontamento_horas",
   "parcelado",
   "marco_faturamento",
+  "banco_horas",
 ];
 
 export const TIPO_RECURSO_CONFIG: Record<TipoRecurso, { label: string }> = {

@@ -114,15 +114,24 @@ export interface Parcela {
   dataPrevisaoFaturamento?: string | null;
   previsaoAtualizadaEm?: number | null;
   previsaoAtualizadaPor?: string | null;
+  /** Só no banco de horas: mês (YYYY-MM) e horas/valor-hora em que a parcela foi calculada. */
+  periodoReferencia?: string | null;
+  horasApontadas?: number | null;
+  valorHoraAplicado?: number | null;
 }
 
-export type TipoFaturamento = "apontamento_horas" | "parcelado" | "marco_faturamento";
+export type TipoFaturamento = "apontamento_horas" | "parcelado" | "marco_faturamento" | "banco_horas";
 
 export interface Financeiro {
   tipoFaturamento: TipoFaturamento;
+  /** Banco de horas: é o valor de venda do contrato (entra nos totais contratados). */
   valorTotal: number;
   numeroParcelas: number;
   parcelas: Parcela[];
+  /** Só no banco de horas: valor contratado da hora (R$), usado para calcular cada faturamento mensal. */
+  valorHora?: number | null;
+  /** Só no banco de horas: valor de venda do contrato (R$). */
+  valorVenda?: number | null;
 }
 
 /** ciencia: registro automático de que alguém marcado leu e ficou ciente de outro registro. */
@@ -446,6 +455,8 @@ export interface Fechamento {
   liberadoPorId?: string | null;
   liberadoPorNome?: string | null;
   observacaoLiberacao?: string | null;
+  /** Documentos complementares anexados pelo gestor ao liberar o faturamento. */
+  anexos?: ArquivoFechamento[];
 }
 
 /** Auditoria: cada mudança de status (subcoleção "fechamentos/{id}/historico"). Nunca editada. */
@@ -503,6 +514,11 @@ export interface FechamentoParceiro {
   ciencia: { em: number | null; porNome?: string | null };
   /** Confirmação (ou contestação) dos valores; só depois da ciência. */
   confirmacao: ConfirmacaoFechamento;
+  /** Nota fiscal da parceira (enviada depois da confirmação; validada pelo financeiro). */
+  nf?: NotaFiscalParceiro | null;
+  historicoNf?: EventoNf[];
+  /** Pagamentos registrados (só depois da NF validada). */
+  pagamentos?: PagamentoParceiro[];
 }
 
 /** Fechamento de um recurso no mês (coleção "fechamentoItens", id = "YYYY-MM_recursoId"): o que o terceiro confere e confirma. */
@@ -529,4 +545,56 @@ export interface ItemFechamento {
   /** true depois de "Liberar faturamento" — só então o consultor terceiro enxerga o item. */
   liberado: boolean;
   confirmacao: ConfirmacaoFechamento;
+}
+
+/** Arquivo guardado no Firebase Storage (só o caminho é gravado; o link é pedido na hora, respeitando as regras). */
+export interface ArquivoFechamento {
+  nome: string;
+  path: string;
+  tamanho: number;
+  em: number;
+}
+
+export type StatusNf = "enviada" | "validada" | "rejeitada";
+
+/** Nota fiscal que a empresa parceira envia depois de confirmar o fechamento (uma por parceira e mês). */
+export interface NotaFiscalParceiro {
+  numero: string;
+  /** Data de emissão (YYYY-MM-DD). */
+  dataEmissao: string;
+  valor: number;
+  arquivo: ArquivoFechamento | null;
+  status: StatusNf;
+  enviadoEm: number;
+  enviadoPorNome: string;
+  validadoEm?: number | null;
+  validadoPorNome?: string | null;
+  motivoRejeicao?: string | null;
+  /** O valor da NF é diferente do valor calculado do fechamento (a validação exigiu justificativa). */
+  divergenciaValor?: boolean;
+  justificativaDivergencia?: string | null;
+}
+
+/** Histórico da NF (só cresce): quando foi enviada, validada ou rejeitada, por quem e por quê. */
+export interface EventoNf {
+  acao: "enviada" | "reenviada" | "validada" | "rejeitada";
+  em: number;
+  porNome: string;
+  numero?: string | null;
+  motivo?: string | null;
+}
+
+export type FormaPagamento = "TED" | "boleto" | "cheque";
+
+export interface PagamentoParceiro {
+  id: string;
+  valor: number;
+  /** Data do pagamento (YYYY-MM-DD). */
+  data: string;
+  forma: FormaPagamento;
+  /** Número/identificação do comprovante. */
+  referencia: string;
+  comprovante?: ArquivoFechamento | null;
+  registradoEm: number;
+  registradoPorNome: string;
 }

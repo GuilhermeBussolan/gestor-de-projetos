@@ -171,9 +171,11 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdmin() || isFinanceiro();
     }
 
-    // Fechamento de cada empresa parceira no mês. Administrador/financeiro gerenciam. O responsável da
-    // parceira (perfil "responsavel_parceira") só enxerga o da própria empresa DEPOIS de liberado o
-    // faturamento e só pode registrar a ciência e confirmar/contestar (campos "ciencia" e "confirmacao").
+    // Fechamento de cada empresa parceira no mês. Administrador/financeiro gerenciam tudo (inclusive validar
+    // a nota fiscal e registrar pagamentos). O responsável da parceira (perfil "responsavel_parceira") só
+    // enxerga o da própria empresa DEPOIS de liberado o faturamento e só pode: registrar a ciência e
+    // confirmar/contestar (campos "ciencia" e "confirmacao") e, depois de confirmar, enviar a nota fiscal
+    // (campos "nf" e "historicoNf"), enquanto ela não existir ou tiver sido rejeitada.
     match /fechamentoParceiros/{fpId} {
       allow read: if isAdmin() || isFinanceiro() ||
         (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
@@ -183,10 +185,47 @@ service cloud.firestore {
         (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
           resource.data.parceiraId == meuUsuario().get('parceiraId', null) &&
           resource.data.liberado == true &&
-          resource.data.confirmacao.status in ['pendente', 'contestado'] &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ciencia', 'confirmacao']) &&
-          request.resource.data.confirmacao.status in ['pendente', 'confirmado', 'contestado'] &&
-          (request.resource.data.confirmacao.status == 'pendente' || request.resource.data.ciencia.em != null));
+          (
+            (resource.data.confirmacao.status in ['pendente', 'contestado'] &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ciencia', 'confirmacao']) &&
+              request.resource.data.confirmacao.status in ['pendente', 'confirmado', 'contestado'] &&
+              (request.resource.data.confirmacao.status == 'pendente' || request.resource.data.ciencia.em != null))
+            ||
+            (resource.data.confirmacao.status == 'confirmado' &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nf', 'historicoNf']) &&
+              request.resource.data.nf.status == 'enviada' &&
+              (resource.data.get('nf', null) == null || resource.data.nf.status == 'rejeitada'))
+          ));
+    }
+
+    // Arquivos do fechamento (NF em PDF, comprovantes e documentos complementares), guardados no próprio Firestore em
+    // partes de até ~700 KB (sem Firebase Storage). tipo: 'nf' | 'comprovante' | 'anexo'.
+    // - administrador/financeiro: tudo;
+    // - responsável da parceira: lê os arquivos da própria empresa e cria apenas a NF (PDF) dela.
+    match /arquivosFechamento/{arquivoId} {
+      allow read: if isAdmin() || isFinanceiro() ||
+        (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
+          resource.data.parceiraId != null &&
+          resource.data.parceiraId == meuUsuario().get('parceiraId', null));
+      allow create: if isAdmin() || isFinanceiro() ||
+        (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
+          request.resource.data.parceiraId != null &&
+          request.resource.data.parceiraId == meuUsuario().get('parceiraId', null) &&
+          request.resource.data.tipo == 'nf' &&
+          request.resource.data.tamanho <= 3145728);
+      allow update, delete: if isAdmin() || isFinanceiro();
+
+      match /partes/{parteId} {
+        allow read: if isAdmin() || isFinanceiro() ||
+          (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
+            get(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.parceiraId != null &&
+            get(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.parceiraId == meuUsuario().get('parceiraId', null));
+        allow create: if isAdmin() || isFinanceiro() ||
+          (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
+            getAfter(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.parceiraId == meuUsuario().get('parceiraId', null) &&
+            getAfter(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.tipo == 'nf');
+        allow update, delete: if isAdmin() || isFinanceiro();
+      }
     }
 
     // Calendário/apontamento unificados: cada consultor só enxerga e mexe nos

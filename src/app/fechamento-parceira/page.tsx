@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronRight, MailCheck, MessageSquareWarnin
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal";
+import { NotaFiscalParceira } from "@/components/financeiro/NotaFiscalParceira";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFechamentoParceira } from "@/lib/useFechamentoParceira";
 import { registrarCiencia, responderConfirmacao } from "@/lib/fechamentoDb";
@@ -173,9 +174,10 @@ function CartaoMes({ f }: { f: FechamentoParceiro }) {
           {f.confirmacao.status === "confirmado" && (
             <p className="text-[12.5px] text-[#15754c]">
               Valores confirmados por {f.confirmacao.porNome ?? "você"}
-              {f.confirmacao.em ? ` em ${dataHora(f.confirmacao.em)}` : ""}. O próximo passo é a nota fiscal, que será solicitada pelo Financeiro.
+              {f.confirmacao.em ? ` em ${dataHora(f.confirmacao.em)}` : ""}. O próximo passo é enviar a nota fiscal.
             </p>
           )}
+          <NotaFiscalParceira f={f} />
           {f.confirmacao.status === "contestado" && f.confirmacao.motivo && (
             <p className="rounded-md bg-[#fdeceb] px-3 py-2 text-[12.5px] text-[#b5392a]">
               <strong>Sua contestação:</strong> {f.confirmacao.motivo}

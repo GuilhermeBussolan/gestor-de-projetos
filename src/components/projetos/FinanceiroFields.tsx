@@ -60,6 +60,14 @@ export const FinanceiroFields = forwardRef<
       : [{ tipoDocumentoId: "", descricao: "", valor: "" }]
   );
 
+  // Banco de horas: valor da hora e valor de venda do contrato (obrigatórios nesse tipo).
+  const [valorHora, setValorHora] = useState(
+    financeiroInicial?.tipoFaturamento === "banco_horas" && financeiroInicial.valorHora ? String(financeiroInicial.valorHora) : ""
+  );
+  const [valorVenda, setValorVenda] = useState(
+    financeiroInicial?.tipoFaturamento === "banco_horas" && financeiroInicial.valorVenda ? String(financeiroInicial.valorVenda) : ""
+  );
+
   const valorTotalNumero = Number(valorTotal) || 0;
   const numeroParcelasNumero = Math.max(1, Number(numeroParcelas) || 1);
   const totalMarcos = marcos.reduce((acc, m) => acc + (Number(m.valor) || 0), 0);
@@ -95,6 +103,20 @@ export const FinanceiroFields = forwardRef<
     obterFinanceiro(): Financeiro {
       if (tipoFaturamento === "apontamento_horas") {
         return { tipoFaturamento, valorTotal: 0, numeroParcelas: 0, parcelas: [] };
+      }
+
+      if (tipoFaturamento === "banco_horas") {
+        const valorVendaNumero = Number(valorVenda) || 0;
+        // As parcelas do banco de horas são geradas mês a mês pelo Financeiro: reeditar o projeto não as apaga.
+        const parcelasExistentes = financeiroInicial?.tipoFaturamento === "banco_horas" ? financeiroInicial.parcelas : [];
+        return {
+          tipoFaturamento,
+          valorTotal: valorVendaNumero,
+          numeroParcelas: parcelasExistentes.length,
+          parcelas: parcelasExistentes,
+          valorHora: Number(valorHora) || 0,
+          valorVenda: valorVendaNumero,
+        };
       }
 
       if (tipoFaturamento === "parcelado") {
@@ -154,6 +176,37 @@ export const FinanceiroFields = forwardRef<
       <p className="mt-1 text-xs text-brand-muted">
         {TIPO_FATURAMENTO_CONFIG[tipoFaturamento].descricao}
       </p>
+
+      {tipoFaturamento === "banco_horas" && (
+        <div className="mt-3 grid grid-cols-2 gap-4">
+          <FormRow label="Valor hora (R$)">
+            <Input
+              type="number"
+              step="0.01"
+              min="0.01"
+              placeholder="0,00"
+              value={valorHora}
+              onChange={(e) => setValorHora(e.target.value)}
+              required
+            />
+          </FormRow>
+          <FormRow label="Valor de venda (R$)">
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0,00"
+              value={valorVenda}
+              onChange={(e) => setValorVenda(e.target.value)}
+              required
+            />
+          </FormRow>
+          <p className="col-span-2 text-xs text-brand-muted">
+            O faturamento de cada mês é calculado no Financeiro: horas apontadas no mês × valor hora. O valor de venda é o valor do contrato
+            (entra nos totais contratados).
+          </p>
+        </div>
+      )}
 
       {tipoFaturamento === "parcelado" && (
         <div className="mt-3 grid grid-cols-2 gap-4">

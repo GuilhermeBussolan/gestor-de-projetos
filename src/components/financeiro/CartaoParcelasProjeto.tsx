@@ -1,34 +1,76 @@
 "use client";
 
+import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Field";
 import { STATUS_PARCELA_CONFIG, STATUS_PARCELA_ORDEM, TIPO_FATURAMENTO_CONFIG } from "@/lib/constants";
 import { nomeExibicaoCliente } from "@/lib/cliente";
+import { formatarHorasDecimais, parcelaDoMes, resumoBancoDeHoras, rotuloMes, valorDoBancoDeHoras } from "@/lib/bancoHoras";
 import type { Cliente, Projeto, StatusParcela } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+/** Banco de horas: as horas apontadas no mês de referência e a ação de gerar a parcela do mês. */
+export interface BancoDeHorasDoMes {
+  mes: string;
+  horas: number;
+  onGerarParcela: (valor: number) => Promise<void>;
+}
+
 /**
  * Card de um projeto na tela do Financeiro. Recolhido mostra só o essencial (cliente, código do
  * cliente, proposta, valor e um resumo das parcelas por status); aberto mostra cada parcela, com o
- * seletor de status.
+ * seletor de status. No banco de horas mostra também o cálculo do mês (horas × valor hora).
  */
 export function CartaoParcelasProjeto({
   projeto: p,
   cliente,
   aberto,
+  banco,
   onAlternar,
   onMudarStatus,
 }: {
   projeto: Projeto;
   cliente: Cliente | undefined;
   aberto: boolean;
+  banco?: BancoDeHorasDoMes;
   onAlternar: () => void;
   onMudarStatus: (projeto: Projeto, numero: number, status: StatusParcela) => void;
 }) {
-  const porHoras = p.financeiro?.tipoFaturamento === "apontamento_horas";
+  const porApontamento = p.financeiro?.tipoFaturamento === "apontamento_horas";
+  const ehBanco = p.financeiro?.tipoFaturamento === "banco_horas";
   const parcelas = p.financeiro?.parcelas ?? [];
   const resumo = STATUS_PARCELA_ORDEM.map((s) => ({ status: s, qtd: parcelas.filter((x) => x.status === s).length })).filter((x) => x.qtd > 0);
+
+  const valorHora = p.financeiro?.valorHora ?? 0;
+  const sugerido = banco ? valorDoBancoDeHoras(banco.horas, valorHora) : 0;
+  const [valorEditado, setValorEditado] = useState<string | null>(null);
+  const [gerando, setGerando] = useState(false);
+  const [erro, setErro] = useState("");
+  const valorAFaturar = valorEditado ?? String(sugerido);
+  const parcelaExistente = banco ? parcelaDoMes(p, banco.mes) : undefined;
+
+  async function gerar() {
+    if (!banco) return;
+    const valor = Number(valorAFaturar.replace(",", "."));
+    if (!Number.isFinite(valor) || valor <= 0) {
+      setErro("Informe um valor a faturar maior que zero.");
+      return;
+    }
+    setGerando(true);
+    setErro("");
+    try {
+      await banco.onGerarParcela(valor);
+      setValorEditado(null);
+    } catch (err) {
+      console.error("Erro ao gerar a parcela do banco de horas:", err);
+      setErro("Não foi possível gerar a parcela. Tente novamente.");
+    } finally {
+      setGerando(false);
+    }
+  }
 
   return (
     <div className="rounded-2xl border border-brand-border bg-white shadow-card">
@@ -54,10 +96,16 @@ export function CartaoParcelasProjeto({
             <span>{TIPO_FATURAMENTO_CONFIG[p.financeiro?.tipoFaturamento ?? "parcelado"].label}</span>
             <PeriodoBadge dataInicio={p.dataInicio} dataFim={p.dataFim} className="text-[11.5px] text-brand-faint" />
           </div>
+          {ehBanco && banco && valorHora > 0 && (
+            <p className="mt-1 text-[12.5px] text-brand-navy-2">
+              <strong>{formatarHorasDecimais(banco.horas)}</strong> em {rotuloMes(banco.mes)} · Valor hora: {moeda(valorHora)} ·{" "}
+              <strong>Total: {moeda(sugerido)}</strong>
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          {!aberto && !porHoras && resumo.length > 0 && (
+          {!aberto && !porApontamento && resumo.length > 0 && (
             <span className="flex flex-wrap gap-1.5">
               {resumo.map(({ status, qtd }) => (
                 <span
@@ -70,18 +118,66 @@ export function CartaoParcelasProjeto({
               ))}
             </span>
           )}
-          {!porHoras && (
-            <span className="text-[15px] font-extrabold whitespace-nowrap text-brand-navy-2">
-              {moeda(p.financeiro?.valorTotal ?? 0)} · {p.financeiro?.numeroParcelas ?? 0}x
-            </span>
+          {ehBanco ? (
+            <span className="text-[13px] font-extrabold whitespace-nowrap text-brand-navy-2">Venda {moeda(p.financeiro?.valorVenda ?? 0)}</span>
+          ) : (
+            !porApontamento && (
+              <span className="text-[15px] font-extrabold whitespace-nowrap text-brand-navy-2">
+                {moeda(p.financeiro?.valorTotal ?? 0)} · {p.financeiro?.numeroParcelas ?? 0}x
+              </span>
+            )
           )}
           <ChevronDown size={18} className={`shrink-0 text-brand-faint transition-transform ${aberto ? "rotate-180" : ""}`} />
         </div>
       </button>
 
       {aberto && (
-        <div className="border-t border-brand-border-soft px-5 pt-4 pb-5">
-          {porHoras ? (
+        <div className="space-y-4 border-t border-brand-border-soft px-5 pt-4 pb-5">
+          {ehBanco && banco && (
+            <div className="rounded-xl border border-brand-accent/30 bg-brand-accent-soft/40 p-4">
+              <p className="text-[11px] font-bold tracking-[.08em] text-brand-faint uppercase">Faturamento de {rotuloMes(banco.mes)}</p>
+              {valorHora <= 0 ? (
+                <p className="mt-1 text-[13px] text-[#b5392a]">Este projeto não tem valor hora cadastrado. Edite o projeto para informar.</p>
+              ) : (
+                <>
+                  <p className="mt-1 text-[14px] font-bold text-brand-navy-2">{resumoBancoDeHoras(banco.horas, valorHora)}</p>
+                  <p className="text-[12px] text-brand-muted">
+                    Horas aprovadas do projeto em {rotuloMes(banco.mes)} (todos os recursos). O valor abaixo é a sugestão e pode ser editado.
+                  </p>
+                  {parcelaExistente ? (
+                    <p className="mt-3 rounded-md bg-[#e3f5ea] px-3 py-2 text-[12.5px] text-[#15754c]">
+                      Já existe a parcela {parcelaExistente.numero} deste mês ({moeda(parcelaExistente.valor)}). Acompanhe o status abaixo.
+                    </p>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap items-end gap-2.5">
+                      <div>
+                        <label className="mb-1 block text-[12px] font-bold text-brand-navy-2">Valor a faturar (R$)</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={valorAFaturar}
+                          onChange={(e) => setValorEditado(e.target.value)}
+                          className="w-44"
+                        />
+                      </div>
+                      {valorEditado !== null && Number(valorEditado) !== sugerido && (
+                        <button type="button" onClick={() => setValorEditado(null)} className="mb-2.5 text-[12.5px] font-semibold text-brand-accent hover:underline">
+                          Voltar ao sugerido ({moeda(sugerido)})
+                        </button>
+                      )}
+                      <Button type="button" onClick={gerar} disabled={gerando || (banco.horas <= 0 && valorEditado === null)}>
+                        {gerando ? "Gerando..." : "Gerar parcela do mês"}
+                      </Button>
+                    </div>
+                  )}
+                  {erro && <p className="mt-2 text-[12.5px] font-semibold text-red-600">{erro}</p>}
+                </>
+              )}
+            </div>
+          )}
+
+          {porApontamento ? (
             <p className="text-sm text-brand-faint">Faturamento por apontamento de horas — sem parcelas fixas.</p>
           ) : (
             <div className="flex flex-wrap gap-2.5">

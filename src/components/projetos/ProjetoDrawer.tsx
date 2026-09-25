@@ -463,7 +463,9 @@ export function ProjetoDrawerConteudo({
                 <span className="text-lg font-extrabold text-brand-navy-2">
                   {projeto.financeiro?.tipoFaturamento === "apontamento_horas"
                     ? "Sem valor fixo"
-                    : `${moeda(projeto.financeiro?.valorTotal ?? 0)} em ${projeto.financeiro?.numeroParcelas ?? 0}x`}
+                    : projeto.financeiro?.tipoFaturamento === "banco_horas"
+                      ? `${moeda(projeto.financeiro?.valorHora ?? 0)}/h · venda ${moeda(projeto.financeiro?.valorVenda ?? 0)}`
+                      : `${moeda(projeto.financeiro?.valorTotal ?? 0)} em ${projeto.financeiro?.numeroParcelas ?? 0}x`}
                 </span>
               </div>
               {telaCheia &&
