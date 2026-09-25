@@ -26,6 +26,25 @@ export function horasApontadasNoMes(eventos: EventoCalendario[], projetoId: stri
   return Math.round(total * 100) / 100;
 }
 
+/** Diagnóstico: horas do projeto fora do mês/status considerados ("set/2026: 12h aprovadas", "ago/2026: 4h aguardando aprovação"). */
+export function horasDoProjetoPorMesEStatus(eventos: EventoCalendario[], projetoId: string): string[] {
+  const mapa = new Map<string, number>();
+  for (const e of eventos) {
+    if (e.projetoId !== projetoId) continue;
+    const st = statusEfetivo(e);
+    if (st === "cancelado" || st === "rejeitado") continue;
+    const chave = `${e.data.slice(0, 7)}|${st === "aprovado" ? "aprovadas" : st === "aguardando_aprovacao" ? "aguardando aprovação" : "previstas"}`;
+    mapa.set(chave, (mapa.get(chave) ?? 0) + (e.totalHoras ?? 0));
+  }
+  return Array.from(mapa.entries())
+    .filter(([, h]) => h > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, h]) => {
+      const [mes, rotulo] = k.split("|");
+      return `${rotuloMes(mes)}: ${formatarHorasDecimais(Math.round(h * 100) / 100)} ${rotulo}`;
+    });
+}
+
 /** Horas × valor hora, arredondado em centavos. */
 export function valorDoBancoDeHoras(horas: number, valorHora: number): number {
   return Math.round(horas * valorHora * 100) / 100;

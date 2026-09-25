@@ -16,6 +16,8 @@ const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curr
 export interface BancoDeHorasDoMes {
   mes: string;
   horas: number;
+  /** Horas do projeto em outros meses/status, para explicar um mês zerado. */
+  outrasHoras?: string[];
   onGerarParcela: (valor: number) => Promise<void>;
 }
 
@@ -144,6 +146,13 @@ export function CartaoParcelasProjeto({
                   <p className="text-[12px] text-brand-muted">
                     Horas aprovadas do projeto em {rotuloMes(banco.mes)} (todos os recursos). O valor abaixo é a sugestão e pode ser editado.
                   </p>
+                  {banco.horas <= 0 && (
+                    <p className="mt-2 rounded-md bg-[#fff2de] px-3 py-2 text-[12.5px] text-[#a4650d]">
+                      {banco.outrasHoras && banco.outrasHoras.length > 0
+                        ? `Sem horas aprovadas em ${rotuloMes(banco.mes)}. Horas deste projeto: ${banco.outrasHoras.join(" · ")}. Troque o mês acima se for o caso.`
+                        : `Este projeto não tem nenhum apontamento (aprovado, aguardando ou previsto) no sistema.`}
+                    </p>
+                  )}
                   {parcelaExistente ? (
                     <p className="mt-3 rounded-md bg-[#e3f5ea] px-3 py-2 text-[12.5px] text-[#15754c]">
                       Já existe a parcela {parcelaExistente.numero} deste mês ({moeda(parcelaExistente.valor)}). Acompanhe o status abaixo.

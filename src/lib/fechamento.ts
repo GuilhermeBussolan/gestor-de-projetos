@@ -177,18 +177,6 @@ export function calcularDivergencias({
     });
   }
 
-  const descontos = doMes.filter(
-    (e) => statusEfetivo(e) === "aprovado" && !!e.horaDesconto && e.horaDesconto !== "00:00" && !(e.descricao ?? "").trim()
-  );
-  if (descontos.length > 0) {
-    lista.push({
-      chave: "descontos",
-      severidade: "alerta",
-      titulo: `${descontos.length} desconto${descontos.length === 1 ? "" : "s"} sem justificativa`,
-      detalhes: descontos.map((e) => `${dataBR(e.data)} · ${nomeRecurso(e.recursoId)} · desconto de ${e.horaDesconto}`),
-    });
-  }
-
   const sobrepostos = Array.from(new Set(linhas.filter((l) => l.sobreposto).map((l) => `${l.data}|${l.recursoNome}`)));
   if (sobrepostos.length > 0) {
     lista.push({
