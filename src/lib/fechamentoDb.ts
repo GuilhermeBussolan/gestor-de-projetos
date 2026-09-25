@@ -1,7 +1,7 @@
-import { collection, doc, getDocs, query, updateDoc, where, writeBatch, type WriteBatch } from "firebase/firestore";
+import { collection, doc, updateDoc, writeBatch, type WriteBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { totaisPorTipo, type ItemBase, type ParceiroBase } from "@/lib/fechamento";
-import type { ArquivoFechamento, Fechamento, StatusFechamento } from "@/types";
+import { idItemFechamento, type ItemBase, type ParceiroBase } from "@/lib/fechamento";
+import type { ArquivoFechamento, FechamentoParceiro, StatusFechamento } from "@/types";
 
 export interface Ator {
   uid: string;
@@ -10,9 +10,11 @@ export interface Ator {
 
 const limpar = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
+/** Auditoria: cada mudança de etapa de uma parceira (o histórico fica no mês, com o nome da parceira). */
 function registrar(
   lote: WriteBatch,
   mesAno: string,
+  parceiraNome: string,
   de: StatusFechamento | null,
   para: StatusFechamento,
   acao: string,
@@ -21,162 +23,153 @@ function registrar(
 ) {
   lote.set(
     doc(collection(db, "fechamentos", mesAno, "historico")),
-    limpar({ de, para, acao, usuarioId: ator.uid, usuarioNome: ator.nomeCompleto, em: Date.now(), motivo: motivo?.trim() || null })
+    limpar({ de, para, acao, parceiraNome, usuarioId: ator.uid, usuarioNome: ator.nomeCompleto, em: Date.now(), motivo: motivo?.trim() || null })
   );
-}
-
-async function itensDoMes(mesAno: string) {
-  const snap = await getDocs(query(collection(db, "fechamentoItens"), where("mesAno", "==", mesAno)));
-  return snap.docs;
-}
-
-async function parceirosDoMes(mesAno: string) {
-  const snap = await getDocs(query(collection(db, "fechamentoParceiros"), where("mesAno", "==", mesAno)));
-  return snap.docs;
 }
 
 const CIENCIA_VAZIA = { em: null };
 const CONFIRMACAO_PENDENTE = { status: "pendente" };
 
+/** Ids dos itens (um por consultor) que já estão gravados para a parceira. */
+const idsDosItens = (mesAno: string, f: FechamentoParceiro | null | undefined) => (f?.recursos ?? []).map((r) => idItemFechamento(mesAno, r.recursoId));
+
 /**
- * Rascunho/em revisão -> em revisão: congela o que cada consultor tem a receber (um item por recurso)
- * e os totais por tipo. Serve também para "atualizar" uma revisão com as horas atuais.
+ * Rascunho/em revisão -> em revisão, SÓ desta parceira: congela o que cada consultor dela tem a receber e o total da
+ * parceira. Serve também para "atualizar" a revisão com as horas atuais.
  */
-export async function enviarParaRevisao({
+export async function enviarParceiraParaRevisao({
   mesAno,
   atual,
+  parceiro,
   itens,
-  parceiros,
   ator,
   motivo,
 }: {
   mesAno: string;
-  atual: Fechamento | null;
+  /** O que já está gravado da parceira (ou null se ainda é rascunho). */
+  atual: FechamentoParceiro | null;
+  parceiro: ParceiroBase;
   itens: ItemBase[];
-  parceiros: ParceiroBase[];
   ator: Ator;
   motivo?: string;
 }) {
   const lote = writeBatch(db);
-  (await itensDoMes(mesAno)).forEach((d) => lote.delete(d.ref));
-  (await parceirosDoMes(mesAno)).forEach((d) => lote.delete(d.ref));
+  idsDosItens(mesAno, atual).forEach((id) => lote.delete(doc(db, "fechamentoItens", id)));
   for (const item of itens) {
     // A conferência é da parceira (grupo), não de cada consultor: o item só guarda o detalhe.
     lote.set(doc(db, "fechamentoItens", item.id), limpar({ ...item, liberado: false, confirmacao: { status: "nao_aplicavel" } }));
   }
-  for (const parceiro of parceiros) {
-    lote.set(
-      doc(db, "fechamentoParceiros", parceiro.id),
-      limpar({ ...parceiro, liberado: false, ciencia: CIENCIA_VAZIA, confirmacao: CONFIRMACAO_PENDENTE })
-    );
-  }
-  const de = atual?.status ?? null;
+  const de: StatusFechamento | null = atual ? (atual.etapa ?? "em_revisao") : null;
   lote.set(
-    doc(db, "fechamentos", mesAno),
+    doc(db, "fechamentoParceiros", parceiro.id),
     limpar({
-      mesAno,
-      status: "em_revisao",
-      criadoEm: atual?.criadoEm ?? Date.now(),
-      criadoPorNome: atual?.criadoPorNome ?? ator.nomeCompleto,
-      atualizadoEm: Date.now(),
-      totais: totaisPorTipo(itens),
+      ...parceiro,
+      etapa: "em_revisao",
+      liberado: false,
+      ciencia: CIENCIA_VAZIA,
+      confirmacao: CONFIRMACAO_PENDENTE,
       fechadoEm: null,
       fechadoPorNome: null,
       justificativaDivergencias: null,
       liberadoEm: null,
-      liberadoPorId: null,
       liberadoPorNome: null,
       observacaoLiberacao: null,
-    }),
-    { merge: true }
+      anexos: [],
+    })
   );
-  registrar(lote, mesAno, de, "em_revisao", de === "em_revisao" ? "Valores atualizados com as horas atuais" : de ? "Reaberto para revisão" : "Enviado para revisão", ator, motivo);
+  registrar(lote, mesAno, parceiro.parceiraNome, de, "em_revisao", atual ? "Valores atualizados com as horas atuais" : "Enviado para revisão", ator, motivo);
   await lote.commit();
 }
 
-/** Em revisão -> rascunho: descarta os valores congelados (volta a calcular ao vivo). */
-export async function voltarParaRascunho({ mesAno, ator, motivo }: { mesAno: string; ator: Ator; motivo: string }) {
+/** Em revisão -> rascunho (só desta parceira): descarta os valores congelados; volta a calcular ao vivo. */
+export async function voltarParceiraParaRascunho({ mesAno, atual, ator, motivo }: { mesAno: string; atual: FechamentoParceiro; ator: Ator; motivo: string }) {
   const lote = writeBatch(db);
-  (await itensDoMes(mesAno)).forEach((d) => lote.delete(d.ref));
-  (await parceirosDoMes(mesAno)).forEach((d) => lote.delete(d.ref));
-  lote.set(doc(db, "fechamentos", mesAno), { status: "rascunho", totais: null, atualizadoEm: Date.now() }, { merge: true });
-  registrar(lote, mesAno, "em_revisao", "rascunho", "Voltou para rascunho", ator, motivo);
+  idsDosItens(mesAno, atual).forEach((id) => lote.delete(doc(db, "fechamentoItens", id)));
+  lote.delete(doc(db, "fechamentoParceiros", atual.id));
+  registrar(lote, mesAno, atual.parceiraNome, "em_revisao", "rascunho", "Voltou para rascunho", ator, motivo);
   await lote.commit();
 }
 
-/** Em revisão -> fechado. `justificativa` é obrigatória quando há divergências bloqueantes. */
-export async function fechar({ mesAno, ator, justificativa }: { mesAno: string; ator: Ator; justificativa?: string }) {
+/** Em revisão -> fechado (só desta parceira). `justificativa` é obrigatória quando há divergências bloqueantes dela. */
+export async function fecharParceira({ mesAno, atual, ator, justificativa }: { mesAno: string; atual: FechamentoParceiro; ator: Ator; justificativa?: string }) {
   const lote = writeBatch(db);
-  lote.set(
-    doc(db, "fechamentos", mesAno),
+  lote.update(
+    doc(db, "fechamentoParceiros", atual.id),
     limpar({
-      status: "fechado",
+      etapa: "fechado",
       fechadoEm: Date.now(),
       fechadoPorNome: ator.nomeCompleto,
       justificativaDivergencias: justificativa?.trim() || null,
-      atualizadoEm: Date.now(),
-    }),
-    { merge: true }
+    })
   );
-  registrar(lote, mesAno, "em_revisao", "fechado", justificativa?.trim() ? "Fechado com divergências justificadas" : "Fechado", ator, justificativa);
+  registrar(lote, mesAno, atual.parceiraNome, "em_revisao", "fechado", justificativa?.trim() ? "Fechado com divergências justificadas" : "Fechado", ator, justificativa);
   await lote.commit();
 }
 
-/** Fechado/faturado -> em revisão (erro detectado). Se já estava liberado, o consultor deixa de ver o item e a confirmação recomeça. */
-export async function reabrir({ mesAno, de, ator, motivo }: { mesAno: string; de: StatusFechamento; ator: Ator; motivo: string }) {
+/** Fechado/faturado -> em revisão (erro detectado), só desta parceira. A ciência e a confirmação dela recomeçam. */
+export async function reabrirParceira({
+  mesAno,
+  atual,
+  de,
+  ator,
+  motivo,
+}: {
+  mesAno: string;
+  atual: FechamentoParceiro;
+  de: StatusFechamento;
+  ator: Ator;
+  motivo: string;
+}) {
   const lote = writeBatch(db);
-  (await itensDoMes(mesAno)).forEach((d) => lote.update(d.ref, { liberado: false }));
-  // Reabrir invalida o que o responsável da parceira já viu/confirmou: recomeça do zero.
-  (await parceirosDoMes(mesAno)).forEach((d) => lote.update(d.ref, { liberado: false, ciencia: CIENCIA_VAZIA, confirmacao: CONFIRMACAO_PENDENTE }));
-  lote.set(
-    doc(db, "fechamentos", mesAno),
+  idsDosItens(mesAno, atual).forEach((id) => lote.set(doc(db, "fechamentoItens", id), { liberado: false }, { merge: true }));
+  lote.update(
+    doc(db, "fechamentoParceiros", atual.id),
     limpar({
-      status: "em_revisao",
+      etapa: "em_revisao",
+      liberado: false,
+      ciencia: CIENCIA_VAZIA,
+      confirmacao: CONFIRMACAO_PENDENTE,
       fechadoEm: null,
       fechadoPorNome: null,
       justificativaDivergencias: null,
       liberadoEm: null,
-      liberadoPorId: null,
       liberadoPorNome: null,
       observacaoLiberacao: null,
-      atualizadoEm: Date.now(),
-    }),
-    { merge: true }
+    })
   );
-  registrar(lote, mesAno, de, "em_revisao", "Reaberto", ator, motivo);
+  registrar(lote, mesAno, atual.parceiraNome, de, "em_revisao", "Reaberto", ator, motivo);
   await lote.commit();
 }
 
-/** Fechado -> faturado: libera o faturamento e o item de cada terceiro para a conferência dele. */
-export async function liberarFaturamento({
+/** Fechado -> faturado (só desta parceira): libera o faturamento para o responsável da parceira conferir. */
+export async function liberarParceira({
   mesAno,
+  atual,
   ator,
   observacao,
   anexos,
 }: {
   mesAno: string;
+  atual: FechamentoParceiro;
   ator: Ator;
   observacao?: string;
-  /** Documentos complementares já enviados ao Storage. */
+  /** Documentos complementares já enviados. */
   anexos?: ArquivoFechamento[];
 }) {
   const lote = writeBatch(db);
-  (await itensDoMes(mesAno)).forEach((d) => lote.update(d.ref, { liberado: true }));
-  (await parceirosDoMes(mesAno)).forEach((d) => lote.update(d.ref, { liberado: true }));
-  lote.set(
-    doc(db, "fechamentos", mesAno),
+  idsDosItens(mesAno, atual).forEach((id) => lote.set(doc(db, "fechamentoItens", id), { liberado: true }, { merge: true }));
+  lote.update(
+    doc(db, "fechamentoParceiros", atual.id),
     limpar({
-      status: "faturado",
+      etapa: "faturado",
+      liberado: true,
       liberadoEm: Date.now(),
-      liberadoPorId: ator.uid,
       liberadoPorNome: ator.nomeCompleto,
       observacaoLiberacao: observacao?.trim() || null,
       anexos: anexos ?? [],
-      atualizadoEm: Date.now(),
-    }),
-    { merge: true }
+    })
   );
-  registrar(lote, mesAno, "fechado", "faturado", "Faturamento liberado", ator, observacao);
+  registrar(lote, mesAno, atual.parceiraNome, "fechado", "faturado", "Faturamento liberado", ator, observacao);
   await lote.commit();
 }
 

@@ -470,6 +470,8 @@ export interface HistoricoFechamento {
   usuarioNome: string;
   em: number;
   motivo?: string | null;
+  /** Parceira a que a mudança se refere (o fechamento é por parceira). */
+  parceiraNome?: string | null;
 }
 
 export type StatusConfirmacaoFechamento = "nao_aplicavel" | "pendente" | "confirmado" | "contestado";
@@ -508,6 +510,19 @@ export interface FechamentoParceiro {
       valorRepasse: number;
     }[];
   }[];
+  /**
+   * Etapa desta parceira no mês (cada parceira segue o próprio fluxo: em revisão -> fechado -> faturado).
+   * Documentos antigos não têm o campo: a etapa vem do status do mês.
+   */
+  etapa?: StatusFechamento;
+  fechadoEm?: number | null;
+  fechadoPorNome?: string | null;
+  justificativaDivergencias?: string | null;
+  liberadoEm?: number | null;
+  liberadoPorNome?: string | null;
+  observacaoLiberacao?: string | null;
+  /** Documentos complementares anexados ao liberar o faturamento desta parceira. */
+  anexos?: ArquivoFechamento[];
   /** true depois de "Liberar faturamento" — só então o responsável da parceira enxerga. */
   liberado: boolean;
   /** Confirmação de que o responsável recebeu e leu o fechamento. */

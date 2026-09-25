@@ -57,7 +57,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[390px] rounded-2xl border border-brand-border bg-white p-9 shadow-card-lg">
         <div className="mb-7 flex flex-col items-center text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-navy.png" alt="NG" className="h-10 w-auto" />
+          <img src="/logo-flowing.png" alt="FlowiNG" className="h-11 w-auto" />
           <span className="mt-2.5 text-sm font-bold text-brand-navy-2">Gestor de Projetos</span>
         </div>
 

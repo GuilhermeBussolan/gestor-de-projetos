@@ -19,10 +19,12 @@ import { exportarNfsPendentes, exportarPagamentosAtrasados } from "@/lib/relator
 import { Select } from "@/components/ui/Field";
 import { formatarHoras } from "@/lib/horas";
 import {
+  type ParceiroBase,
   ETAPAS_FECHAMENTO,
   STATUS_FECHAMENTO_CONFIG,
   calcularDivergencias,
   dataBR,
+  etapaDaParceira,
   linhasDosItens,
   type ItemBase,
   montarItens,
@@ -30,7 +32,8 @@ import {
   prazoFechamento,
   totaisPorTipo,
 } from "@/lib/fechamento";
-import { enviarParaRevisao, fechar, liberarFaturamento, reabrir, voltarParaRascunho } from "@/lib/fechamentoDb";
+import { enviarParceiraParaRevisao, fecharParceira, liberarParceira, reabrirParceira, voltarParceiraParaRascunho } from "@/lib/fechamentoDb";
+import { tipoBoxEfetivo } from "@/lib/relatorioFechamento";
 import {
   descreverEscopo,
   exportarFechamentoExcel,
@@ -62,37 +65,18 @@ const CONFIRMACAO: Record<StatusConfirmacaoFechamento, { label: string; bg: stri
   contestado: { label: "Contestado", bg: "#fdeceb", text: "#b5392a" },
 };
 
-type Acao =
-  | { tipo: "revisao" }
-  | { tipo: "atualizar" }
-  | { tipo: "rascunho" }
-  | { tipo: "fechar" }
-  | { tipo: "liberar" }
-  | { tipo: "reabrir" };
+type TipoAcao = "revisao" | "atualizar" | "rascunho" | "fechar" | "liberar" | "reabrir";
+/** O fechamento é por parceira: cada ação vale para uma parceira só. */
+type Acao = { tipo: TipoAcao; parceiraId: string };
 
-function Etapas({ status }: { status: StatusFechamento }) {
-  const indice = ETAPAS_FECHAMENTO.indexOf(status);
-  return (
-    <ol className="flex flex-wrap items-center gap-1.5 text-[12px]">
-      {ETAPAS_FECHAMENTO.map((e, i) => {
-        const cfg = STATUS_FECHAMENTO_CONFIG[e];
-        const atual = i === indice;
-        const feita = i < indice;
-        return (
-          <Fragment key={e}>
-            {i > 0 && <span className="text-brand-faint">›</span>}
-            <li
-              className={`rounded-full px-3 py-1 font-bold ${atual ? "" : feita ? "bg-[#e3f5ea] text-[#15754c]" : "bg-brand-hover text-brand-faint"}`}
-              style={atual ? { backgroundColor: cfg.bg, color: cfg.text } : undefined}
-            >
-              {feita && "✓ "}
-              {cfg.label}
-            </li>
-          </Fragment>
-        );
-      })}
-    </ol>
-  );
+/** Uma parceira no mês: o que está gravado (se já saiu do rascunho), o cálculo ao vivo e os consultores exibidos. */
+interface GrupoParceira {
+  parceiraId: string;
+  nome: string;
+  salvo?: FechamentoParceiro;
+  vivo?: ParceiroBase;
+  etapa: StatusFechamento;
+  itens: ItemExibido[];
 }
 
 function CartaoTotais({ titulo, horas, valor, detalhe, destaque }: { titulo: string; horas: number; valor: number; detalhe: string; destaque?: boolean }) {
@@ -111,21 +95,21 @@ function CartaoTotais({ titulo, horas, valor, detalhe, destaque }: { titulo: str
 type ItemExibido = ItemBase & Partial<Pick<ItemFechamento, "liberado" | "confirmacao">>;
 
 function TabelaItens({
-  itens,
-  parceirosSalvos,
-  mostrarConfirmacao,
+  proprios,
+  grupos: parceiras,
   hojeIso,
   filtroTipo,
   filtroSituacao,
   onDocumento,
+  onAcao,
 }: {
-  itens: ItemExibido[];
-  parceirosSalvos: FechamentoParceiro[];
-  mostrarConfirmacao: boolean;
+  proprios: ItemExibido[];
+  grupos: GrupoParceira[];
   hojeIso: string;
   filtroTipo: "" | "proprio" | "terceiro";
   filtroSituacao: "" | SituacaoParceiro;
   onDocumento: (parceiro: FechamentoParceiro) => void;
+  onAcao: (tipo: TipoAcao, parceiraId: string) => void;
 }) {
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
   const alternar = (id: string) =>
@@ -136,21 +120,8 @@ function TabelaItens({
       return n;
     });
 
-  // Terceiros agrupados por parceira.
-  const grupos = useMemo(() => {
-    const proprios = itens.filter((i) => i.tipoBox === "proprio");
-    const porParceira = new Map<string, typeof itens>();
-    itens
-      .filter((i) => i.tipoBox === "terceiro")
-      .forEach((i) => {
-        const chave = i.parceiraNome ?? "Terceiros sem parceira";
-        porParceira.set(chave, [...(porParceira.get(chave) ?? []), i]);
-      });
-    return { proprios, parceiras: Array.from(porParceira.entries()).sort((a, b) => a[0].localeCompare(b[0], "pt-BR")) };
-  }, [itens]);
-
   const cols = 5;
-  const linhaItem = (i: (typeof itens)[number]) => {
+  const linhaItem = (i: ItemExibido) => {
     const aberto = abertos.has(i.id);
     return (
       <Fragment key={i.id}>
@@ -203,81 +174,175 @@ function TabelaItens({
       <th />
     </tr>
   );
-  const subtotal = (lista: typeof itens) => ({ h: lista.reduce((s, i) => s + i.horas, 0), v: lista.reduce((s, i) => s + i.valorRepasse, 0) });
+  const subtotal = (lista: ItemExibido[]) => ({ h: lista.reduce((s, i) => s + i.horas, 0), v: lista.reduce((s, i) => s + i.valorRepasse, 0) });
+
+  const grupoTabela = [
+    { chave: "proprios", titulo: "Recursos próprios", lista: proprios, g: undefined as GrupoParceira | undefined },
+    ...parceiras.map((g) => ({ chave: g.parceiraId, titulo: `Terceiros — ${g.nome}`, lista: g.itens, g: g as GrupoParceira | undefined })),
+  ];
 
   return (
     <div className="space-y-4">
-      {[{ titulo: "Recursos próprios", lista: grupos.proprios, parceiro: undefined as FechamentoParceiro | undefined }, ...grupos.parceiras.map(([nome, lista]) => ({
-          titulo: `Terceiros — ${nome}`,
-          lista,
-          parceiro: parceirosSalvos.find((x) => x.parceiraId === (lista[0]?.parceiraId ?? "sem_parceira")),
-        }))].map(
-        ({ titulo, lista, parceiro }) => {
-          // Filtros: tipo de consultor (próprio/terceiro) e situação de NF/pagamento (só faz sentido para terceiros).
-          if (!parceiro && filtroTipo === "terceiro") return null;
-          if (parceiro && filtroTipo === "proprio") return null;
-          if (filtroSituacao && (!parceiro || situacaoDaParceira(parceiro) !== filtroSituacao)) return null;
-          const s = subtotal(lista);
-          const ciente = !!parceiro?.ciencia?.em;
-          const conf = parceiro ? CONFIRMACAO[parceiro.confirmacao.status] : null;
-          return (
-            <div key={titulo} className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-border-soft px-4 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[13.5px] font-extrabold text-brand-navy-2">{titulo}</p>
-                  {mostrarConfirmacao && parceiro && conf && (
-                    <>
+      {grupoTabela.map(({ chave, titulo, lista, g }) => {
+        const parceiro = g?.salvo;
+        const liberada = g?.etapa === "faturado";
+        // Filtros: tipo de consultor (próprio/terceiro) e situação de NF/pagamento (só faz sentido para terceiros).
+        if (!g && filtroTipo === "terceiro") return null;
+        if (g && filtroTipo === "proprio") return null;
+        if (filtroSituacao && (!parceiro || !liberada || situacaoDaParceira(parceiro) !== filtroSituacao)) return null;
+        const s = subtotal(lista);
+        const ciente = !!parceiro?.ciencia?.em;
+        const conf = parceiro ? CONFIRMACAO[parceiro.confirmacao.status] : null;
+        const cfgEtapa = g ? STATUS_FECHAMENTO_CONFIG[g.etapa] : null;
+        const desatualizada =
+          !!g?.salvo &&
+          !!g.vivo &&
+          g.etapa !== "rascunho" &&
+          (Math.abs(g.salvo.horas - g.vivo.horas) > 0.01 || Math.abs(g.salvo.valor - g.vivo.valor) > 0.01);
+        return (
+          <div key={chave} className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-border-soft px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[13.5px] font-extrabold text-brand-navy-2">{titulo}</p>
+                {cfgEtapa && (
+                  <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: cfgEtapa.bg, color: cfgEtapa.text }}>
+                    {cfgEtapa.label}
+                  </span>
+                )}
+                {liberada && parceiro && conf && (
+                  <>
+                    <span
+                      className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+                      style={ciente ? { backgroundColor: "#e3f5ea", color: "#15754c" } : { backgroundColor: "#fff2de", color: "#a4650d" }}
+                      title={ciente && parceiro.ciencia.em ? `Recebido e lido por ${parceiro.ciencia.porNome ?? "—"} em ${dataHora(parceiro.ciencia.em)}` : "O responsável ainda não confirmou o recebimento"}
+                    >
+                      {ciente ? "Recebimento confirmado" : "Aguardando ciência"}
+                    </span>
+                    <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: conf.bg, color: conf.text }}>
+                      {parceiro.confirmacao.status === "pendente" ? "Valores a confirmar" : conf.label}
+                    </span>
+                    {parceiro.confirmacao.status === "confirmado" && (
                       <span
                         className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
-                        style={ciente ? { backgroundColor: "#e3f5ea", color: "#15754c" } : { backgroundColor: "#fff2de", color: "#a4650d" }}
-                        title={ciente && parceiro.ciencia.em ? `Recebido e lido por ${parceiro.ciencia.porNome ?? "—"} em ${dataHora(parceiro.ciencia.em)}` : "O responsável ainda não confirmou o recebimento"}
+                        style={{
+                          backgroundColor: SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].bg,
+                          color: SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].text,
+                        }}
                       >
-                        {ciente ? "Recebimento confirmado" : "Aguardando ciência"}
+                        {SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].label}
                       </span>
-                      <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: conf.bg, color: conf.text }}>
-                        {parceiro.confirmacao.status === "pendente" ? "Valores a confirmar" : conf.label}
-                      </span>
-                      {parceiro.confirmacao.status === "confirmado" && (
-                        <span
-                          className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
-                          style={{
-                            backgroundColor: SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].bg,
-                            color: SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].text,
-                          }}
-                        >
-                          {SITUACAO_PARCEIRO_CONFIG[situacaoDaParceira(parceiro)].label}
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-                <p className="text-[12.5px] text-brand-muted">
-                  {lista.length} consultor{lista.length === 1 ? "" : "es"} · {formatarHoras(s.h)} · <strong className="text-brand-navy-2">{moeda(s.v)}</strong>
-                </p>
+                    )}
+                  </>
+                )}
               </div>
-              {parceiro?.confirmacao.status === "contestado" && parceiro.confirmacao.motivo && (
-                <p className="border-b border-brand-border-soft bg-[#fdeceb] px-4 py-2.5 text-[12.5px] text-[#b5392a]">
-                  <strong>Contestado por {parceiro.confirmacao.porNome ?? "—"}:</strong> {parceiro.confirmacao.motivo}
-                </p>
-              )}
-              <table className="w-full text-[13px]">
-                <thead>{cabecalho}</thead>
-                <tbody>
-                  {lista.map(linhaItem)}
-                  {lista.length === 0 && (
-                    <tr>
-                      <td colSpan={cols + 1} className="px-4 py-6 text-center text-brand-faint">
-                        Nenhuma hora aprovada neste período.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              {mostrarConfirmacao && parceiro && <PainelParceiroFinanceiro f={parceiro} hojeIso={hojeIso} onDocumentoFaturamento={() => onDocumento(parceiro)} />}
+              <p className="text-[12.5px] text-brand-muted">
+                {lista.length} consultor{lista.length === 1 ? "" : "es"} · {formatarHoras(s.h)} · <strong className="text-brand-navy-2">{moeda(s.v)}</strong>
+              </p>
             </div>
-          );
-        }
-      )}
+
+            {/* Ações da parceira: cada uma segue o próprio fluxo, independente das outras. */}
+            {g && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-brand-border-soft bg-brand-hover/40 px-4 py-2.5">
+                {g.etapa === "rascunho" && (
+                  <>
+                    <Button onClick={() => onAcao("revisao", g.parceiraId)} disabled={!g.vivo || g.itens.length === 0} className="h-8 px-3 text-[12.5px]">
+                      <Send size={14} />
+                      Enviar para revisão
+                    </Button>
+                    <span className="text-[12px] text-brand-muted">Congela os valores desta parceira para conferência.</span>
+                  </>
+                )}
+                {g.etapa === "em_revisao" && (
+                  <>
+                    <Button onClick={() => onAcao("fechar", g.parceiraId)} className="h-8 px-3 text-[12.5px]">
+                      <Lock size={14} />
+                      Fechar
+                    </Button>
+                    <Button variant="secondary" onClick={() => onAcao("atualizar", g.parceiraId)} className="h-8 px-3 text-[12.5px]">
+                      <RotateCcw size={14} />
+                      Atualizar valores
+                    </Button>
+                    <Button variant="secondary" onClick={() => onAcao("rascunho", g.parceiraId)} className="h-8 px-3 text-[12.5px]">
+                      Voltar para rascunho
+                    </Button>
+                  </>
+                )}
+                {g.etapa === "fechado" && (
+                  <>
+                    <Button onClick={() => onAcao("liberar", g.parceiraId)} className="h-8 px-3 text-[12.5px]">
+                      <CheckCircle2 size={14} />
+                      Liberar faturamento
+                    </Button>
+                    <Button variant="secondary" onClick={() => onAcao("reabrir", g.parceiraId)} className="h-8 px-3 text-[12.5px]">
+                      <LockOpen size={14} />
+                      Reabrir
+                    </Button>
+                    <span className="text-[12px] text-brand-muted">
+                      Fechado {parceiro?.fechadoEm ? `em ${dataHora(parceiro.fechadoEm)} ` : ""}por {parceiro?.fechadoPorNome ?? "—"}.
+                    </span>
+                  </>
+                )}
+                {g.etapa === "faturado" && (
+                  <>
+                    <span className="text-[12.5px] font-semibold text-[#15754c]">
+                      Faturamento liberado {parceiro?.liberadoEm ? `em ${dataHora(parceiro.liberadoEm)} ` : ""}por {parceiro?.liberadoPorNome ?? "—"}.
+                    </span>
+                    <Button variant="secondary" onClick={() => onAcao("reabrir", g.parceiraId)} className="ml-auto h-8 px-3 text-[12.5px]">
+                      <LockOpen size={14} />
+                      Reabrir
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+            {parceiro?.justificativaDivergencias && (
+              <p className="border-b border-brand-border-soft bg-[#fff2de] px-4 py-2.5 text-[12.5px] text-[#a4650d]">
+                <strong>Fechada com divergências justificadas:</strong> {parceiro.justificativaDivergencias}
+              </p>
+            )}
+            {liberada && parceiro?.observacaoLiberacao && (
+              <p className="border-b border-brand-border-soft bg-brand-hover px-4 py-2.5 text-[12.5px] text-brand-muted">
+                <strong className="text-brand-navy-2">Observação da liberação:</strong> {parceiro.observacaoLiberacao}
+              </p>
+            )}
+            {liberada && parceiro?.anexos && parceiro.anexos.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-brand-border-soft bg-brand-hover px-4 py-2.5 text-[12.5px] text-brand-muted">
+                <strong className="text-brand-navy-2">Documentos complementares:</strong>
+                {parceiro.anexos.map((a) => (
+                  <LinkArquivo key={a.path} arquivo={a} />
+                ))}
+              </div>
+            )}
+            {desatualizada && g?.salvo && g.vivo && (
+              <p className="flex items-start gap-2 border-b border-brand-border-soft bg-[#fff2de] px-4 py-2.5 text-[12.5px] font-medium text-[#a4650d]">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                As horas aprovadas mudaram depois que os valores foram congelados (hoje: {formatarHoras(g.vivo.horas)} e {moeda(g.vivo.valor)}; no fechamento:{" "}
+                {formatarHoras(g.salvo.horas)} e {moeda(g.salvo.valor)}).
+                {g.etapa === "em_revisao" ? " Use “Atualizar valores” para refletir a mudança." : " Reabra o fechamento desta parceira se for preciso corrigir."}
+              </p>
+            )}
+            {parceiro?.confirmacao.status === "contestado" && parceiro.confirmacao.motivo && (
+              <p className="border-b border-brand-border-soft bg-[#fdeceb] px-4 py-2.5 text-[12.5px] text-[#b5392a]">
+                <strong>Contestado por {parceiro.confirmacao.porNome ?? "—"}:</strong> {parceiro.confirmacao.motivo}
+              </p>
+            )}
+            <table className="w-full text-[13px]">
+              <thead>{cabecalho}</thead>
+              <tbody>
+                {lista.map(linhaItem)}
+                {lista.length === 0 && (
+                  <tr>
+                    <td colSpan={cols + 1} className="px-4 py-6 text-center text-brand-faint">
+                      Nenhuma hora aprovada neste período.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            {liberada && parceiro && <PainelParceiroFinanceiro f={parceiro} hojeIso={hojeIso} onDocumentoFaturamento={() => onDocumento(parceiro)} />}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -306,8 +371,9 @@ function FechamentosPageContent() {
   const [exportando, setExportando] = useState<"pdf" | "excel" | null>(null);
   const [divAbertas, setDivAbertas] = useState<Set<string>>(new Set());
 
+  // O fechamento é por parceira; o documento do mês só existe em fechamentos antigos (feitos com o mês inteiro de uma vez).
   const fechamento = fechamentos.find((f) => f.id === mesAno) ?? null;
-  const status: StatusFechamento = fechamento?.status ?? "rascunho";
+  const statusDoMes: StatusFechamento = fechamento?.status ?? "rascunho";
   const ator = usuario ? { uid: usuario.uid, nomeCompleto: usuario.nomeCompleto } : null;
 
   const filtros = useMemo(() => ({ tipo: "" as const, parceiraId: "", recursoId: "" }), []);
@@ -316,59 +382,97 @@ function FechamentosPageContent() {
     [eventos, recursos, projetos, clientes, parceiras, filtros, mesAno]
   );
   const itensVivos = useMemo(() => montarItens(linhasVivas, recursos, parceiras, mesAno), [linhasVivas, recursos, parceiras, mesAno]);
-  const congelado = status !== "rascunho";
-  const itensExibidos = useMemo<ItemExibido[]>(
-    () => (congelado ? [...itensSalvos].sort((a, b) => a.recursoNome.localeCompare(b.recursoNome, "pt-BR")) : itensVivos),
-    [congelado, itensSalvos, itensVivos]
-  );
-  const totais = useMemo(() => totaisPorTipo(itensExibidos), [itensExibidos]);
   const parceirosVivos = useMemo(() => montarParceiros(itensVivos, parceiras, mesAno), [itensVivos, parceiras, mesAno]);
-  const totaisVivos = useMemo(() => totaisPorTipo(itensVivos), [itensVivos]);
+
+  // Terceiros: uma parceira por grupo. Com documento salvo, vale o que foi congelado; sem ele, o cálculo ao vivo.
+  const grupos: GrupoParceira[] = (() => {
+    const ids = new Set<string>([...parceirosVivos.map((x) => x.parceiraId), ...parceirosSalvos.map((x) => x.parceiraId)]);
+    return Array.from(ids)
+      .map((parceiraId) => {
+        const salvo = parceirosSalvos.find((x) => x.parceiraId === parceiraId);
+        const vivo = parceirosVivos.find((x) => x.parceiraId === parceiraId);
+        const itens: ItemExibido[] = salvo
+          ? itensSalvos.filter((i) => salvo.recursos.some((r) => r.recursoId === i.recursoId))
+          : itensVivos.filter((i) => i.tipoBox === "terceiro" && (i.parceiraId ?? "sem_parceira") === parceiraId);
+        return {
+          parceiraId,
+          nome: salvo?.parceiraNome ?? vivo?.parceiraNome ?? "Terceiros sem parceira cadastrada",
+          salvo,
+          vivo,
+          etapa: etapaDaParceira(salvo, statusDoMes),
+          itens: [...itens].sort((a, b) => a.recursoNome.localeCompare(b.recursoNome, "pt-BR")),
+        };
+      })
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  })();
+  const proprios = useMemo<ItemExibido[]>(() => itensVivos.filter((i) => i.tipoBox === "proprio"), [itensVivos]);
+  const itensExibidos: ItemExibido[] = [...proprios, ...grupos.flatMap((g) => g.itens)];
+  const totais = totaisPorTipo(itensExibidos);
   const divergencias = useMemo(
     () => calcularDivergencias({ eventos, recursos, projetos, clientes, linhas: linhasVivas, mesAno }),
     [eventos, recursos, projetos, clientes, linhasVivas, mesAno]
   );
-  const bloqueantes = divergencias.filter((d) => d.severidade === "bloqueante");
 
-  // Depois de congelado, as horas do período podem mudar (ex: um apontamento aprovado depois).
-  const totalCongelado = totais.proprio.horas + totais.terceiro.horas;
-  const totalVivo = totaisVivos.proprio.horas + totaisVivos.terceiro.horas;
-  const valorCongelado = totais.proprio.valor + totais.terceiro.valor;
-  const valorVivo = totaisVivos.proprio.valor + totaisVivos.terceiro.valor;
-  const desatualizado = congelado && (Math.abs(totalCongelado - totalVivo) > 0.01 || Math.abs(valorCongelado - valorVivo) > 0.01);
+  /** Divergências bloqueantes (lançamentos sem aprovação) só dos consultores desta parceira. */
+  function bloqueantesDaParceira(parceiraId: string) {
+    const ids = new Set(recursos.filter((r) => tipoBoxEfetivo(r) === "terceiro" && (r.parceiraId ?? "sem_parceira") === parceiraId).map((r) => r.id));
+    return calcularDivergencias({
+      eventos: eventos.filter((e) => ids.has(e.recursoId)),
+      recursos: recursos.filter((r) => ids.has(r.id)),
+      projetos,
+      clientes,
+      linhas: linhasVivas.filter((l) => ids.has(l.recursoId)),
+      mesAno,
+    }).filter((d) => d.severidade === "bloqueante");
+  }
 
-  const podeEnviarRevisao = itensVivos.length > 0;
   const prazo = prazoFechamento(mesAno);
-  const prazoVencido = hojeIso > prazo && status !== "faturado";
-  const parceirosAguardandoCiencia = parceirosSalvos.filter((x) => !x.ciencia?.em).length;
-  const parceirosPendentes = parceirosSalvos.filter((x) => !!x.ciencia?.em && x.confirmacao.status === "pendente").length;
-  const parceirosContestados = parceirosSalvos.filter((x) => x.confirmacao.status === "contestado").length;
-  const parceirosConfirmados = parceirosSalvos.filter((x) => x.confirmacao.status === "confirmado").length;
+  const liberadas = grupos.filter((g) => g.etapa === "faturado").length;
+  const prazoVencido = hojeIso > prazo && (grupos.length === 0 || liberadas < grupos.length);
+  const contagemEtapas = ETAPAS_FECHAMENTO.map((e) => ({ etapa: e, qtd: grupos.filter((g) => g.etapa === e).length }));
+  const parceirosLiberados = parceirosSalvos.filter((x) => x.liberado);
+  const parceirosAguardandoCiencia = parceirosLiberados.filter((x) => !x.ciencia?.em).length;
+  const parceirosPendentes = parceirosLiberados.filter((x) => !!x.ciencia?.em && x.confirmacao.status === "pendente").length;
+  const parceirosContestados = parceirosLiberados.filter((x) => x.confirmacao.status === "contestado").length;
+  const parceirosConfirmados = parceirosLiberados.filter((x) => x.confirmacao.status === "confirmado").length;
+
+  const grupoDaAcao = acao ? grupos.find((g) => g.parceiraId === acao.parceiraId) ?? null : null;
+  const bloqueantes = acao?.tipo === "fechar" ? bloqueantesDaParceira(acao.parceiraId) : [];
 
   async function executar(texto: string, arquivos: File[] = []) {
-    if (!acao || !ator) return;
+    if (!acao || !ator || !grupoDaAcao) return;
     setProcessando(true);
     setErro("");
     try {
+      const { salvo, vivo } = grupoDaAcao;
       if (acao.tipo === "revisao" || acao.tipo === "atualizar") {
-        await enviarParaRevisao({ mesAno, atual: fechamento, itens: itensVivos, parceiros: parceirosVivos, ator, motivo: texto });
-      } else if (acao.tipo === "rascunho") await voltarParaRascunho({ mesAno, ator, motivo: texto });
-      else if (acao.tipo === "fechar") await fechar({ mesAno, ator, justificativa: texto });
+        if (!vivo) throw new Error("Esta parceira não tem horas aprovadas no período.");
+        await enviarParceiraParaRevisao({
+          mesAno,
+          atual: salvo ?? null,
+          parceiro: vivo,
+          itens: itensVivos.filter((i) => i.tipoBox === "terceiro" && (i.parceiraId ?? "sem_parceira") === acao.parceiraId),
+          ator,
+          motivo: texto,
+        });
+      } else if (!salvo) {
+        throw new Error("Envie esta parceira para revisão primeiro.");
+      } else if (acao.tipo === "rascunho") await voltarParceiraParaRascunho({ mesAno, atual: salvo, ator, motivo: texto });
+      else if (acao.tipo === "fechar") await fecharParceira({ mesAno, atual: salvo, ator, justificativa: texto });
       else if (acao.tipo === "liberar") {
         let anexos: Awaited<ReturnType<typeof enviarArquivo>>[] = [];
         try {
-          anexos = await Promise.all(arquivos.map((a) => enviarArquivo({ mesAno, parceiraId: null, tipo: "anexo", autorUid: ator.uid }, a)));
+          anexos = await Promise.all(arquivos.map((a) => enviarArquivo({ mesAno, parceiraId: salvo.parceiraId, tipo: "anexo", autorUid: ator.uid }, a)));
         } catch (err) {
           console.error("Erro ao anexar documentos:", err);
           throw new Error(err instanceof Error && err.message.includes("3 MB") ? err.message : MENSAGEM_ERRO_ARQUIVO);
         }
-        await liberarFaturamento({ mesAno, ator, observacao: texto, anexos });
-      }
-      else await reabrir({ mesAno, de: status, ator, motivo: texto });
+        await liberarParceira({ mesAno, atual: salvo, ator, observacao: texto, anexos });
+      } else await reabrirParceira({ mesAno, atual: salvo, de: grupoDaAcao.etapa, ator, motivo: texto });
       setAcao(null);
     } catch (err) {
       console.error("Erro na ação do fechamento:", err);
-      setErro(err instanceof Error && (err.message === MENSAGEM_ERRO_ARQUIVO || err.message.includes("3 MB")) ? err.message : "Não foi possível concluir a ação. Confira se as regras do Firestore foram publicadas e tente de novo.");
+      setErro(err instanceof Error && (err.message === MENSAGEM_ERRO_ARQUIVO || err.message.includes("3 MB") || err.message.includes("parceira")) ? err.message : "Não foi possível concluir a ação. Confira se as regras do Firestore foram publicadas e tente de novo.");
       setAcao(null);
     } finally {
       setProcessando(false);
@@ -379,7 +483,7 @@ function FechamentosPageContent() {
     setExportando(formato);
     setErro("");
     try {
-      const linhas = congelado ? linhasDosItens(itensSalvos) : linhasVivas;
+      const linhas = linhasDosItens(itensExibidos);
       const escopo = { ...descreverEscopo({ tipo: "", parceiraId: "", recursoId: "" }, null), incluirDesconto: temDesconto(linhas) };
       if (formato === "pdf") await exportarFechamentoPdf(linhas, escopo, mesAno, "/logo-navy.png");
       else await exportarFechamentoExcel(linhas, escopo, mesAno, "/logo-navy.png");
@@ -395,7 +499,7 @@ function FechamentosPageContent() {
   async function gerarDocumentoParceira(parceiro: FechamentoParceiro) {
     setErro("");
     try {
-      const doParceiro = linhasDosItens(itensSalvos).filter((l) => parceiro.recursos.some((r) => r.recursoId === l.recursoId));
+      const doParceiro = linhasDosItens(itensExibidos).filter((l) => parceiro.recursos.some((r) => r.recursoId === l.recursoId));
       const escopo = {
         rotulo: parceiro.parceiraNome,
         cnpj: parceiras.find((p) => p.id === parceiro.parceiraId)?.cnpj,
@@ -409,35 +513,35 @@ function FechamentosPageContent() {
     }
   }
 
-  const cfgStatus = STATUS_FECHAMENTO_CONFIG[status];
   const [ano, mes] = mesAno.split("-");
 
   const modal = acao && (
     <AcaoFechamentoModal
       titulo={
+        `${grupoDaAcao?.nome ?? ""} — ` +
         {
           revisao: "Enviar para revisão",
           atualizar: "Atualizar valores da revisão",
           rascunho: "Voltar para rascunho",
-          fechar: bloqueantes.length > 0 ? "Fechar com divergências" : "Fechar o mês",
+          fechar: bloqueantes.length > 0 ? "Fechar com divergências" : "Fechar",
           liberar: "Liberar faturamento",
           reabrir: "Reabrir fechamento",
         }[acao.tipo]
       }
       descricao={
         {
-          revisao: "Congela o valor de cada consultor com as horas aprovadas até agora. Você poderá atualizar ou voltar para rascunho enquanto estiver em revisão.",
+          revisao: "Congela o valor de cada consultor desta parceira com as horas aprovadas até agora. Você poderá atualizar ou voltar para rascunho enquanto estiver em revisão.",
           atualizar: "Recalcula os valores com as horas aprovadas atuais e substitui os valores congelados.",
           rascunho: "Descarta os valores congelados. O fechamento volta a ser calculado ao vivo.",
           fechar:
             bloqueantes.length > 0
               ? `Há ${bloqueantes.length} divergência(s) bloqueante(s) em aberto (${bloqueantes.map((b) => b.titulo).join("; ")}). Para fechar assim, registre a justificativa.`
-              : "Depois de fechado, o mês pode seguir para a liberação do faturamento.",
-          liberar: "Libera o faturamento. Cada consultor terceiro passa a ver o próprio fechamento para conferir e confirmar. Fica registrado quem liberou e quando.",
+              : "Depois de fechado, esta parceira pode seguir para a liberação do faturamento.",
+          liberar: "Libera o faturamento desta parceira: o responsável dela passa a ver o fechamento para conferir e confirmar. Fica registrado quem liberou e quando.",
           reabrir:
-            status === "faturado"
-              ? "O faturamento deixa de estar liberado, os terceiros deixam de ver o fechamento e as confirmações recomeçam."
-              : "O mês volta para a revisão.",
+            grupoDaAcao?.etapa === "faturado"
+              ? "O faturamento desta parceira deixa de estar liberado, o responsável deixa de ver o fechamento e a confirmação recomeça."
+              : "O fechamento desta parceira volta para a revisão.",
         }[acao.tipo]
       }
       rotulo={
@@ -458,12 +562,9 @@ function FechamentosPageContent() {
       <FinanceiroTabs />
       <div className="mb-1 flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Fechamentos</h1>
-        <span className="rounded-full px-3 py-1 text-[12px] font-bold" style={{ backgroundColor: cfgStatus.bg, color: cfgStatus.text }}>
-          {cfgStatus.label}
-        </span>
       </div>
       <p className="mb-5 text-sm text-brand-muted">
-        Do fechamento das horas do mês até a liberação do faturamento. Recursos próprios e terceiros ficam separados, e os terceiros agrupados por parceira.
+        Do fechamento das horas do mês até a liberação do faturamento. Os recursos próprios só têm o relatório; cada parceira terceira segue o próprio fluxo (revisão, fechamento e liberação), com botões próprios.
       </p>
 
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -472,7 +573,6 @@ function FechamentosPageContent() {
             <label className="mb-1 block text-[12.5px] font-bold text-brand-navy-2">Mês de referência</label>
             <Input type="month" value={mesAno} onChange={(e) => e.target.value && setMesAno(e.target.value)} className="w-44" />
           </div>
-          <Etapas status={status} />
           <span
             className={`rounded-full px-3 py-1 text-[12px] font-bold ${prazoVencido ? "bg-[#fdeceb] text-[#b5392a]" : "bg-brand-hover text-brand-muted"}`}
             title="O fechamento do mês acontece do dia 1 ao dia 10 do mês seguinte (referência; nada é bloqueado por data)"
@@ -495,92 +595,31 @@ function FechamentosPageContent() {
 
       {erro && <p className="mb-4 rounded-md bg-[#fdeceb] p-3 text-sm font-medium text-[#b5392a]">{erro}</p>}
 
-      {/* Ações do status atual */}
-      <div className="mb-5 flex flex-wrap items-center gap-2.5 rounded-2xl border border-brand-border bg-white p-4 shadow-card">
-        {status === "rascunho" && (
-          <>
-            <Button onClick={() => setAcao({ tipo: "revisao" })} disabled={!podeEnviarRevisao}>
-              <Send size={15} />
-              Enviar para revisão
-            </Button>
-            <span className="text-[12.5px] text-brand-muted">
-              {itensVivos.length === 0 ? "Nenhuma hora aprovada neste período." : "Congela o valor de cada consultor e de cada parceira para conferência."}
+      {grupos.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-[12.5px]">
+          <span className="font-bold text-brand-navy-2">Parceiras:</span>
+          {contagemEtapas.map(({ etapa, qtd }) => (
+            <span
+              key={etapa}
+              className="rounded-full px-2.5 py-1 font-bold"
+              style={{ backgroundColor: STATUS_FECHAMENTO_CONFIG[etapa].bg, color: STATUS_FECHAMENTO_CONFIG[etapa].text }}
+            >
+              {qtd} {STATUS_FECHAMENTO_CONFIG[etapa].label.toLowerCase()}
             </span>
-          </>
-        )}
-        {status === "em_revisao" && (
-          <>
-            <Button onClick={() => setAcao({ tipo: "fechar" })}>
-              <Lock size={15} />
-              Fechar o mês
-            </Button>
-            <Button variant="secondary" onClick={() => setAcao({ tipo: "atualizar" })}>
-              <RotateCcw size={15} />
-              Atualizar valores
-            </Button>
-            <Button variant="secondary" onClick={() => setAcao({ tipo: "rascunho" })}>
-              Voltar para rascunho
-            </Button>
-          </>
-        )}
-        {status === "fechado" && (
-          <>
-            <Button onClick={() => setAcao({ tipo: "liberar" })}>
-              <CheckCircle2 size={15} />
-              Liberar faturamento
-            </Button>
-            <Button variant="secondary" onClick={() => setAcao({ tipo: "reabrir" })}>
-              <LockOpen size={15} />
-              Reabrir
-            </Button>
-            <span className="text-[12.5px] text-brand-muted">
-              Fechado em {fechamento?.fechadoEm ? dataHora(fechamento.fechadoEm) : "—"} por {fechamento?.fechadoPorNome ?? "—"}.
-            </span>
-          </>
-        )}
-        {status === "faturado" && (
-          <>
-            <span className="text-[13px] font-semibold text-[#15754c]">
-              Faturamento liberado em {fechamento?.liberadoEm ? dataHora(fechamento.liberadoEm) : "—"} por {fechamento?.liberadoPorNome ?? "—"}.
-            </span>
-            <Button variant="secondary" onClick={() => setAcao({ tipo: "reabrir" })} className="ml-auto">
-              <LockOpen size={15} />
-              Reabrir
-            </Button>
-          </>
-        )}
-      </div>
-
-      {fechamento?.justificativaDivergencias && (
-        <p className="mb-4 rounded-md bg-[#fff2de] p-3 text-[12.5px] text-[#a4650d]">
-          <strong>Fechado com divergências justificadas:</strong> {fechamento.justificativaDivergencias}
-        </p>
+          ))}
+        </div>
       )}
-      {status === "faturado" && fechamento?.observacaoLiberacao && (
-        <p className="mb-4 rounded-md bg-brand-hover p-3 text-[12.5px] text-brand-muted">
-          <strong className="text-brand-navy-2">Observação da liberação:</strong> {fechamento.observacaoLiberacao}
-        </p>
-      )}
-      {desatualizado && (
-        <p className="mb-4 flex items-start gap-2 rounded-md bg-[#fff2de] p-3 text-[12.5px] font-medium text-[#a4650d]">
-          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-          As horas aprovadas do período mudaram depois que os valores foram congelados (hoje: {formatarHoras(totalVivo)} e {moeda(valorVivo)}; no
-          fechamento: {formatarHoras(totalCongelado)} e {moeda(valorCongelado)}).
-          {status === "em_revisao" ? " Use “Atualizar valores” para refletir a mudança." : " Reabra o fechamento se for preciso corrigir."}
-        </p>
-      )}
-      {status === "faturado" && parceirosSalvos.length > 0 && (
+      {parceirosLiberados.length > 0 && (
         <p className="mb-4 text-[12.5px] text-brand-muted">
-          Conferência das parceiras: <strong className="text-[#a4650d]">{parceirosAguardandoCiencia} aguardando ciência</strong> ·{" "}
+          Conferência das parceiras liberadas: <strong className="text-[#a4650d]">{parceirosAguardandoCiencia} aguardando ciência</strong> ·{" "}
           <strong className="text-[#a4650d]">{parceirosPendentes} a confirmar valores</strong> ·{" "}
           <strong className="text-[#15754c]">{parceirosConfirmados} confirmada(s)</strong> ·{" "}
           <strong className="text-[#b5392a]">{parceirosContestados} contestada(s)</strong>. A nota fiscal só é solicitada depois da confirmação.
         </p>
       )}
-
-      {status === "faturado" && fechamento?.anexos && fechamento.anexos.length > 0 && (
+      {fechamento?.anexos && fechamento.anexos.length > 0 && (
         <div className="mb-4 rounded-md bg-brand-hover p-3 text-[12.5px] text-brand-muted">
-          <strong className="text-brand-navy-2">Documentos complementares:</strong>
+          <strong className="text-brand-navy-2">Documentos complementares (liberação antiga do mês inteiro):</strong>
           <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
             {fechamento.anexos.map((a) => (
               <LinkArquivo key={a.path} arquivo={a} />
@@ -695,13 +734,13 @@ function FechamentosPageContent() {
       </div>
 
       <TabelaItens
-        itens={itensExibidos}
-        parceirosSalvos={parceirosSalvos}
-        mostrarConfirmacao={status === "faturado"}
+        proprios={proprios}
+        grupos={grupos}
         hojeIso={hojeIso}
         filtroTipo={filtroTipo}
         filtroSituacao={filtroSituacao}
         onDocumento={gerarDocumentoParceira}
+        onAcao={(tipo, parceiraId) => setAcao({ tipo, parceiraId })}
       />
 
       {/* Auditoria */}
@@ -717,7 +756,7 @@ function FechamentosPageContent() {
             {historico.map((h) => (
               <li key={h.id} className="py-2.5 text-[13px]">
                 <p className="text-brand-navy-2">
-                  <strong>{h.acao}</strong> <span className="text-brand-faint">— {h.usuarioNome} · {dataHora(h.em)}</span>
+                  {h.parceiraNome && <strong className="text-brand-accent">{h.parceiraNome} · </strong>}<strong>{h.acao}</strong> <span className="text-brand-faint">— {h.usuarioNome} · {dataHora(h.em)}</span>
                 </p>
                 <p className="text-[12px] text-brand-faint">
                   {h.de ? STATUS_FECHAMENTO_CONFIG[h.de].label : "Novo"} → {STATUS_FECHAMENTO_CONFIG[h.para].label}

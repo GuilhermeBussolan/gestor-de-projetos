@@ -170,7 +170,7 @@ export function Sidebar() {
       >
         {!colapsada && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/logo-white.png" alt="NG" className="h-6 w-auto shrink-0" />
+          <img src="/logo-flowing-branca.png" alt="FlowiNG" className="h-5 w-auto shrink-0" />
         )}
         <button
           onClick={alternarColapsada}

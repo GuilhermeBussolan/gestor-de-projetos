@@ -14,7 +14,18 @@ export const STATUS_FECHAMENTO_CONFIG: Record<StatusFechamento, { label: string;
 
 export const ETAPAS_FECHAMENTO: StatusFechamento[] = ["rascunho", "em_revisao", "fechado", "faturado"];
 
-export const dataBR = (iso: string) => iso.split("-").reverse().join("/");
+/**
+ * Etapa de uma parceira no mês. Sem documento salvo = rascunho (calculado ao vivo). Documentos antigos, de
+ * quando o fechamento era do mês inteiro, não têm "etapa": vale o status do mês.
+ */
+export function etapaDaParceira(doc: FechamentoParceiro | undefined, statusDoMes: StatusFechamento): StatusFechamento {
+  if (!doc) return "rascunho";
+  if (doc.etapa) return doc.etapa;
+  if (doc.liberado) return "faturado";
+  return statusDoMes === "rascunho" ? "em_revisao" : statusDoMes;
+}
+
+export const dataBR =(iso: string) => iso.split("-").reverse().join("/");
 
 export function proximoMes(mesAno: string): string {
   const [ano, mes] = mesAno.split("-").map(Number);
@@ -204,7 +215,7 @@ export function calcularDivergencias({
 }
 
 /** Reconstrói as linhas do relatório (PDF/Excel) a partir dos itens congelados do fechamento. */
-export function linhasDosItens(itens: ItemFechamento[]): LinhaFechamento[] {
+export function linhasDosItens(itens: Pick<ItemFechamento, "recursoId" | "recursoNome" | "tipoBox" | "parceiraNome" | "lancamentos">[]): LinhaFechamento[] {
   return itens.flatMap((i) =>
     i.lancamentos.map((l) => ({
       data: l.data,
