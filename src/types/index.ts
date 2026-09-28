@@ -428,6 +428,24 @@ export interface EventoCalendario {
   createdAt: number;
 }
 
+/**
+ * Bloqueio na agenda de um consultor (férias, curso, consulta...): nenhum apontamento pode cair dentro dele. Vale de
+ * `dataInicio` a `dataFim` (inclusive); sem `diaInteiro`, o horário vale em cada um desses dias.
+ */
+export interface BloqueioAgenda {
+  id: string;
+  recursoId: string;
+  dataInicio: string; // YYYY-MM-DD
+  dataFim: string; // YYYY-MM-DD
+  diaInteiro: boolean;
+  horaInicio: string | null; // HH:mm (só quando não é dia inteiro)
+  horaFim: string | null; // HH:mm
+  motivo: string;
+  criadoPorUid: string;
+  criadoPorNome: string;
+  createdAt: number;
+}
+
 /** Fechamento mensal de horas: rascunho (cálculo ao vivo) -> em revisão (valores congelados) -> fechado -> faturado (liberado). */
 export type StatusFechamento = "rascunho" | "em_revisao" | "fechado" | "faturado";
 

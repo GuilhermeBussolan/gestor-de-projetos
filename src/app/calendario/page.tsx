@@ -14,12 +14,13 @@ import {
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { where } from "firebase/firestore";
-import { CalendarOff, Plus, Repeat } from "lucide-react";
+import { CalendarOff, Lock, Plus, Repeat } from "lucide-react";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { CalendarioTabs } from "@/components/layout/CalendarioTabs";
 import { EventoModal } from "@/components/calendario/EventoModal";
 import { OcorrenciaModal } from "@/components/calendario/OcorrenciaModal";
+import { BloqueiosModal } from "@/components/calendario/BloqueiosModal";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthContext";
 import { nomeExibicaoCliente } from "@/lib/cliente";
@@ -27,7 +28,9 @@ import { formatarHoras } from "@/lib/horas";
 import { STATUS_HORA_CONFIG, statusEfetivo } from "@/lib/statusHora";
 import { HORARIO_PERIODO, PERIODO_LABEL } from "@/lib/cronograma";
 import { previstosDoCronograma, type PrevistoCronograma } from "@/lib/agendaPrevista";
-import type { Cliente, EventoCalendario, Projeto, Recurso } from "@/types";
+import { bloqueioNoDia, bloqueiosQueConflitam, horarioDoBloqueio, horasBloqueadasNoTurno } from "@/lib/bloqueioAgenda";
+import { useBloqueiosAgenda } from "@/lib/useBloqueiosAgenda";
+import type { BloqueioAgenda, Cliente, EventoCalendario, Projeto, Recurso } from "@/types";
 
 const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const OCULTAR_FIM_DE_SEMANA_KEY = "gp_calendario_sem_fim_de_semana";
@@ -46,6 +49,8 @@ function CalendarioPageContent() {
   const { data: projetos } = useCollection<Projeto>("projetos");
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: recursos } = useCollection<Recurso>("recursos");
+  const { bloqueios } = useBloqueiosAgenda(usuario);
+  const [bloqueiosAbertos, setBloqueiosAbertos] = useState<{ data: string; editando: BloqueioAgenda | null } | null>(null);
 
   const [mesBase, setMesBase] = useState(() => startOfMonth(new Date()));
   const [filtroRecursos, setFiltroRecursos] = useState<string[]>([]);
@@ -101,6 +106,18 @@ function CalendarioPageContent() {
 
   function toggleFiltro(id: string) {
     setFiltroRecursos((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));
+  }
+
+  function bloqueiosDoDia(diaISO: string) {
+    return bloqueios
+      .filter((b) => bloqueioNoDia(b, diaISO) && recursosVisiveis.some((r) => r.id === b.recursoId))
+      .sort((a, b) => Number(b.diaInteiro) - Number(a.diaInteiro) || (a.horaInicio ?? "").localeCompare(b.horaInicio ?? ""));
+  }
+
+  // Na agenda de um consultor só (o próprio, ou um filtro de um recurso), os atalhos +M/+T somem no turno bloqueado.
+  const recursoUnico = recursosVisiveis.length === 1 ? recursosVisiveis[0].id : null;
+  function turnoBloqueado(diaISO: string, periodo: "manha" | "tarde") {
+    return !!recursoUnico && horasBloqueadasNoTurno(bloqueios, recursoUnico, diaISO, periodo) >= 4;
   }
 
   function eventosDoDia(diaISO: string) {
@@ -217,6 +234,15 @@ function CalendarioPageContent() {
             >
               <CalendarOff size={17} />
             </button>
+            <button
+              type="button"
+              onClick={() => setBloqueiosAbertos({ data: hojeISO, editando: null })}
+              aria-label="Bloqueios de agenda"
+              title="Bloqueios de agenda"
+              className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-brand-border bg-white text-brand-muted transition-colors hover:bg-brand-hover"
+            >
+              <Lock size={17} />
+            </button>
             <Button onClick={() => abrirNovo(hojeISO, "08:00", "12:00")}>
               <Plus size={16} /> Novo lançamento
             </Button>
@@ -260,6 +286,7 @@ function CalendarioPageContent() {
                       {format(d, "d")}
                     </span>
                     <div className="flex gap-0.5">
+                      {!turnoBloqueado(diaISO, "manha") && (
                       <button
                         onClick={() => abrirNovo(diaISO, "08:00", "12:00")}
                         className="rounded px-1 text-[10px] font-bold text-brand-faint opacity-60 group-hover:opacity-100 hover:bg-brand-accent-soft hover:text-brand-accent"
@@ -268,6 +295,8 @@ function CalendarioPageContent() {
                       >
                         +M
                       </button>
+                      )}
+                      {!turnoBloqueado(diaISO, "tarde") && (
                       <button
                         onClick={() => abrirNovo(diaISO, "13:00", "17:00")}
                         className="rounded px-1 text-[10px] font-bold text-brand-faint opacity-60 group-hover:opacity-100 hover:bg-brand-accent-soft hover:text-brand-accent"
@@ -276,20 +305,45 @@ function CalendarioPageContent() {
                       >
                         +T
                       </button>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col gap-0.5 overflow-y-auto">
+                    {bloqueiosDoDia(diaISO).map((b) => {
+                      const rec = recursos.find((r) => r.id === b.recursoId);
+                      return (
+                        <button
+                          key={`bloq-${b.id}`}
+                          onClick={() => setBloqueiosAbertos({ data: diaISO, editando: b })}
+                          className="flex items-center gap-1 truncate rounded border border-[#c9cfdd] px-1.5 py-[3px] text-left text-[10.5px] leading-tight text-[#4d5670] hover:brightness-95"
+                          style={{ background: "repeating-linear-gradient(135deg, #eef0f5 0 6px, #e2e6ef 6px 12px)" }}
+                          title={`Agenda bloqueada (${horarioDoBloqueio(b)}): ${b.motivo}`}
+                        >
+                          <Lock size={9} className="shrink-0" />
+                          <span className="truncate">
+                            <strong>{b.diaInteiro ? "Dia todo" : b.horaInicio}</strong>{" "}
+                            {!souConsultor && rec ? `${rec.nomeCompleto.split(" ")[0]} · ` : ""}
+                            {b.motivo}
+                          </span>
+                        </button>
+                      );
+                    })}
                     {(previstosPorDia.get(diaISO) ?? []).map((g) => {
                       const proj = projetos.find((p) => p.id === g.projetoId);
                       const cli = clientes.find((c) => c.id === proj?.clienteId);
                       const rec = recursos.find((r) => r.id === g.recursoId);
+                      const h = HORARIO_PERIODO[g.periodo];
+                      const bloqueado = bloqueiosQueConflitam(bloqueios, g.recursoId, g.data, h.horaInicio, h.horaFim).length > 0;
                       return (
                         <button
                           key={`prev-${g.recursoId}-${g.projetoId}-${g.periodo}`}
                           onClick={() => abrirPrevisto(g)}
                           className="flex items-center gap-1 truncate rounded border border-dashed border-[#9db8f1] bg-[#eef3ff] px-1.5 py-[3px] text-left text-[10.5px] leading-tight text-[#2f5fc0] hover:brightness-95"
-                          title={`Previsto no cronograma (${PERIODO_LABEL[g.periodo]}, ${g.horas}h): ${g.nomes.join(", ")} — clique para apontar`}
+                          title={`Previsto no cronograma (${PERIODO_LABEL[g.periodo]}, ${g.horas}h): ${g.nomes.join(", ")} — ${
+                            bloqueado ? "ATENÇÃO: cai num bloqueio da agenda; ajuste o cronograma ou o bloqueio" : "clique para apontar"
+                          }`}
                         >
+                          {bloqueado && <Lock size={9} className="shrink-0 text-[#b5392a]" />}
                           <span className="truncate">
                             <strong>{g.periodo === "manha" ? "M" : "T"}</strong> Previsto ·{" "}
                             {!souConsultor && rec ? `${rec.nomeCompleto.split(" ")[0]} · ` : ""}
@@ -394,6 +448,13 @@ function CalendarioPageContent() {
               <span className="h-3.5 w-3.5 shrink-0 rounded border border-dashed border-[#9db8f1] bg-[#eef3ff]" />
               Previsto no cronograma
             </div>
+            <div className="flex items-center gap-2.5">
+              <span
+                className="h-3.5 w-3.5 shrink-0 rounded border border-[#c9cfdd]"
+                style={{ background: "repeating-linear-gradient(135deg, #eef0f5 0 3px, #e2e6ef 3px 6px)" }}
+              />
+              Agenda bloqueada
+            </div>
             {(Object.keys(STATUS_HORA_CONFIG) as Array<keyof typeof STATUS_HORA_CONFIG>).map((s) => (
               <div key={s} className="flex items-center gap-2.5">
                 <span
@@ -421,6 +482,19 @@ function CalendarioPageContent() {
           usuario={usuario}
           eventos={eventos}
           preenchimento={preenchimento}
+        />
+      )}
+
+      {bloqueiosAbertos && usuario && (
+        <BloqueiosModal
+          aberto
+          onClose={() => setBloqueiosAbertos(null)}
+          usuario={usuario}
+          recursos={recursos}
+          bloqueios={bloqueios}
+          eventos={eventos}
+          dataInicial={bloqueiosAbertos.data}
+          editandoInicial={bloqueiosAbertos.editando}
         />
       )}
 

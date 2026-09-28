@@ -11,6 +11,8 @@ import { nomeExibicaoCliente } from "@/lib/cliente";
 import { calcularTotalHoras, formatarHoras } from "@/lib/horas";
 import { registrarContato } from "@/lib/contato";
 import { statusAoConfirmar, statusEfetivo } from "@/lib/statusHora";
+import { bloqueiosQueConflitam, mensagemConflitoBloqueio } from "@/lib/bloqueioAgenda";
+import { useBloqueiosAgenda } from "@/lib/useBloqueiosAgenda";
 import type { Cliente, EventoCalendario, Projeto, Recurso, Usuario } from "@/types";
 
 type Decisao = "realizada" | "cancelada" | "";
@@ -45,6 +47,9 @@ function OcorrenciaForm({
     ocorrencia.atividadesRealizadas ?? []
   );
   const [salvando, setSalvando] = useState(false);
+  const { bloqueios } = useBloqueiosAgenda(usuario, ocorrencia.recursoId);
+  const conflitosBloqueio = bloqueiosQueConflitam(bloqueios, ocorrencia.recursoId, ocorrencia.data, horaInicio, horaFim);
+  const bloqueadoParaRealizar = decisao === "realizada" && conflitosBloqueio.length > 0;
 
   const projetosDisponiveis = souConsultor
     ? projetos.filter((p) => p.consultorIds?.includes(meuRecursoId) && p.status !== "finalizado")
@@ -57,6 +62,7 @@ function OcorrenciaForm({
     e.preventDefault();
     if (!decisao || !projetoId) return;
     if (decisao === "realizada" && !memo.trim()) return;
+    if (bloqueadoParaRealizar) return;
     setSalvando(true);
     try {
       const totalHoras = decisao === "realizada" ? calcularTotalHoras(horaInicio, horaFim, horaDesconto) : 0;
@@ -193,11 +199,15 @@ function OcorrenciaForm({
         </>
       )}
 
+      {bloqueadoParaRealizar && (
+        <p className="rounded-md bg-[#fdeceb] p-3 text-sm text-[#b5392a]">{mensagemConflitoBloqueio(conflitosBloqueio)}</p>
+      )}
+
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={salvando || !decisao}>
+        <Button type="submit" disabled={salvando || !decisao || bloqueadoParaRealizar}>
           {salvando ? "Salvando..." : "Confirmar"}
         </Button>
       </div>

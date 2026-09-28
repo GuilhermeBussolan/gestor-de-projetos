@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarSearch, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarSearch, ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useCollection } from "@/lib/useCollection";
@@ -10,7 +10,17 @@ import { CalendarioTabs } from "@/components/layout/CalendarioTabs";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormRow, Input, Select } from "@/components/ui/Field";
-import { CelulaMapaAlocacao, COR_TURNO, DetalhesTurno, ROTULO_STATUS } from "@/components/calendario/CelulaMapaAlocacao";
+import {
+  CelulaMapaAlocacao,
+  COR_TURNO,
+  DetalhesTurno,
+  FUNDO_BLOQUEIO,
+  ROTULO_STATUS,
+  type BloqueioTurno,
+} from "@/components/calendario/CelulaMapaAlocacao";
+import { useAuth } from "@/contexts/AuthContext";
+import { bloqueioNoDia, horasBloqueadasNoTurno } from "@/lib/bloqueioAgenda";
+import { useBloqueiosAgenda } from "@/lib/useBloqueiosAgenda";
 import { PainelDisponibilidade } from "@/components/calendario/PainelDisponibilidade";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import {
@@ -41,6 +51,15 @@ function MapaAlocacaoPageContent() {
   const { data: recursos } = useCollection<Recurso>("recursos");
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: eventos } = useCollection<EventoCalendario>("eventosCalendario", []);
+  const { usuario } = useAuth();
+  const { bloqueios } = useBloqueiosAgenda(usuario);
+
+  function bloqueioDoTurno(recursoId: string, data: string, periodo: PeriodoDia): BloqueioTurno | null {
+    const horas = horasBloqueadasNoTurno(bloqueios, recursoId, data, periodo);
+    if (horas <= 0) return null;
+    const motivos = bloqueios.filter((b) => b.recursoId === recursoId && bloqueioNoDia(b, data)).map((b) => b.motivo);
+    return { horas, motivos: Array.from(new Set(motivos)) };
+  }
 
   const hojeIso = new Date().toISOString().slice(0, 10);
   const [modo, setModo] = useState<"semana" | "mes">("semana");
@@ -196,6 +215,7 @@ function MapaAlocacaoPageContent() {
           recursos={recursos}
           alocacoes={todasAloc}
           realizadas={realizadas}
+          bloqueios={bloqueios}
           hojeIso={hojeIso}
           onVerNoMapa={verNoMapa}
         />
@@ -207,6 +227,15 @@ function MapaAlocacaoPageContent() {
             <span className={`h-3 w-3 rounded border ${COR_TURNO[s].borda} ${COR_TURNO[s].fundo}`} /> {ROTULO_STATUS[s]}
           </span>
         ))}
+        <span className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded border border-[#c9cfdd]" style={{ background: FUNDO_BLOQUEIO }} /> Agenda bloqueada
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="rounded bg-[#b5392a] p-[2px] text-white">
+            <Lock size={8} />
+          </span>
+          Previsto dentro de um bloqueio
+        </span>
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-brand-border bg-white shadow-card">
@@ -280,6 +309,7 @@ function MapaAlocacaoPageContent() {
                               compacto={compacto}
                               projetos={projetos}
                               clientes={clientes}
+                              bloqueio={bloqueioDoTurno(r.id, d, p)}
                               onAbrir={() => setDetalhe({ recursoId: r.id, data: d, periodo: p, celula })}
                             />
                           )}
@@ -310,6 +340,7 @@ function MapaAlocacaoPageContent() {
             recursoNome={recursos.find((r) => r.id === detalhe.recursoId)?.nomeCompleto ?? "Recurso"}
             projetos={projetos}
             clientes={clientes}
+            bloqueio={bloqueioDoTurno(detalhe.recursoId, detalhe.data, detalhe.periodo)}
           />
         )}
       </Modal>

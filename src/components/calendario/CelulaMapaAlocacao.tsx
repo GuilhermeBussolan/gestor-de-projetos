@@ -1,5 +1,6 @@
 "use client";
 
+import { Lock } from "lucide-react";
 import { HORAS_POR_TURNO, PERIODO_LABEL, type CelulaTurno, type StatusTurno } from "@/lib/cronograma";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { formatarHoras } from "@/lib/horas";
@@ -22,6 +23,12 @@ export const ROTULO_STATUS: Record<StatusTurno, string> = {
   realizado: "Realizado",
 };
 
+/** Fundo listrado usado em tudo que é "agenda bloqueada". */
+export const FUNDO_BLOQUEIO = "repeating-linear-gradient(135deg, #eef0f5 0 6px, #e2e6ef 6px 12px)";
+
+/** Bloqueio que atinge o turno: horas tomadas (até 4) e os motivos. */
+export type BloqueioTurno = { horas: number; motivos: string[] };
+
 export function tituloProjeto(projetoId: string, projetos: Projeto[], clientes: Cliente[]): string {
   const projeto = projetos.find((p) => p.id === projetoId);
   if (!projeto) return "Projeto removido";
@@ -39,19 +46,43 @@ export function CelulaMapaAlocacao({
   projetos,
   clientes,
   onAbrir,
+  bloqueio,
 }: {
   celula: CelulaTurno;
   compacto: boolean;
   projetos: Projeto[];
   clientes: Cliente[];
   onAbrir: () => void;
+  bloqueio?: BloqueioTurno | null;
 }) {
   const cor = COR_TURNO[celula.status];
   const ocupacao = Math.min(1, Math.max(celula.horasPrevistas, celula.horasRealizadas) / HORAS_POR_TURNO);
+  const tituloBloqueio = bloqueio
+    ? `Agenda bloqueada${bloqueio.horas < HORAS_POR_TURNO ? ` (${horasCurtas(bloqueio.horas)} do turno)` : ""}: ${bloqueio.motivos.join(", ")}`
+    : "";
 
   if (celula.status === "livre") {
+    if (bloqueio) {
+      return (
+        <div
+          className="flex h-full min-h-[46px] w-full items-center justify-center gap-1 overflow-hidden rounded-md border border-[#c9cfdd] px-1 text-[10px] font-bold text-[#4d5670]"
+          style={{ background: FUNDO_BLOQUEIO }}
+          title={tituloBloqueio}
+        >
+          <Lock size={11} className="shrink-0" />
+          {!compacto && <span className="truncate">{bloqueio.horas < HORAS_POR_TURNO ? horasCurtas(bloqueio.horas) : "Bloqueado"}</span>}
+        </div>
+      );
+    }
     return <div className={`h-full min-h-[46px] w-full rounded-md border ${cor.borda} ${cor.fundo}`} title="Livre" />;
   }
+
+  // Previsto/realizado num turno bloqueado: cadeado vermelho (conflito a corrigir no cronograma ou no bloqueio).
+  const seloBloqueio = bloqueio && (
+    <span className="absolute top-0.5 right-0.5 rounded bg-[#b5392a] p-[2px] text-white" title={tituloBloqueio}>
+      <Lock size={8} />
+    </span>
+  );
 
   const projetosDoTurno = Array.from(new Set(celula.itens.map((i) => tituloProjeto(i.alocacao.projetoId, projetos, clientes))));
   const rotulo = `${ROTULO_STATUS[celula.status]} · ${formatarHoras(celula.horasPrevistas)} previstas${
@@ -63,10 +94,11 @@ export function CelulaMapaAlocacao({
       <button
         type="button"
         onClick={onAbrir}
-        title={`${projetosDoTurno.join(", ")} — ${rotulo}`}
+        title={`${projetosDoTurno.join(", ")} — ${rotulo}${bloqueio ? ` — ${tituloBloqueio}` : ""}`}
         className={`relative flex h-full min-h-[46px] w-full items-center justify-center overflow-hidden rounded-md border text-[10px] font-bold text-brand-navy-2 ${cor.borda} ${cor.fundo}`}
       >
         {horasCurtas(Math.max(celula.horasPrevistas, celula.horasRealizadas))}
+        {seloBloqueio}
         <span className={`absolute right-0 bottom-0 left-0 h-[3px] ${cor.barra}`} style={{ width: `${ocupacao * 100}%` }} />
       </button>
     );
@@ -76,7 +108,7 @@ export function CelulaMapaAlocacao({
     <button
       type="button"
       onClick={onAbrir}
-      title={rotulo}
+      title={bloqueio ? `${rotulo} — ${tituloBloqueio}` : rotulo}
       className={`relative flex h-full min-h-[46px] w-full flex-col items-start justify-center gap-0.5 overflow-hidden rounded-md border px-1.5 py-1 text-left ${cor.borda} ${cor.fundo}`}
     >
       {celula.itens.length > 0 ? (
@@ -101,6 +133,7 @@ export function CelulaMapaAlocacao({
         )}
       </span>
       <span className={`absolute right-0 bottom-0 left-0 h-[3px] ${cor.barra}`} style={{ width: `${ocupacao * 100}%` }} />
+      {seloBloqueio}
     </button>
   );
 }
@@ -113,6 +146,7 @@ export function DetalhesTurno({
   recursoNome,
   projetos,
   clientes,
+  bloqueio,
 }: {
   celula: CelulaTurno;
   periodo: "manha" | "tarde";
@@ -120,6 +154,7 @@ export function DetalhesTurno({
   recursoNome: string;
   projetos: Projeto[];
   clientes: Cliente[];
+  bloqueio?: BloqueioTurno | null;
 }) {
   const [ano, mes, dia] = data.split("-");
   return (
@@ -140,6 +175,16 @@ export function DetalhesTurno({
           <span className="rounded-full bg-[#fdeceb] px-2.5 py-1 font-bold text-[#b5392a]">Turno com excesso de horas</span>
         )}
       </div>
+      {bloqueio && (
+        <p className="flex items-center gap-2 rounded-md border border-[#c9cfdd] px-3 py-2 text-[12.5px] text-[#4d5670]" style={{ background: FUNDO_BLOQUEIO }}>
+          <Lock size={13} className="shrink-0" />
+          <span>
+            <strong>Agenda bloqueada</strong>
+            {bloqueio.horas < HORAS_POR_TURNO ? ` (${formatarHoras(bloqueio.horas)} do turno)` : ""}: {bloqueio.motivos.join(", ")}
+            {celula.itens.length > 0 ? " — há tarefa prevista neste turno; ajuste o cronograma ou o bloqueio." : ""}
+          </span>
+        </p>
+      )}
       {celula.itens.length === 0 && <p className="text-[13px] text-brand-faint">Sem tarefas previstas neste turno.</p>}
       <div className="divide-y divide-brand-border-soft rounded-xl border border-brand-border">
         {celula.itens.map((item, i) => (

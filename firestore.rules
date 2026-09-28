@@ -271,5 +271,26 @@ service cloud.firestore {
       allow update, delete: if isAdmin() || isCoordenador() ||
         (isSignedIn() && resource.data.recursoId == meuRecursoId());
     }
+
+    // Bloqueios de agenda (férias, curso...): nenhum apontamento pode cair dentro deles.
+    // Administrador bloqueia a agenda de qualquer consultor; o consultor bloqueia só a própria
+    // e só mexe nos bloqueios que ele mesmo criou (os do administrador ficam só para leitura).
+    // Coordenador apenas enxerga (calendário e mapa de alocação).
+    match /bloqueiosAgenda/{id} {
+      allow read: if isAdmin() || isCoordenador() ||
+        (isSignedIn() && resource.data.recursoId == meuRecursoId());
+      allow create: if isAdmin() ||
+        (isSignedIn() && meuRecursoId() != null &&
+          request.resource.data.recursoId == meuRecursoId() &&
+          request.resource.data.criadoPorUid == request.auth.uid);
+      allow update: if isAdmin() ||
+        (isSignedIn() && resource.data.recursoId == meuRecursoId() &&
+          resource.data.criadoPorUid == request.auth.uid &&
+          request.resource.data.recursoId == meuRecursoId() &&
+          request.resource.data.criadoPorUid == request.auth.uid);
+      allow delete: if isAdmin() ||
+        (isSignedIn() && resource.data.recursoId == meuRecursoId() &&
+          resource.data.criadoPorUid == request.auth.uid);
+    }
   }
 }

@@ -15,6 +15,8 @@ import { sistemasQrh } from "@/lib/qrh";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { calcularTotalHoras, formatarHoras } from "@/lib/horas";
 import { STATUS_HORA_CONFIG, statusAoConfirmar, statusEfetivo, statusNaCriacao } from "@/lib/statusHora";
+import { bloqueiosQueConflitam, mensagemConflitoBloqueio } from "@/lib/bloqueioAgenda";
+import { useBloqueiosAgenda } from "@/lib/useBloqueiosAgenda";
 import type { Cliente, EventoCalendario, Projeto, Recurso, Usuario } from "@/types";
 
 function timestampAtual(): number {
@@ -107,6 +109,10 @@ export function EventoModal({
 
   const totalHorasAtual = calcularTotalHoras(horaInicio, horaFim, horaDesconto);
 
+  // Bloqueios da agenda do recurso escolhido: nenhum lançamento pode cair dentro de um deles.
+  const { bloqueios } = useBloqueiosAgenda(usuario, recursoId);
+  const conflitosBloqueio = recursoId && dataEvento ? bloqueiosQueConflitam(bloqueios, recursoId, dataEvento, horaInicio, horaFim) : [];
+
   // Previsto x Realizado: por atividade marcada (ex: "Riscos" = 8h), não pelo grupo de rotina. Só
   // entra em cena quando o escopo do projeto tem duração cadastrada (cronograma importado) —
   // projetos antigos, sem isso, não geram alerta nenhum.
@@ -131,6 +137,10 @@ export function EventoModal({
     if (!projetoId || !recursoId) return;
     if (souConsultorEditandoMeuEvento && dataEvento > hojeISO) {
       setErro("Não é permitido apontar horas em datas futuras.");
+      return;
+    }
+    if (conflitosBloqueio.length > 0) {
+      setErro(mensagemConflitoBloqueio(conflitosBloqueio));
       return;
     }
     const totalHoras = calcularTotalHoras(horaInicio, horaFim, horaDesconto);
@@ -385,6 +395,9 @@ export function EventoModal({
           <Textarea rows={2} value={descricao} onChange={(e) => setDescricao(e.target.value)} required={precisaObservacao} />
         </FormRow>
 
+        {conflitosBloqueio.length > 0 && !erro && (
+          <p className="rounded-md bg-[#fdeceb] p-3 text-sm text-[#b5392a]">{mensagemConflitoBloqueio(conflitosBloqueio)}</p>
+        )}
         {erro && <p className="text-sm font-medium text-red-600">{erro}</p>}
 
         <div className="flex items-center justify-between pt-2">
@@ -410,7 +423,7 @@ export function EventoModal({
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={salvando}>
+            <Button type="submit" disabled={salvando || conflitosBloqueio.length > 0}>
               {salvando ? "Salvando..." : eraRejeitado ? "Reenviar para aprovação" : "Salvar"}
             </Button>
           </div>

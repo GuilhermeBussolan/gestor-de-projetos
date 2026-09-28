@@ -22,12 +22,13 @@ const nomeMes = (mesAno: string) => {
 function situacao(i: ItemFechamento): { label: string; bg: string; text: string } {
   if (i.confirmacao.status === "confirmado") return { label: "Confirmado", bg: "#e3f5ea", text: "#15754c" };
   if (i.confirmacao.status === "contestado") return { label: "Contestado — em análise", bg: "#fdeceb", text: "#b5392a" };
+  if (i.confirmacao.status === "nao_aplicavel") return { label: "Conferido pela empresa", bg: "#eef1f8", text: "#6a7594" };
   return { label: "Aguardando a sua confirmação", bg: "#fff2de", text: "#a4650d" };
 }
 
 function CartaoMes({ item }: { item: ItemFechamento }) {
   const { usuario } = useAuth();
-  const [aberto, setAberto] = useState(item.confirmacao.status === "pendente");
+  const [aberto, setAberto] = useState(item.confirmacao.status === "pendente" || item.confirmacao.status === "contestado");
   const [acao, setAcao] = useState<"confirmar" | "contestar" | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
@@ -129,6 +130,12 @@ function CartaoMes({ item }: { item: ItemFechamento }) {
           )}
           {erro && <p className="text-[12.5px] font-semibold text-red-600">{erro}</p>}
 
+          {item.confirmacao.status === "nao_aplicavel" && (
+            <p className="rounded-md bg-brand-hover px-3 py-2 text-[12.5px] text-brand-muted">
+              Este mês foi liberado antes da confirmação por consultor existir, então a conferência foi feita pela sua empresa. Se algo estiver errado, fale
+              com o Financeiro.
+            </p>
+          )}
           {podeResponder && (
             <div className="flex flex-wrap items-center justify-end gap-2.5">
               <span className="mr-auto text-[12.5px] text-brand-muted">Se estiver de acordo, confirme; se houver erro, conteste explicando.</span>

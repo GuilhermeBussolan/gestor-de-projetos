@@ -13,7 +13,8 @@ import {
   type AlocacaoAtividade,
 } from "@/lib/cronograma";
 import { formatarMinutos } from "@/lib/escopo";
-import type { PeriodoDia, Recurso } from "@/types";
+import { horasBloqueadasNoTurno } from "@/lib/bloqueioAgenda";
+import type { BloqueioAgenda, PeriodoDia, Recurso } from "@/types";
 
 const LIMITE_DIAS = 92;
 
@@ -26,12 +27,15 @@ export function PainelDisponibilidade({
   recursos,
   alocacoes,
   realizadas,
+  bloqueios,
   hojeIso,
   onVerNoMapa,
 }: {
   recursos: Recurso[];
   alocacoes: AlocacaoAtividade[];
   realizadas: Map<string, number>;
+  /** Turnos bloqueados na agenda não contam como livres. */
+  bloqueios: BloqueioAgenda[];
   hojeIso: string;
   onVerNoMapa: (recursoId: string, data: string) => void;
 }) {
@@ -55,7 +59,9 @@ export function PainelDisponibilidade({
     const mapa = montarMapaAlocacao(alocacoes, recursos.map((r) => r.id), dias, realizadas);
     return recursos
       .map((r) => {
-        const livres = turnosLivresDoRecurso(mapa.get(r.id), dias, turnos, comFimDeSemana);
+        const livres = turnosLivresDoRecurso(mapa.get(r.id), dias, turnos, comFimDeSemana)
+          .map((t) => ({ ...t, horasLivres: t.horasLivres - horasBloqueadasNoTurno(bloqueios, r.id, t.data, t.periodo) }))
+          .filter((t) => t.horasLivres > 0.01);
         const totalTurnos =
           dias.filter((d) => comFimDeSemana || ![0, 6].includes(new Date(`${d}T12:00:00`).getDay())).length * turnos.length;
         const horasLivres = livres.reduce((s, t) => s + t.horasLivres, 0);
@@ -63,7 +69,7 @@ export function PainelDisponibilidade({
       })
       .sort((a, b) => b.horasLivres - a.horasLivres);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alocacoes, recursos, dias, realizadas, turno, comFimDeSemana]);
+  }, [alocacoes, recursos, dias, realizadas, bloqueios, turno, comFimDeSemana]);
 
   return (
     <div className="mb-4 rounded-2xl border border-brand-accent/30 bg-brand-accent-soft/40 p-4">
@@ -71,7 +77,7 @@ export function PainelDisponibilidade({
         <CalendarSearch size={17} className="text-brand-accent" />
         Quem está livre?
         <span className="text-[12px] font-medium text-brand-muted">
-          — considera o previsto dos cronogramas e o que já foi realizado
+          — considera o previsto dos cronogramas, o que já foi realizado e os bloqueios de agenda
         </span>
       </div>
       <div className="mb-3 flex flex-wrap items-end gap-2.5">
