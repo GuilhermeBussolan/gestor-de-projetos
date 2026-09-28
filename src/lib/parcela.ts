@@ -86,6 +86,11 @@ export function validarDadosStatusParcela(
   parcelas: Parcela[],
   numero: number
 ): string | null {
+  // Evita datas digitadas errado (ex.: ano "0022" em vez de 2026), que tiram a parcela dos relatórios por mês.
+  const anoPlausivel = (iso?: string | null) => !iso || /^20\d\d-/.test(iso);
+  if (!anoPlausivel(dados.dataLiberacaoIso) || !anoPlausivel(dados.dataRecebimento) || !anoPlausivel(dados.dataCancelamento)) {
+    return "Confira a data: o ano precisa estar entre 2000 e 2099.";
+  }
   if (status === "LIBERADO") {
     if (existeParcelaAnteriorPendente(parcelas, numero)) {
       return "Existe uma parcela anterior ainda aguardando liberação. Libere as parcelas em ordem.";

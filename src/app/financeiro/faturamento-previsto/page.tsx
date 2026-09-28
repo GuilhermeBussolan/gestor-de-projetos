@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { useCollection } from "@/lib/useCollection";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
@@ -60,6 +61,8 @@ function FaturamentoPrevistoPageContent() {
   const [tipoFaturamento, setTipoFaturamento] = useState<"" | TipoFaturamento>("");
   const [status, setStatus] = useState<"" | TipoItemFaturamento>("");
   const [mesAberto, setMesAberto] = useState<string | null>(null);
+  // Aviso das parcelas fora do relatório: oculto por padrão (muitas ainda não têm data); o ícone ao lado das exportações abre.
+  const [avisoAberto, setAvisoAberto] = useState(false);
 
   const filtros: FiltrosFaturamento = useMemo(() => ({ clienteId, tipoFaturamento, status }), [clienteId, tipoFaturamento, status]);
 
@@ -106,6 +109,23 @@ function FaturamentoPrevistoPageContent() {
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Faturamento Previsto x Realizado</h1>
         <div className="flex gap-2">
+          {datasInvalidas.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setAvisoAberto((v) => !v)}
+              aria-pressed={avisoAberto}
+              aria-label={`${datasInvalidas.length} parcelas fora do relatório`}
+              title={avisoAberto ? "Ocultar as parcelas fora do relatório" : `Ver as ${datasInvalidas.length} parcelas que ficaram fora do relatório (sem data ou com data inválida)`}
+              className={`relative flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors ${
+                avisoAberto ? "border-[#e0a84a] bg-[#fff2de] text-[#a4650d]" : "border-brand-border bg-white text-[#c07a12] hover:bg-brand-hover"
+              }`}
+            >
+              <AlertTriangle size={17} />
+              <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#c07a12] px-1 text-[10px] font-bold text-white">
+                {datasInvalidas.length}
+              </span>
+            </button>
+          )}
           <Button variant="secondary" disabled={matriz.length === 0} onClick={() => exportarMatrizCsv(matriz, ano, meses)}>
             Exportar CSV
           </Button>
@@ -170,7 +190,7 @@ function FaturamentoPrevistoPageContent() {
         </div>
       </div>
 
-      {datasInvalidas.length > 0 && (
+      {avisoAberto && datasInvalidas.length > 0 && (
         <div className="mb-5 rounded-xl border border-[#f3d19b] bg-[#fff8ec] px-4 py-3 text-[12.5px] text-[#8a5a0b]">
           <p className="font-bold">
             {datasInvalidas.length === 1 ? "1 parcela ficou" : `${datasInvalidas.length} parcelas ficaram`} fora deste relatório (
