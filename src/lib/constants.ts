@@ -117,27 +117,4 @@ export const TIPO_REGISTRO_CONFIG: Record<TipoRegistro, { label: string; bg: str
 /** Tipos que o usuário escolhe ao registrar (ciência é gerada pelo botão "Dar ciência"). */
 export const TIPO_REGISTRO_ORDEM: TipoRegistro[] = ["atualizacao", "problema", "decisao"];
 
-export const DOCUMENTOS_PADRAO: { codigo: string; descricao: string; pesoIndividual: number }[] = [
-  { codigo: "MIT024", descricao: "KICK-OFF", pesoIndividual: 5 },
-  { codigo: "MIT041", descricao: "DIAGRAMA DE PROCESSOS", pesoIndividual: 15 },
-  {
-    codigo: "MIT010A",
-    descricao: "VALIDAÇÃO DAS CONFIGURAÇÕES, PARAMETRIZAÇÕES E INTEGRAÇÃO",
-    pesoIndividual: 10,
-  },
-  { codigo: "MIT010B", descricao: "VALIDAÇÃO DA CAPACITAÇÕES", pesoIndividual: 30 },
-  { codigo: "MIT045", descricao: "SIMULAÇÃO DE PROCESSOS", pesoIndividual: 10 },
-  { codigo: "MIT010C", descricao: "GO-LIVE", pesoIndividual: 10 },
-  { codigo: "MIT054", descricao: "PLANO DE CUT-OVER", pesoIndividual: 10 },
-  { codigo: "MIT005", descricao: "ACOMPANHAMENTO", pesoIndividual: 5 },
-  { codigo: "MIT062", descricao: "TERMO DE ENCERRAMENTO", pesoIndividual: 5 },
-];
-
 export const CODIGO_TERMO_ENCERRAMENTO = "MIT062";
-
-export const SEED_ADMIN = {
-  nomeCompleto: "Administrador",
-  email: "admin@empresa.com",
-  senha: "admin123",
-  perfil: "administrador" as const,
-};

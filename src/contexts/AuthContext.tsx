@@ -18,7 +18,6 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { seedAdminIfNeeded } from "@/lib/seedAdmin";
 import { sincronizarDiretorio } from "@/lib/diretorio";
 import type { Usuario } from "@/types";
 
@@ -39,7 +38,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    seedAdminIfNeeded();
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
       try {

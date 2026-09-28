@@ -30,23 +30,18 @@ service cloud.firestore {
       return meuUsuario().get('recursoId', null);
     }
 
-    // Documento público que marca se o admin seed já foi criado.
+    // Marcador antigo do "admin seed" (não é mais usado pelo app). Só o administrador enxerga.
     match /config/bootstrap {
-      allow read: if true;
-      allow write: if !exists(/databases/$(database)/documents/config/bootstrap) || isAdmin();
+      allow read, write: if isAdmin();
     }
 
     match /usuarios/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
-      // Sem autocadastro: só um admin cria usuários (via rota server-side com
-      // Admin SDK, que já ignora estas regras — isso aqui é reforço). A única
-      // exceção é o bootstrap do primeiro admin, antes de config/bootstrap existir.
-      allow create: if isAdmin() ||
-        (isSignedIn() && request.auth.uid == uid &&
-          request.resource.data.perfil == 'administrador' &&
-          !exists(/databases/$(database)/documents/config/bootstrap));
-      allow update, delete: if isAdmin();
+      // Sem autocadastro: só um admin cria usuários (via rota server-side com Admin SDK, que já ignora
+      // estas regras — isso aqui é reforço). O primeiro admin de uma instalação nova é criado pelo
+      // script scripts/criar-primeiro-admin.mjs, também com o Admin SDK.
+      allow create, update, delete: if isAdmin();
     }
 
     match /clientes/{id} {

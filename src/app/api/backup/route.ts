@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { excluirBackupDoGithub, listarBackups, salvarBackupNoGithub } from "@/lib/githubBackup";
@@ -14,9 +15,20 @@ const COLECOES = [
 
 const RETENCAO_DIAS = 30;
 
+/**
+ * Só a Vercel (o cron, que manda "Authorization: Bearer <CRON_SECRET>") pode disparar o backup. Sem o segredo
+ * configurado a rota fica fechada — antes, sem ele, "Bearer undefined" passava. A comparação é em tempo constante.
+ */
+function autorizado(request: NextRequest): boolean {
+  const segredo = process.env.CRON_SECRET?.trim();
+  if (!segredo || segredo.length < 16) return false;
+  const recebido = Buffer.from(request.headers.get("authorization") ?? "");
+  const esperado = Buffer.from(`Bearer ${segredo}`);
+  return recebido.length === esperado.length && timingSafeEqual(recebido, esperado);
+}
+
 export async function GET(request: NextRequest) {
-  const auth = request.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!autorizado(request)) {
     return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
   }
 

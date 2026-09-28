@@ -56,6 +56,10 @@ npx tsc --noEmit && npx eslint src && npm run build
   em Firebase Console → Firestore Database → Regras → Publicar.
 - Variáveis de ambiente de produção (incluindo a chave do Firebase Admin, `FIREBASE_SERVICE_ACCOUNT_KEY`) ficam nas
   configurações do projeto na Vercel — nunca no repositório.
+- **Primeiro administrador** (só numa instalação nova): o app não cria usuário sozinho nem tem senha padrão. Com a
+  chave de serviço no `.env.local`, rode `node scripts/criar-primeiro-admin.mjs email@empresa.com "Nome Completo"`: ele
+  cria o admin com uma senha aleatória (mostrada uma vez no terminal) e os tipos de documento padrão. Os demais
+  usuários são criados em Cadastros → Usuários.
 
 ## Estrutura
 
