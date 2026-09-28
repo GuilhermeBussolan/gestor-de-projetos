@@ -1,16 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronRight, MessageSquareWarning } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, FileText, MessageSquareWarning } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal";
+import { NotaFiscalParceira } from "@/components/financeiro/NotaFiscalParceira";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMeuFechamento } from "@/lib/useMeuFechamento";
 import { responderConfirmacaoConsultor } from "@/lib/fechamentoDb";
 import { dataBR } from "@/lib/fechamento";
 import { formatarHoras } from "@/lib/horas";
-import type { ItemFechamento } from "@/types";
+import { confirmacaoDaParceira, situacaoDaParceira, SITUACAO_PARCEIRO_CONFIG } from "@/lib/fechamentoNf";
+import type { FechamentoParceiro, ItemFechamento, StatusConfirmacaoFechamento } from "@/types";
+
+const ROTULO_CONFIRMACAO: Record<StatusConfirmacaoFechamento, string> = {
+  confirmado: "confirmou",
+  contestado: "contestou",
+  pendente: "ainda não confirmou",
+  nao_aplicavel: "—",
+};
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dataHora = (ms: number) => new Date(ms).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -26,9 +35,61 @@ function situacao(i: ItemFechamento): { label: string; bg: string; text: string 
   return { label: "Aguardando a sua confirmação", bg: "#fff2de", text: "#a4650d" };
 }
 
-function CartaoMes({ item }: { item: ItemFechamento }) {
+/**
+ * Nota fiscal da empresa no mês, para quem é o contato 1 da parceira: depois que ele e os colegas confirmam as horas,
+ * envia a NF (com o prazo e os dados de recebimento) e acompanha a validação e o pagamento.
+ */
+function NotaFiscalDaEmpresa({ item, fechamento }: { item: ItemFechamento; fechamento: FechamentoParceiro | undefined }) {
+  if (!fechamento) {
+    return (
+      <p className="rounded-md bg-brand-hover px-3 py-2 text-[12.5px] text-brand-muted">
+        Carregando o fechamento da {item.parceiraNome ?? "empresa"}… Se esta mensagem não sair, fale com o Financeiro.
+      </p>
+    );
+  }
+  if (confirmacaoDaParceira(fechamento).status !== "confirmado") {
+    const status = fechamento.statusConsultores ?? {};
+    const faltam = fechamento.recursos.filter((r) => status[r.recursoId] !== "confirmado");
+    return (
+      <div className="rounded-xl border border-brand-border bg-white p-4 text-[12.5px]">
+        <p className="mb-1.5 flex items-center gap-2 text-[13px] font-bold text-brand-navy-2">
+          <FileText size={15} className="text-brand-faint" />
+          Nota fiscal da {fechamento.parceiraNome}
+        </p>
+        <p className="text-brand-muted">
+          Você é o responsável pelo envio da NF da empresa. O envio é liberado quando todos os consultores confirmarem as horas:
+        </p>
+        <ul className="mt-1.5 space-y-0.5">
+          {faltam.map((r) => (
+            <li key={r.recursoId} className={status[r.recursoId] === "contestado" ? "text-[#b5392a]" : "text-[#a4650d]"}>
+              {r.recursoNome} {ROTULO_CONFIRMACAO[status[r.recursoId] ?? "pendente"]}
+              {status[r.recursoId] === "contestado" ? " — o Financeiro vai analisar" : ""}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+  return <NotaFiscalParceira f={fechamento} titulo={`Nota fiscal da ${fechamento.parceiraNome}`} />;
+}
+
+function CartaoMes({
+  item,
+  responsavelNf,
+  fechamentoParceira,
+  nomeResponsavelNf,
+}: {
+  item: ItemFechamento;
+  /** Este consultor é o contato 1 da parceira: envia a NF da empresa. */
+  responsavelNf: boolean;
+  fechamentoParceira: FechamentoParceiro | undefined;
+  /** Nome do contato 1 da parceira (para os demais consultores saberem quem envia a NF). */
+  nomeResponsavelNf: string | null;
+}) {
   const { usuario } = useAuth();
-  const [aberto, setAberto] = useState(item.confirmacao.status === "pendente" || item.confirmacao.status === "contestado");
+  const situacaoNf = responsavelNf && fechamentoParceira ? situacaoDaParceira(fechamentoParceira) : null;
+  const nfPendente = situacaoNf === "aguardando_nf" || situacaoNf === "nf_rejeitada";
+  const [aberto, setAberto] = useState(item.confirmacao.status === "pendente" || item.confirmacao.status === "contestado" || nfPendente);
   const [acao, setAcao] = useState<"confirmar" | "contestar" | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
@@ -75,6 +136,14 @@ function CartaoMes({ item }: { item: ItemFechamento }) {
           <span className="rounded-full px-3 py-1 text-[11.5px] font-bold" style={{ backgroundColor: cfg.bg, color: cfg.text }}>
             {cfg.label}
           </span>
+          {situacaoNf && item.confirmacao.status === "confirmado" && (
+            <span
+              className="rounded-full px-3 py-1 text-[11.5px] font-bold"
+              style={{ backgroundColor: SITUACAO_PARCEIRO_CONFIG[situacaoNf].bg, color: SITUACAO_PARCEIRO_CONFIG[situacaoNf].text }}
+            >
+              {nfPendente ? (situacaoNf === "nf_rejeitada" ? "NF rejeitada — reenviar" : "Enviar NF") : SITUACAO_PARCEIRO_CONFIG[situacaoNf].label}
+            </span>
+          )}
         </div>
       </button>
 
@@ -119,10 +188,13 @@ function CartaoMes({ item }: { item: ItemFechamento }) {
 
           {item.confirmacao.status === "confirmado" && (
             <p className="text-[12.5px] text-[#15754c]">
-              Você confirmou{item.confirmacao.em ? ` em ${dataHora(item.confirmacao.em)}` : ""}. Quando todos os consultores da sua empresa confirmarem, a
-              empresa envia a nota fiscal.
+              Você confirmou{item.confirmacao.em ? ` em ${dataHora(item.confirmacao.em)}` : ""}.{" "}
+              {responsavelNf
+                ? "Quando todos os consultores da sua empresa confirmarem, você envia a nota fiscal logo abaixo."
+                : `Quando todos os consultores da sua empresa confirmarem, ${nomeResponsavelNf ?? "o responsável da empresa"} envia a nota fiscal.`}
             </p>
           )}
+          {item.confirmacao.status === "confirmado" && responsavelNf && <NotaFiscalDaEmpresa item={item} fechamento={fechamentoParceira} />}
           {item.confirmacao.status === "contestado" && item.confirmacao.motivo && (
             <p className="rounded-md bg-[#fdeceb] px-3 py-2 text-[12.5px] text-[#b5392a]">
               <strong>Sua contestação:</strong> {item.confirmacao.motivo}
@@ -175,7 +247,7 @@ function CartaoMes({ item }: { item: ItemFechamento }) {
 
 function MeuFechamentoContent() {
   const { usuario } = useAuth();
-  const { itens, pendentes, loading, erro } = useMeuFechamento(usuario);
+  const { itens, parceiras, fechamentosParceira, souResponsavelNf, confirmacoesPendentes, nfsPendentes, loading, erro } = useMeuFechamento(usuario);
 
   return (
     <div>
@@ -184,15 +256,26 @@ function MeuFechamentoContent() {
         Quando o faturamento do mês da sua empresa é liberado, você confere as suas horas e os seus valores e confirma (ou contesta). A nota fiscal só é
         enviada depois que todos os consultores da empresa confirmarem.
       </p>
-      {pendentes > 0 && (
+      {confirmacoesPendentes > 0 && (
         <p className="mb-4 rounded-md bg-[#fff2de] p-3 text-[13px] font-semibold text-[#a4650d]">
-          Você tem {pendentes} fechamento{pendentes === 1 ? "" : "s"} aguardando a sua confirmação.
+          Você tem {confirmacoesPendentes} fechamento{confirmacoesPendentes === 1 ? "" : "s"} aguardando a sua confirmação.
+        </p>
+      )}
+      {nfsPendentes > 0 && (
+        <p className="mb-4 rounded-md bg-[#e8efff] p-3 text-[13px] font-semibold text-[#2456b8]">
+          {nfsPendentes === 1 ? "Há 1 nota fiscal da sua empresa pronta para envio." : `Há ${nfsPendentes} notas fiscais da sua empresa prontas para envio.`}
         </p>
       )}
       {erro && <p className="mb-4 rounded-md bg-[#fdeceb] p-3 text-sm text-[#b5392a]">Não foi possível carregar os fechamentos.</p>}
       <div className="flex flex-col gap-3">
         {itens.map((i) => (
-          <CartaoMes key={i.id} item={i} />
+          <CartaoMes
+            key={i.id}
+            item={i}
+            responsavelNf={souResponsavelNf(i.parceiraId)}
+            fechamentoParceira={fechamentosParceira.find((f) => f.id === `${i.mesAno}_${i.parceiraId}`)}
+            nomeResponsavelNf={parceiras.find((p) => p.id === i.parceiraId)?.contatos?.[0]?.nome?.trim() || null}
+          />
         ))}
         {!loading && !erro && itens.length === 0 && (
           <p className="rounded-2xl border border-dashed border-brand-border bg-white p-8 text-center text-sm text-brand-faint">Nenhum fechamento liberado para você ainda.</p>

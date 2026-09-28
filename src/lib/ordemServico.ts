@@ -23,13 +23,27 @@ const HOVER: [number, number, number] = [247, 249, 253];
 const MARGEM = 16;
 
 /**
+ * Número da OS: Nº do projeto (código da proposta) - data - hora início - hora fim do atendimento.
+ * Ex.: projeto 1234, 28/09/2026 das 08:00 às 12:00 -> "1234-28092026-0800-1200". Sai sempre igual para o
+ * mesmo apontamento, então gerar a OS de novo não cria um número diferente.
+ */
+export function numeroOrdemServico(
+  codigoProposta: string,
+  evento: Pick<EventoCalendario, "data" | "horaInicio" | "horaFim">
+): string {
+  const [ano, mes, dia] = evento.data.split("-");
+  const hora = (h: string) => (h ?? "").replace(":", "");
+  const projeto = (codigoProposta ?? "").trim().replace(/\s+/g, "") || "SEM-PROJETO";
+  return `${projeto}-${dia}${mes}${ano}-${hora(evento.horaInicio)}-${hora(evento.horaFim)}`;
+}
+
+/**
  * PDF de "Ordem de Serviço" para um apontamento específico — documento voltado ao CLIENTE, então
- * só mostra o que interessa a ele (quem, quando, o que foi feito); nada de horas/duração do
- * atendimento, que é controle interno. Pronto pra confirmação por assinatura manual — o envio por
- * e-mail ainda é feito fora do sistema.
+ * só mostra o que interessa a ele (quem, quando e em que horário, o que foi feito); o total de
+ * horas é controle interno e não aparece. O envio por e-mail ainda é feito fora do sistema.
  */
 export async function gerarOrdemServicoPdf(
-  evento: Pick<EventoCalendario, "data" | "descricao">,
+  evento: Pick<EventoCalendario, "data" | "descricao" | "horaInicio" | "horaFim">,
   projeto: Pick<Projeto, "codigoProposta" | "modulo">,
   cliente: Cliente | undefined,
   recurso: Recurso | undefined,
@@ -42,6 +56,7 @@ export async function gerarOrdemServicoPdf(
   const largura = pdf.internal.pageSize.getWidth();
   const altura = pdf.internal.pageSize.getHeight();
   const nomeCliente = nomeExibicaoCliente(cliente);
+  const numeroOS = numeroOrdemServico(projeto.codigoProposta, evento);
 
   // --- Faixa de cabeçalho (navy, com a logo clara) ---
   const alturaFaixa = 34;
@@ -64,11 +79,15 @@ export async function gerarOrdemServicoPdf(
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(16);
   pdf.setTextColor(255, 255, 255);
-  pdf.text("Ordem de Serviço", largura - MARGEM, alturaFaixa / 2 - 1, { align: "right" });
+  pdf.text("Ordem de Serviço", largura - MARGEM, alturaFaixa / 2 - 4, { align: "right" });
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+  pdf.setTextColor(255, 255, 255);
+  pdf.text(`Nº ${numeroOS}`, largura - MARGEM, alturaFaixa / 2 + 3, { align: "right" });
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
+  pdf.setFontSize(8.5);
   pdf.setTextColor(210, 220, 240);
-  pdf.text(NG_INFORMATICA.razaoSocial, largura - MARGEM, alturaFaixa / 2 + 6, { align: "right" });
+  pdf.text(NG_INFORMATICA.razaoSocial, largura - MARGEM, alturaFaixa / 2 + 9, { align: "right" });
 
   let y = alturaFaixa + 14;
 
@@ -96,10 +115,31 @@ export async function gerarOrdemServicoPdf(
   const linhaInfo: string[] = [];
   if (cliente?.cnpj) linhaInfo.push(`CNPJ ${cliente.cnpj}`);
   linhaInfo.push(`Projeto ${projeto.codigoProposta} · ${projeto.modulo}`);
-  linhaInfo.push(`Atendimento em ${dataBR(evento.data)}`);
   if (recurso?.nomeCompleto) linhaInfo.push(`Consultor: ${recurso.nomeCompleto}`);
   pdf.text(linhaInfo.join("   ·   "), MARGEM, y);
-  y += 10;
+  y += 8;
+
+  // --- Data e horário do atendimento (em destaque) ---
+  const alturaHorario = 16;
+  pdf.setFillColor(...ACCENT_SOFT);
+  pdf.roundedRect(MARGEM, y, largura - MARGEM * 2, alturaHorario, 2.5, 2.5, "F");
+  const colunas = [
+    { rotulo: "Data do atendimento", valor: dataBR(evento.data) },
+    { rotulo: "Hora início", valor: evento.horaInicio || "—" },
+    { rotulo: "Hora fim", valor: evento.horaFim || "—" },
+  ];
+  const larguraColuna = (largura - MARGEM * 2) / colunas.length;
+  colunas.forEach((c, i) => {
+    const x = MARGEM + 6 + i * larguraColuna;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(...FAINT);
+    pdf.text(c.rotulo.toUpperCase(), x, y + 6);
+    pdf.setFontSize(12);
+    pdf.setTextColor(...NAVY);
+    pdf.text(c.valor, x, y + 12.5);
+  });
+  y += alturaHorario + 8;
 
   pdf.setDrawColor(...BORDER);
   pdf.setLineWidth(0.4);
@@ -228,5 +268,5 @@ export async function gerarOrdemServicoPdf(
     y + 16
   );
 
-  pdf.save(`ordem-servico-${nomeArquivoSeguro(nomeCliente)}-${evento.data}.pdf`);
+  pdf.save(`ordem-servico-${nomeArquivoSeguro(numeroOS)}-${nomeArquivoSeguro(nomeCliente)}.pdf`);
 }

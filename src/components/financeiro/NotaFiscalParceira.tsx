@@ -1,15 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileText, Upload } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input } from "@/components/ui/Field";
 import { LinkArquivo } from "@/components/financeiro/LinkArquivo";
+import {
+  DadosRecebimentoFields,
+  limparRecebimento,
+  RECEBIMENTO_VAZIO,
+  ResumoRecebimento,
+  validarRecebimento,
+} from "@/components/financeiro/DadosRecebimento";
 import { useAuth } from "@/contexts/AuthContext";
-import { enviarNotaFiscal } from "@/lib/fechamentoNfDb";
+import { buscarUltimoRecebimento, enviarNotaFiscal } from "@/lib/fechamentoNfDb";
 import { MENSAGEM_ERRO_ARQUIVO, TAMANHO_MAXIMO_BYTES } from "@/lib/arquivosFechamento";
-import { confirmacaoDaParceira, situacaoDaParceira, totalPago } from "@/lib/fechamentoNf";
-import type { FechamentoParceiro } from "@/types";
+import { confirmacaoDaParceira, situacaoDaParceira, totalPago, vencimentoDaParceira, vencimentoDoMes } from "@/lib/fechamentoNf";
+import type { DadosRecebimento, FechamentoParceiro } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dataHora = (ms: number) => new Date(ms).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -17,17 +24,33 @@ const dataBR = (iso: string) => iso.split("-").reverse().join("/");
 const NOME_ACAO: Record<string, string> = { enviada: "NF enviada", reenviada: "NF reenviada", validada: "NF validada", rejeitada: "NF rejeitada" };
 
 /**
- * Passo 3 do fechamento, do lado do responsável da parceira: depois de confirmar os valores ele envia a
- * nota fiscal (número, data de emissão, valor e PDF), acompanha a validação do Financeiro e vê os pagamentos.
+ * Passo 3 do fechamento, do lado de quem envia a NF da parceira (o contato 1 do cadastro, no "Meu fechamento", ou o
+ * responsável da parceira): depois que todos os consultores confirmam as horas, envia a nota fiscal (número, data de
+ * emissão, valor e PDF), o prazo de pagamento e os dados para recebimento; acompanha a validação e os pagamentos.
  */
-export function NotaFiscalParceira({ f }: { f: FechamentoParceiro }) {
+export function NotaFiscalParceira({ f, titulo = "3. Nota fiscal" }: { f: FechamentoParceiro; titulo?: string }) {
   const { usuario } = useAuth();
   const [numero, setNumero] = useState(f.nf?.numero ?? "");
   const [dataEmissao, setDataEmissao] = useState(f.nf?.dataEmissao ?? "");
   const [valor, setValor] = useState(String(f.nf?.valor ?? f.valor));
+  const [vencimento, setVencimento] = useState(f.nf?.vencimento || vencimentoDoMes(f.mesAno));
+  const [recebimento, setRecebimento] = useState<DadosRecebimento>(f.nf?.recebimento ?? RECEBIMENTO_VAZIO);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
+
+  // Primeira NF do mês: traz a conta/PIX da última NF da parceira (normalmente não muda de um mês para o outro).
+  const precisaPreencher = !f.nf?.recebimento;
+  useEffect(() => {
+    if (!precisaPreencher) return;
+    let ativo = true;
+    buscarUltimoRecebimento(f.parceiraId, f.mesAno).then((r) => {
+      if (ativo && r) setRecebimento((atual) => (atual.titular || atual.documentoTitular ? atual : { ...RECEBIMENTO_VAZIO, ...r }));
+    });
+    return () => {
+      ativo = false;
+    };
+  }, [precisaPreencher, f.parceiraId, f.mesAno]);
 
   if (confirmacaoDaParceira(f).status !== "confirmado") return null;
   const situacao = situacaoDaParceira(f);
@@ -40,6 +63,15 @@ export function NotaFiscalParceira({ f }: { f: FechamentoParceiro }) {
     const v = Number(valor.replace(",", "."));
     if (!numero.trim() || !dataEmissao || !Number.isFinite(v) || v <= 0) {
       setErro("Informe número, data de emissão e valor da nota fiscal.");
+      return;
+    }
+    if (!vencimento) {
+      setErro("Informe o prazo de pagamento.");
+      return;
+    }
+    const erroRecebimento = validarRecebimento(recebimento);
+    if (erroRecebimento) {
+      setErro(erroRecebimento);
       return;
     }
     if (!arquivo && !f.nf?.arquivo) {
@@ -55,7 +87,7 @@ export function NotaFiscalParceira({ f }: { f: FechamentoParceiro }) {
     try {
       await enviarNotaFiscal({
         fechamento: f,
-        dados: { numero, dataEmissao, valor: v },
+        dados: { numero, dataEmissao, valor: v, vencimento, recebimento: limparRecebimento(recebimento) },
         arquivo,
         ator: { uid: usuario.uid, nomeCompleto: usuario.nomeCompleto },
       });
@@ -72,7 +104,7 @@ export function NotaFiscalParceira({ f }: { f: FechamentoParceiro }) {
     <div className="rounded-xl border border-brand-border bg-white p-4">
       <p className="mb-2 flex items-center gap-2 text-[13px] font-bold text-brand-navy-2">
         <FileText size={15} className="text-brand-faint" />
-        3. Nota fiscal
+        {titulo}
       </p>
 
       {f.nf?.status === "rejeitada" && (
@@ -87,6 +119,14 @@ export function NotaFiscalParceira({ f }: { f: FechamentoParceiro }) {
             NF <strong>{f.nf.numero}</strong> · emitida em {dataBR(f.nf.dataEmissao)} · <strong>{moeda(f.nf.valor)}</strong>
           </p>
           {f.nf.arquivo && <LinkArquivo arquivo={f.nf.arquivo} />}
+          <p className="text-brand-muted">
+            Prazo de pagamento: <strong className="text-brand-navy-2">{dataBR(vencimentoDaParceira(f))}</strong>
+          </p>
+          {f.nf.recebimento && (
+            <div className="rounded-md bg-brand-hover px-3 py-2">
+              <ResumoRecebimento r={f.nf.recebimento} />
+            </div>
+          )}
           <p className={f.nf.status === "validada" ? "text-[#15754c]" : "text-[#0f7d9e]"}>
             {f.nf.status === "validada"
               ? `Validada por ${f.nf.validadoPorNome ?? "—"}${f.nf.validadoEm ? ` em ${dataHora(f.nf.validadoEm)}` : ""}. O pagamento será registrado pelo Financeiro.`
@@ -117,6 +157,19 @@ export function NotaFiscalParceira({ f }: { f: FechamentoParceiro }) {
             <p className="mt-1 text-[11.5px] text-brand-faint">
               Valor calculado do fechamento: <strong>{moeda(f.valor)}</strong>. A nota deve ser da {f.parceiraNome}, referente a este mês.
             </p>
+          </div>
+
+          <div className="border-t border-brand-border-soft pt-3 sm:col-span-3">
+            <p className="mb-2 text-[12.5px] font-bold text-brand-navy-2">Dados para recebimento</p>
+            <div className="mb-3 max-w-[220px]">
+              <FormRow label="Prazo de pagamento">
+                <Input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} required />
+              </FormRow>
+              <p className="mt-1 text-[11px] text-brand-faint">
+                Padrão: dia 28 do mês seguinte ({dataBR(vencimentoDoMes(f.mesAno))}), ou o próximo dia útil.
+              </p>
+            </div>
+            <DadosRecebimentoFields valor={recebimento} onChange={setRecebimento} />
           </div>
           {erro && <p className="text-[12.5px] font-semibold text-red-600 sm:col-span-3">{erro}</p>}
           <div className="flex justify-end sm:col-span-3">

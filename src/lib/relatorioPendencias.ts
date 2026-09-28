@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-import { nfPendente, pagamentoAtrasado, situacaoDaParceira, SITUACAO_PARCEIRO_CONFIG, totalPago, vencimentoDoMes } from "@/lib/fechamentoNf";
+import { nfPendente, pagamentoAtrasado, situacaoDaParceira, SITUACAO_PARCEIRO_CONFIG, totalPago, vencimentoDaParceira } from "@/lib/fechamentoNf";
 import type { FechamentoParceiro } from "@/types";
 
 const dataBR = (iso: string) => iso.split("-").reverse().join("/");
@@ -51,6 +51,6 @@ export async function exportarPagamentosAtrasados(lista: FechamentoParceiro[], h
       { cabecalho: "Saldo", largura: 14, formato: '"R$" #,##0.00' },
       { cabecalho: "Vencimento", largura: 13 },
     ],
-    atrasados.map((f) => [f.mesAno, f.parceiraNome, f.nf?.numero ?? "", f.valor, totalPago(f), Math.round((f.valor - totalPago(f)) * 100) / 100, dataBR(vencimentoDoMes(f.mesAno))])
+    atrasados.map((f) => [f.mesAno, f.parceiraNome, f.nf?.numero ?? "", f.valor, totalPago(f), Math.round((f.valor - totalPago(f)) * 100) / 100, dataBR(vencimentoDaParceira(f))])
   );
 }

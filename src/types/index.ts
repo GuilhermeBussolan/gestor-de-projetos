@@ -612,6 +612,31 @@ export interface NotaFiscalParceiro {
   /** O valor da NF é diferente do valor calculado do fechamento (a validação exigiu justificativa). */
   divergenciaValor?: boolean;
   justificativaDivergencia?: string | null;
+  /**
+   * Prazo de pagamento informado no envio (YYYY-MM-DD). Vem preenchido com o vencimento padrão (dia 28 do mês
+   * seguinte, adiado para o próximo dia útil). Ausente em NFs antigas: vale o vencimento padrão.
+   */
+  vencimento?: string | null;
+  /** Como a parceira quer receber (depósito/PIX/boleto). Ausente em NFs antigas. */
+  recebimento?: DadosRecebimento | null;
+}
+
+export const FORMAS_RECEBIMENTO = ["PIX", "Depósito/TED", "Boleto"] as const;
+export type FormaRecebimento = (typeof FORMAS_RECEBIMENTO)[number];
+
+/** Dados para o Financeiro pagar a nota fiscal. Os campos usados dependem da forma. */
+export interface DadosRecebimento {
+  forma: FormaRecebimento;
+  /** Titular da conta / favorecido e o CPF ou CNPJ dele. */
+  titular: string;
+  documentoTitular: string;
+  banco?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
+  tipoConta?: "corrente" | "poupanca" | null;
+  chavePix?: string | null;
+  linhaDigitavel?: string | null;
+  observacoes?: string | null;
 }
 
 /** Histórico da NF (só cresce): quando foi enviada, validada ou rejeitada, por quem e por quê. */

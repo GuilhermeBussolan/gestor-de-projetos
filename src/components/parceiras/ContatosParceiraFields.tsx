@@ -78,6 +78,10 @@ export function ContatosParceiraFields({
         {contatos.length === 0 && (
           <p className="text-xs text-brand-faint">Nenhum contato adicionado ainda.</p>
         )}
+        <p className="text-xs text-brand-muted">
+          O <strong>contato 1</strong> é quem envia a nota fiscal da empresa, pelo &quot;Meu fechamento&quot;. Use o mesmo e-mail
+          do login dele no sistema.
+        </p>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { calcularVencimentoFechamento } from "@/lib/feriados";
-import type { ConfirmacaoFechamento, FechamentoParceiro } from "@/types";
+import type { ConfirmacaoFechamento, EmpresaParceira, FechamentoParceiro } from "@/types";
 
 /** Onde cada parceira está no caminho: confirmação -> NF -> pagamento -> encerrado. */
 export type SituacaoParceiro =
@@ -69,10 +69,24 @@ export function vencimentoDoMes(mesAno: string): string {
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 }
 
+/** Vencimento que vale para a parceira no mês: o prazo informado na NF ou, sem ele, o vencimento padrão. */
+export function vencimentoDaParceira(f: Pick<FechamentoParceiro, "mesAno" | "nf">): string {
+  return f.nf?.vencimento || vencimentoDoMes(f.mesAno);
+}
+
 /** Pagamento atrasado: NF validada, ainda não quitado e já passou do vencimento. */
 export function pagamentoAtrasado(f: FechamentoParceiro, hojeIso: string): boolean {
   const s = situacaoDaParceira(f);
-  return (s === "aguardando_pagamento" || s === "pago_parcial") && hojeIso > vencimentoDoMes(f.mesAno);
+  return (s === "aguardando_pagamento" || s === "pago_parcial") && hojeIso > vencimentoDaParceira(f);
+}
+
+/**
+ * Quem envia a NF da parceira: o contato 1 do cadastro dela. O consultor é reconhecido pelo e-mail (o e-mail de
+ * login dele precisa ser o mesmo do contato 1). A regra do Firestore faz a mesma comparação.
+ */
+export function ehResponsavelNf(parceira: Pick<EmpresaParceira, "contatos"> | undefined, email: string | null | undefined): boolean {
+  const doContato = parceira?.contatos?.[0]?.email?.trim().toLowerCase();
+  return !!doContato && !!email && doContato === email.trim().toLowerCase();
 }
 
 /** NF pendente: confirmada pela parceira, mas sem NF ou com NF ainda não validada. */

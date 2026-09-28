@@ -8,7 +8,8 @@ import { LinkArquivo } from "@/components/financeiro/LinkArquivo";
 import { RegistrarPagamentoModal } from "@/components/financeiro/RegistrarPagamentoModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatarHoras } from "@/lib/horas";
-import { confirmacaoDaParceira, diferencaPagamento, pagamentoAtrasado, situacaoDaParceira, totalPago, vencimentoDoMes } from "@/lib/fechamentoNf";
+import { confirmacaoDaParceira, diferencaPagamento, pagamentoAtrasado, situacaoDaParceira, totalPago, vencimentoDaParceira } from "@/lib/fechamentoNf";
+import { ResumoRecebimento } from "@/components/financeiro/DadosRecebimento";
 import { rejeitarNotaFiscal, removerPagamento, validarNotaFiscal } from "@/lib/fechamentoNfDb";
 import type { FechamentoParceiro } from "@/types";
 
@@ -73,7 +74,7 @@ export function PainelParceiroFinanceiro({ f, hojeIso, onDocumentoFaturamento }:
         <ReceiptText size={15} className="text-brand-faint" />
         <strong className="text-brand-navy-2">Nota fiscal e pagamento</strong>
         {atrasado && (
-          <span className="rounded-full bg-[#fdeceb] px-2 py-0.5 text-[10.5px] font-bold text-[#b5392a]">Pagamento atrasado (venc. {dataBR(vencimentoDoMes(f.mesAno))})</span>
+          <span className="rounded-full bg-[#fdeceb] px-2 py-0.5 text-[10.5px] font-bold text-[#b5392a]">Pagamento atrasado (venc. {dataBR(vencimentoDaParceira(f))})</span>
         )}
         <button type="button" onClick={onDocumentoFaturamento} className="ml-auto flex items-center gap-1.5 font-semibold text-brand-accent hover:underline">
           <FileDown size={14} />
@@ -94,6 +95,16 @@ export function PainelParceiroFinanceiro({ f, hojeIso, onDocumentoFaturamento }:
             {nf.arquivo && <LinkArquivo arquivo={nf.arquivo} rotulo="Ver PDF da NF" />}
             <span className="text-brand-faint">enviada por {nf.enviadoPorNome} em {dataHora(nf.enviadoEm)}</span>
           </div>
+          <p className="mt-1.5 text-brand-muted">
+            Prazo de pagamento: <strong className="text-brand-navy-2">{dataBR(vencimentoDaParceira(f))}</strong>
+            {!nf.vencimento ? " (padrão)" : ""}
+          </p>
+          {nf.recebimento && (
+            <div className="mt-2 rounded-md border border-brand-border-soft bg-brand-hover/60 px-3 py-2">
+              <p className="mb-1 text-[10.5px] font-bold tracking-[.08em] text-brand-faint uppercase">Dados para pagamento</p>
+              <ResumoRecebimento r={nf.recebimento} />
+            </div>
+          )}
           {nfDivergente && (
             <p className="mt-1.5 flex items-center gap-1.5 text-[#a4650d]">
               <AlertTriangle size={13} />

@@ -1,13 +1,16 @@
-import { arrayUnion, doc, updateDoc } from "firebase/firestore";
+import { arrayUnion, doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { enviarArquivo } from "@/lib/arquivosFechamento";
 import type { Ator } from "@/lib/fechamentoDb";
-import type { EventoNf, FechamentoParceiro, FormaPagamento, NotaFiscalParceiro, PagamentoParceiro } from "@/types";
+import type { DadosRecebimento, EventoNf, FechamentoParceiro, FormaPagamento, NotaFiscalParceiro, PagamentoParceiro } from "@/types";
 
 const limpar = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const refDoc = (id: string) => doc(db, "fechamentoParceiros", id);
 
-/** A parceira envia (ou reenvia, se a anterior foi rejeitada) a nota fiscal: número, data, valor e PDF. */
+/**
+ * A parceira envia (ou reenvia, se a anterior foi rejeitada) a nota fiscal: número, data, valor, PDF, o prazo de
+ * pagamento e como quer receber.
+ */
 export async function enviarNotaFiscal({
   fechamento: f,
   dados,
@@ -15,7 +18,7 @@ export async function enviarNotaFiscal({
   ator,
 }: {
   fechamento: FechamentoParceiro;
-  dados: { numero: string; dataEmissao: string; valor: number };
+  dados: { numero: string; dataEmissao: string; valor: number; vencimento: string; recebimento: DadosRecebimento };
   arquivo: File | null;
   ator: Ator;
 }) {
@@ -33,9 +36,31 @@ export async function enviarNotaFiscal({
     motivoRejeicao: null,
     divergenciaValor: false,
     justificativaDivergencia: null,
+    vencimento: dados.vencimento,
+    recebimento: dados.recebimento,
   };
   const evento: EventoNf = { acao: f.nf ? "reenviada" : "enviada", em: Date.now(), porNome: ator.nomeCompleto, numero: nf.numero };
   await updateDoc(refDoc(f.id), { nf: limpar(nf), historicoNf: arrayUnion(limpar(evento)) });
+}
+
+/**
+ * Dados de recebimento da última NF enviada pela parceira (até 12 meses antes), para o formulário já vir preenchido:
+ * normalmente a conta/PIX não muda de um mês para o outro. Lê documento a documento (o id é "YYYY-MM_parceiraId").
+ */
+export async function buscarUltimoRecebimento(parceiraId: string, mesAno: string): Promise<DadosRecebimento | null> {
+  const [ano, mes] = mesAno.split("-").map(Number);
+  for (let voltar = 1; voltar <= 12; voltar++) {
+    const d = new Date(ano, mes - 1 - voltar, 1);
+    const id = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}_${parceiraId}`;
+    try {
+      const snap = await getDoc(refDoc(id));
+      const recebimento = (snap.data() as FechamentoParceiro | undefined)?.nf?.recebimento;
+      if (recebimento) return recebimento;
+    } catch {
+      // mês sem fechamento liberado (ou sem permissão): segue procurando
+    }
+  }
+  return null;
 }
 
 /** O financeiro valida a NF (confere período, parceira e valor). Se o valor difere do fechamento, exige justificativa. */

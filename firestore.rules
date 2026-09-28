@@ -178,6 +178,15 @@ service cloud.firestore {
           request.resource.data.confirmacao.status in ['confirmado', 'contestado']);
     }
 
+    // Quem envia a NF da parceira: o contato 1 do cadastro dela, reconhecido pelo e-mail do login
+    // (o consultor terceiro faz isso pelo "Meu fechamento").
+    function souResponsavelNfDa(parceiraId) {
+      return isSignedIn() && parceiraId != null && request.auth.token.email != null &&
+        get(/databases/$(database)/documents/parceiras/$(parceiraId)).data.get('contatos', []).size() > 0 &&
+        get(/databases/$(database)/documents/parceiras/$(parceiraId)).data.contatos[0].get('email', '').lower() ==
+          request.auth.token.email.lower();
+    }
+
     // Confirmação da parceira: vale a de cada consultor (statusConsultores) ou, em documentos antigos, a do responsável.
     function consultoresConfirmaram(d) {
       return d.get('statusConsultores', null) != null
@@ -193,9 +202,16 @@ service cloud.firestore {
     match /fechamentoParceiros/{fpId} {
       allow read: if isAdmin() || isFinanceiro() ||
         (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
-          resource.data.parceiraId == meuUsuario().get('parceiraId', null) && resource.data.liberado == true);
+          resource.data.parceiraId == meuUsuario().get('parceiraId', null) && resource.data.liberado == true) ||
+        (resource.data.liberado == true && souResponsavelNfDa(resource.data.parceiraId));
       allow create, delete: if isAdmin() || isFinanceiro();
       allow update: if isAdmin() || isFinanceiro() ||
+        // O contato 1 da parceira envia (ou reenvia, se rejeitada) a NF, depois que todos os consultores confirmaram.
+        (resource.data.liberado == true && souResponsavelNfDa(resource.data.parceiraId) &&
+          consultoresConfirmaram(resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nf', 'historicoNf']) &&
+          request.resource.data.nf.status == 'enviada' &&
+          (resource.data.get('nf', null) == null || resource.data.nf.status == 'rejeitada')) ||
         // O consultor terceiro só troca a PRÓPRIA chave em statusConsultores, enquanto a NF não foi enviada.
         (isSignedIn() && meuRecursoId() != null && resource.data.liberado == true &&
           resource.data.get('nf', null) == null &&
@@ -222,13 +238,18 @@ service cloud.firestore {
     // Arquivos do fechamento (NF em PDF, comprovantes e documentos complementares), guardados no próprio Firestore em
     // partes de até ~700 KB (sem Firebase Storage). tipo: 'nf' | 'comprovante' | 'anexo'.
     // - administrador/financeiro: tudo;
-    // - responsável da parceira: lê os arquivos da própria empresa e cria apenas a NF (PDF) dela.
+    // - responsável da parceira (perfil) e o contato 1 da parceira: leem os arquivos da própria empresa e criam
+    //   apenas a NF (PDF) dela.
     match /arquivosFechamento/{arquivoId} {
       allow read: if isAdmin() || isFinanceiro() ||
         (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
           resource.data.parceiraId != null &&
-          resource.data.parceiraId == meuUsuario().get('parceiraId', null));
+          resource.data.parceiraId == meuUsuario().get('parceiraId', null)) ||
+        souResponsavelNfDa(resource.data.parceiraId);
       allow create: if isAdmin() || isFinanceiro() ||
+        (souResponsavelNfDa(request.resource.data.parceiraId) &&
+          request.resource.data.tipo == 'nf' &&
+          request.resource.data.tamanho <= 3145728) ||
         (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
           request.resource.data.parceiraId != null &&
           request.resource.data.parceiraId == meuUsuario().get('parceiraId', null) &&
@@ -240,8 +261,11 @@ service cloud.firestore {
         allow read: if isAdmin() || isFinanceiro() ||
           (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
             get(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.parceiraId != null &&
-            get(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.parceiraId == meuUsuario().get('parceiraId', null));
+            get(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.parceiraId == meuUsuario().get('parceiraId', null)) ||
+          souResponsavelNfDa(get(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.parceiraId);
         allow create: if isAdmin() || isFinanceiro() ||
+          (souResponsavelNfDa(getAfter(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.parceiraId) &&
+            getAfter(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.tipo == 'nf') ||
           (isSignedIn() && meuUsuario().perfil == 'responsavel_parceira' &&
             getAfter(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.parceiraId == meuUsuario().get('parceiraId', null) &&
             getAfter(/databases/$(database)/documents/arquivosFechamento/$(arquivoId)).data.tipo == 'nf');
