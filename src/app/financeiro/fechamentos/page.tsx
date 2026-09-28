@@ -454,6 +454,8 @@ function FechamentosPageContent() {
   const [erro, setErro] = useState("");
   const [exportando, setExportando] = useState<"pdf" | "excel" | null>(null);
   const [divAbertas, setDivAbertas] = useState<Set<string>>(new Set());
+  // Histórico de status começa minimizado (é consulta eventual; o botão abre e fecha).
+  const [historicoAberto, setHistoricoAberto] = useState(false);
 
   // O fechamento é por parceira; o documento do mês só existe em fechamentos antigos (feitos com o mês inteiro de uma vez).
   const fechamento = fechamentos.find((f) => f.id === mesAno) ?? null;
@@ -892,11 +894,23 @@ function FechamentosPageContent() {
 
       {/* Auditoria */}
       <div className="mt-6 rounded-2xl border border-brand-border bg-white p-4 shadow-card">
-        <div className="mb-3 flex items-center gap-2 text-[14px] font-extrabold text-brand-navy-2">
+        <button
+          type="button"
+          onClick={() => setHistoricoAberto((v) => !v)}
+          aria-expanded={historicoAberto}
+          title={historicoAberto ? "Minimizar o histórico" : "Mostrar o histórico"}
+          className={`flex w-full items-center gap-2 text-left text-[14px] font-extrabold text-brand-navy-2 ${historicoAberto ? "mb-3" : ""}`}
+        >
           <History size={16} className="text-brand-faint" />
           Histórico de status
-        </div>
-        {historico.length === 0 ? (
+          <span className="text-[12px] font-medium text-brand-muted">
+            — {historico.length === 0 ? "nenhuma mudança" : `${historico.length} mudança${historico.length === 1 ? "" : "s"}`}
+          </span>
+          <span className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-brand-faint hover:bg-brand-hover">
+            {historicoAberto ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </span>
+        </button>
+        {!historicoAberto ? null : historico.length === 0 ? (
           <p className="text-[13px] text-brand-faint">Nenhuma mudança de status registrada para este mês.</p>
         ) : (
           <ul className="divide-y divide-brand-border-soft">
