@@ -19,7 +19,10 @@ const MARGEM_ESQ = 46;
 const MARGEM_BAIXO = 26;
 const MARGEM_TOPO = 14;
 
-/** Gráfico de barras empilhadas (uma cor por situação: previsto, liberado, faturado, recebido, cancelado) dos 12 meses — sem libs externas. */
+/**
+ * Gráfico de barras empilhadas (uma cor por situação: previsto, liberado, faturado, recebido, cancelado), um mês por
+ * barra — sem libs externas. Com vários anos (filtro "Todos"), mostra o ano embaixo dos meses e rola para o lado.
+ */
 export function GraficoFaturamentoBarras({
   totais,
   mesSelecionado,
@@ -30,20 +33,32 @@ export function GraficoFaturamentoBarras({
   onClickMes: (mes: string) => void;
 }) {
   const maiorTotal = Math.max(1, ...totais.map(somaDoMes));
+  const variosAnos = new Set(totais.map((t) => t.mes.slice(0, 4))).size > 1;
+  // Até 18 meses cabe na largura padrão; mais do que isso, cada barra ganha 40px e o gráfico rola para o lado.
+  const LARGURA_TOTAL = Math.max(LARGURA, MARGEM_ESQ + totais.length * 40);
+  const ALTURA_TOTAL = ALTURA + (variosAnos ? 14 : 0);
   const alturaUtil = ALTURA - MARGEM_BAIXO - MARGEM_TOPO;
-  const larguraUtil = LARGURA - MARGEM_ESQ;
+  const larguraUtil = LARGURA_TOTAL - MARGEM_ESQ;
+  const inicioDeAno = (i: number) => i === 0 || totais[i].mes.slice(0, 4) !== totais[i - 1].mes.slice(0, 4);
   const larguraBarra = (larguraUtil / totais.length) * 0.55;
   const escalaY = (v: number) => (v / maiorTotal) * alturaUtil;
 
   const linhasGuia = [0, 0.25, 0.5, 0.75, 1];
 
   return (
-    <svg viewBox={`0 0 ${LARGURA} ${ALTURA}`} className="w-full" role="img" aria-label="Faturamento previsto por mês">
+    <div className="overflow-x-auto">
+    <svg
+      viewBox={`0 0 ${LARGURA_TOTAL} ${ALTURA_TOTAL}`}
+      className="w-full"
+      style={totais.length > 18 ? { minWidth: LARGURA_TOTAL } : undefined}
+      role="img"
+      aria-label="Faturamento previsto por mês"
+    >
       {linhasGuia.map((f) => {
         const y = MARGEM_TOPO + alturaUtil * (1 - f);
         return (
           <g key={f}>
-            <line x1={MARGEM_ESQ} y1={y} x2={LARGURA} y2={y} stroke="#e7ebf3" strokeWidth={1} />
+            <line x1={MARGEM_ESQ} y1={y} x2={LARGURA_TOTAL} y2={y} stroke="#e7ebf3" strokeWidth={1} />
             <text x={MARGEM_ESQ - 6} y={y + 3} textAnchor="end" fontSize={9} fill="#8b94ad">
               {moedaCompacta(maiorTotal * f)}
             </text>
@@ -72,7 +87,11 @@ export function GraficoFaturamentoBarras({
             opacity={mesSelecionado && !selecionado ? 0.55 : 1}
           >
             <title>
-              {t.label}: {TIPOS_ITEM_ORDEM.filter((tipo) => t[tipo] > 0).map((tipo) => TIPO_ITEM_CONFIG[tipo].label.toLowerCase() + " " + moeda(t[tipo])).join(" · ") || "sem lançamentos"}
+              {`${t.label}/${t.mes.slice(0, 4)}: ${
+                TIPOS_ITEM_ORDEM.filter((tipo) => t[tipo] > 0)
+                  .map((tipo) => TIPO_ITEM_CONFIG[tipo].label.toLowerCase() + " " + moeda(t[tipo]))
+                  .join(" · ") || "sem lançamentos"
+              }`}
             </title>
             <rect
               x={x - 3}
@@ -114,12 +133,30 @@ export function GraficoFaturamentoBarras({
             >
               {t.label}
             </text>
+            {variosAnos && inicioDeAno(i) && (
+              <>
+                {i > 0 && (
+                  <line
+                    x1={MARGEM_ESQ + (larguraUtil / totais.length) * i}
+                    y1={MARGEM_TOPO}
+                    x2={MARGEM_ESQ + (larguraUtil / totais.length) * i}
+                    y2={ALTURA_TOTAL - 4}
+                    stroke="#c7cede"
+                    strokeDasharray="3 3"
+                  />
+                )}
+                <text x={MARGEM_ESQ + (larguraUtil / totais.length) * i + 4} y={ALTURA_TOTAL - 4} fontSize={10} fontWeight={700} fill="#2456b8">
+                  {t.mes.slice(0, 4)}
+                </text>
+              </>
+            )}
           </g>
         );
       })}
 
-      <line x1={MARGEM_ESQ} y1={MARGEM_TOPO + alturaUtil} x2={LARGURA} y2={MARGEM_TOPO + alturaUtil} stroke="#c7cede" />
+      <line x1={MARGEM_ESQ} y1={MARGEM_TOPO + alturaUtil} x2={LARGURA_TOTAL} y2={MARGEM_TOPO + alturaUtil} stroke="#c7cede" />
     </svg>
+    </div>
   );
 }
 

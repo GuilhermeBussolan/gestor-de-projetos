@@ -11,32 +11,51 @@ import { DetalheMesFaturamentoModal } from "@/components/financeiro/DetalheMesFa
 import { TIPO_FATURAMENTO_CONFIG, TIPO_FATURAMENTO_ORDEM } from "@/lib/constants";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import {
+  anosComDados,
   detalheDoMes,
   exportarMatrizCsv,
   exportarMatrizPdf,
   filtrarItens,
+  lancamentosComDataInvalida,
   matrizAnual,
+  mesesComDados,
   montarItensFaturamento,
+  rotuloMes,
+  rotuloMesAno,
+  sufixoAno,
   TIPOS_ITEM_ORDEM,
   TIPO_ITEM_CONFIG,
+  totaisDaMatriz,
   totaisDoAnoPorTipo,
   totaisPorMes,
   totalDoAno,
+  type AnoFiltro,
   type FiltrosFaturamento,
   type TipoItemFaturamento,
 } from "@/lib/faturamentoPrevisto";
 import type { Cliente, Projeto, TipoFaturamento } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const ANO_ATUAL = new Date().getFullYear();
-const ANOS = [ANO_ATUAL - 1, ANO_ATUAL, ANO_ATUAL + 1];
+const TIPOS_COLUNA = ["liberado", "faturado", "recebido", "cancelado"] as const;
+
+/** Meses agrupados por ano, para a faixa de anos acima dos meses no cabeçalho da tabela. */
+function gruposPorAno(meses: string[]): { ano: string; quantidade: number }[] {
+  const grupos: { ano: string; quantidade: number }[] = [];
+  meses.forEach((m) => {
+    const ano = m.slice(0, 4);
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo?.ano === ano) ultimo.quantidade += 1;
+    else grupos.push({ ano, quantidade: 1 });
+  });
+  return grupos;
+}
 
 function FaturamentoPrevistoPageContent() {
   const { data: projetos } = useCollection<Projeto>("projetos");
   const { data: clientes } = useCollection<Cliente>("clientes");
 
-  const [ano, setAno] = useState(ANO_ATUAL);
+  const [ano, setAno] = useState<AnoFiltro>(ANO_ATUAL);
   const [clienteId, setClienteId] = useState("");
   const [tipoFaturamento, setTipoFaturamento] = useState<"" | TipoFaturamento>("");
   const [status, setStatus] = useState<"" | TipoItemFaturamento>("");
@@ -44,12 +63,26 @@ function FaturamentoPrevistoPageContent() {
 
   const filtros: FiltrosFaturamento = useMemo(() => ({ clienteId, tipoFaturamento, status }), [clienteId, tipoFaturamento, status]);
 
-  const todosItens = useMemo(() => montarItensFaturamento(projetos, clientes, ano), [projetos, clientes, ano]);
+  // Tudo, de todos os anos: alimenta o filtro de ano e, recortado, o ano escolhido.
+  const itensTodosAnos = useMemo(() => montarItensFaturamento(projetos, clientes, "todos"), [projetos, clientes]);
+  const anos = useMemo(() => anosComDados(itensTodosAnos, ANO_ATUAL), [itensTodosAnos]);
+  const datasInvalidas = useMemo(() => lancamentosComDataInvalida(projetos, clientes), [projetos, clientes]);
+  const todosItens = useMemo(
+    () => (ano === "todos" ? itensTodosAnos : itensTodosAnos.filter((i) => i.mes.startsWith(`${ano}-`))),
+    [itensTodosAnos, ano]
+  );
   const itens = useMemo(() => filtrarItens(todosItens, filtros), [todosItens, filtros]);
   const totais = useMemo(() => totaisPorMes(itens, ano), [itens, ano]);
   const total = totalDoAno(totais);
   const totaisPorTipo = useMemo(() => totaisDoAnoPorTipo(totais), [totais]);
-  const matriz = useMemo(() => matrizAnual(itens, projetos), [itens, projetos]);
+
+  // Colunas de meses da tabela: do primeiro ao último mês com dados (com os filtros atuais), atravessando anos.
+  const meses = useMemo(() => mesesComDados(itens), [itens]);
+  const grupos = useMemo(() => gruposPorAno(meses), [meses]);
+  const matriz = useMemo(() => matrizAnual(itens, projetos, meses), [itens, projetos, meses]);
+  const totaisTabela = useMemo(() => totaisDaMatriz(matriz, meses.length), [matriz, meses.length]);
+  const sufixo = sufixoAno(ano);
+  const inicioDeAno = (i: number) => i === 0 || meses[i].slice(0, 4) !== meses[i - 1].slice(0, 4);
 
   const linhasDoMes = useMemo(
     () => (mesAberto ? detalheDoMes(itens, projetos, mesAberto) : []),
@@ -61,16 +94,22 @@ function FaturamentoPrevistoPageContent() {
     return clientes.filter((c) => ids.has(c.id)).sort((a, b) => nomeExibicaoCliente(a).localeCompare(nomeExibicaoCliente(b)));
   }, [todosItens, clientes]);
 
+  const rotuloPeriodo =
+    ano !== "todos" ? String(ano) : meses.length > 0 ? `${rotuloMesAno(meses[0])} a ${rotuloMesAno(meses[meses.length - 1])}` : "todo o período";
+
+  // Classes das colunas fixas (Cliente fica "grudada" à esquerda ao rolar os meses).
+  const colCliente = "sticky left-0 z-10 min-w-[180px] border-r border-brand-border-soft";
+
   return (
     <div>
       <FinanceiroTabs />
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Faturamento Previsto x Realizado</h1>
         <div className="flex gap-2">
-          <Button variant="secondary" disabled={matriz.length === 0} onClick={() => exportarMatrizCsv(matriz, ano)}>
+          <Button variant="secondary" disabled={matriz.length === 0} onClick={() => exportarMatrizCsv(matriz, ano, meses)}>
             Exportar CSV
           </Button>
-          <Button variant="secondary" disabled={matriz.length === 0} onClick={() => exportarMatrizPdf(matriz, ano)}>
+          <Button variant="secondary" disabled={matriz.length === 0} onClick={() => exportarMatrizPdf(matriz, ano, meses)}>
             Exportar PDF
           </Button>
         </div>
@@ -83,8 +122,9 @@ function FaturamentoPrevistoPageContent() {
       <div className="mb-5 flex flex-wrap items-end gap-2.5">
         <div className="w-28 shrink-0">
           <FormRow label="Ano">
-            <Select value={ano} onChange={(e) => setAno(Number(e.target.value))}>
-              {ANOS.map((a) => (
+            <Select value={String(ano)} onChange={(e) => setAno(e.target.value === "todos" ? "todos" : Number(e.target.value))}>
+              <option value="todos">Todos</option>
+              {anos.map((a) => (
                 <option key={a} value={a}>
                   {a}
                 </option>
@@ -130,66 +170,135 @@ function FaturamentoPrevistoPageContent() {
         </div>
       </div>
 
+      {datasInvalidas.length > 0 && (
+        <div className="mb-5 rounded-xl border border-[#f3d19b] bg-[#fff8ec] px-4 py-3 text-[12.5px] text-[#8a5a0b]">
+          <p className="font-bold">
+            {datasInvalidas.length === 1 ? "1 parcela está" : `${datasInvalidas.length} parcelas estão`} com data inválida e ficaram fora deste relatório.
+            Corrija a data no financeiro do projeto:
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {datasInvalidas.slice(0, 10).map((d, i) => (
+              <li key={`${d.projetoId}-${i}`}>
+                {d.cliente} — proposta {d.codigoProposta} · {d.identificacao} · data gravada: <strong>{d.data}</strong>
+              </li>
+            ))}
+            {datasInvalidas.length > 10 && <li>e mais {datasInvalidas.length - 10}…</li>}
+          </ul>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-brand-border bg-white p-5 shadow-card">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <LegendaFaturamento totais={totaisPorTipo} />
           <p className="text-[12.5px] text-brand-muted">
-            Total programado {ano} (sem cancelados): <strong className="text-brand-navy-2">{moeda(total)}</strong>
+            Total programado {ano === "todos" ? `(${rotuloPeriodo})` : ano} (sem cancelados): <strong className="text-brand-navy-2">{moeda(total)}</strong>
           </p>
         </div>
         <GraficoFaturamentoBarras totais={totais} mesSelecionado={mesAberto} onClickMes={setMesAberto} />
       </div>
 
       <div className="mt-5 overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
+        {meses.length > 0 && (
+          <p className="border-b border-brand-border-soft px-4 py-2 text-[12px] text-brand-muted">
+            Previsto por mês de <strong className="text-brand-navy-2">{rotuloMesAno(meses[0])}</strong> a{" "}
+            <strong className="text-brand-navy-2">{rotuloMesAno(meses[meses.length - 1])}</strong>
+            {meses.length > 12 ? " — role para o lado para ver todos os meses" : ""}
+          </p>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
               <tr className="bg-brand-hover text-left text-[10px] font-bold tracking-[.07em] whitespace-nowrap text-brand-faint uppercase">
-                <th className="px-3 py-2.5">Cliente</th>
-                <th className="px-3 py-2.5">Valor Venda</th>
-                <th className="px-3 py-2.5">Realizado</th>
-                <th className="px-3 py-2.5">Saldo</th>
-                {(["liberado", "faturado", "recebido", "cancelado"] as const).map((t) => (
-                  <th key={t} className="px-2 py-2.5 text-right">
-                    {TIPO_ITEM_CONFIG[t].label} {ano}
+                <th rowSpan={2} className={`${colCliente} bg-brand-hover px-3 py-2.5 align-bottom`}>
+                  Cliente
+                </th>
+                <th rowSpan={2} className="px-3 py-2.5 align-bottom">Valor Venda</th>
+                <th rowSpan={2} className="px-3 py-2.5 align-bottom">Realizado</th>
+                <th rowSpan={2} className="px-3 py-2.5 align-bottom">Saldo</th>
+                {TIPOS_COLUNA.map((t) => (
+                  <th key={t} rowSpan={2} className="px-2 py-2.5 text-right align-bottom">
+                    {TIPO_ITEM_CONFIG[t].label}
+                    {sufixo}
                   </th>
                 ))}
-                {MESES_ABREV.map((m) => (
-                  <th key={m} className="px-2 py-2.5 text-right">
-                    Previsto {m}
+                {grupos.map((g) => (
+                  <th
+                    key={g.ano}
+                    colSpan={g.quantidade}
+                    className="border-l-2 border-brand-border bg-[#e8efff] px-2 py-1 text-center text-[11px] tracking-[.12em] text-[#2456b8]"
+                  >
+                    {g.ano}
                   </th>
                 ))}
-                <th className="px-3 py-2.5 text-right">Total Previsto {ano}</th>
+                <th rowSpan={2} className="border-l-2 border-brand-border px-3 py-2.5 text-right align-bottom">
+                  Total Previsto{sufixo}
+                </th>
+              </tr>
+              <tr className="bg-brand-hover text-[10px] font-bold tracking-[.07em] whitespace-nowrap text-brand-faint uppercase">
+                {meses.map((m, i) => (
+                  <th
+                    key={m}
+                    title={`Previsto ${rotuloMesAno(m)}`}
+                    className={`px-2 py-1.5 text-right ${inicioDeAno(i) ? "border-l-2 border-brand-border" : ""}`}
+                  >
+                    {rotuloMes(m)}/{m.slice(2, 4)}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {matriz.map((l) => (
-                <tr key={l.clienteId} className="border-t border-brand-border-soft whitespace-nowrap">
-                  <td className="px-3 py-2 font-bold text-brand-navy-2">{l.cliente}</td>
+                <tr key={l.clienteId} className="group border-t border-brand-border-soft whitespace-nowrap">
+                  <td className={`${colCliente} bg-white px-3 py-2 font-bold text-brand-navy-2 group-hover:bg-brand-hover`}>{l.cliente}</td>
                   <td className="px-3 py-2 text-brand-muted">{moeda(l.valorVenda)}</td>
                   <td className="px-3 py-2 text-brand-muted">{moeda(l.realizado)}</td>
                   <td className="px-3 py-2 text-brand-muted">{moeda(l.saldo)}</td>
-                  {((["liberado", "faturado", "recebido", "cancelado"] as const)).map((t) => (
+                  {TIPOS_COLUNA.map((t) => (
                     <td key={t} className="px-2 py-2 text-right text-brand-muted">
                       {l.porTipo[t] > 0 ? moeda(l.porTipo[t]) : "—"}
                     </td>
                   ))}
                   {l.previstoPorMes.map((v, i) => (
-                    <td key={i} className="px-2 py-2 text-right text-brand-muted">
+                    <td
+                      key={meses[i]}
+                      title={`${l.cliente} · ${rotuloMesAno(meses[i])}`}
+                      className={`px-2 py-2 text-right ${v > 0 ? "text-brand-navy-2" : "text-brand-faint"} ${inicioDeAno(i) ? "border-l-2 border-brand-border" : ""}`}
+                    >
                       {v > 0 ? moeda(v) : "—"}
                     </td>
                   ))}
-                  <td className="px-3 py-2 text-right font-bold text-brand-navy-2">{moeda(l.totalPrevistoAno)}</td>
+                  <td className="border-l-2 border-brand-border px-3 py-2 text-right font-bold text-brand-navy-2">{moeda(l.totalPrevisto)}</td>
                 </tr>
               ))}
               {matriz.length === 0 && (
                 <tr>
-                  <td colSpan={20} className="px-4 py-8 text-center text-brand-faint">
-                    Nenhum lançamento previsto para esse filtro em {ano}.
+                  <td colSpan={9 + meses.length} className="px-4 py-8 text-center text-brand-faint">
+                    Nenhum lançamento previsto para esse filtro{ano === "todos" ? "" : ` em ${ano}`}.
                   </td>
                 </tr>
               )}
             </tbody>
+            {matriz.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-brand-border bg-brand-hover font-bold whitespace-nowrap text-brand-navy-2">
+                  <td className={`${colCliente} bg-brand-hover px-3 py-2`}>Total</td>
+                  <td className="px-3 py-2">{moeda(totaisTabela.valorVenda)}</td>
+                  <td className="px-3 py-2">{moeda(totaisTabela.realizado)}</td>
+                  <td className="px-3 py-2">{moeda(totaisTabela.saldo)}</td>
+                  {TIPOS_COLUNA.map((t) => (
+                    <td key={t} className="px-2 py-2 text-right">
+                      {moeda(totaisTabela.porTipo[t])}
+                    </td>
+                  ))}
+                  {totaisTabela.porMes.map((v, i) => (
+                    <td key={meses[i]} className={`px-2 py-2 text-right ${inicioDeAno(i) ? "border-l-2 border-brand-border" : ""}`}>
+                      {v > 0 ? moeda(v) : "—"}
+                    </td>
+                  ))}
+                  <td className="border-l-2 border-brand-border px-3 py-2 text-right">{moeda(totaisTabela.totalPrevisto)}</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
