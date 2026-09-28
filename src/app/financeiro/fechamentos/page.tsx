@@ -100,6 +100,7 @@ function TabelaItens({
   hojeIso,
   filtroTipo,
   filtroSituacao,
+  filtroEtapa,
   onDocumento,
   onAcao,
   onConfirmarEmNome,
@@ -109,6 +110,8 @@ function TabelaItens({
   hojeIso: string;
   filtroTipo: "" | "proprio" | "terceiro";
   filtroSituacao: "" | SituacaoParceiro;
+  /** Só as parceiras nesta etapa (rascunho, em revisão, fechado, faturado); esconde os recursos próprios. */
+  filtroEtapa: "" | StatusFechamento;
   onDocumento: (parceiro: FechamentoParceiro) => void;
   onAcao: (tipo: TipoAcao, parceiraId: string) => void;
   onConfirmarEmNome: (item: ItemExibido, g: GrupoParceira) => void;
@@ -198,6 +201,21 @@ function TabelaItens({
             </td>
           </tr>
         )}
+        {/* Nota fiscal e pagamento ficam dentro da linha do consultor: recolher a linha esconde tudo junto. */}
+        {aberto && g?.etapa === "faturado" && g.salvo && (
+          <tr className="bg-brand-hover/60">
+            <td colSpan={cols + 1} className="px-4 pb-3">
+              <div className="overflow-hidden rounded-xl border border-brand-border bg-white">
+                {g.itens.length > 1 && (
+                  <p className="border-b border-brand-border-soft px-4 py-2 text-[11.5px] text-brand-faint">
+                    A nota fiscal e o pagamento são da {g.nome} (uma NF para os {g.itens.length} consultores dela).
+                  </p>
+                )}
+                <PainelParceiroFinanceiro f={g.salvo} hojeIso={hojeIso} onDocumentoFaturamento={() => g.salvo && onDocumento(g.salvo)} />
+              </div>
+            </td>
+          </tr>
+        )}
       </Fragment>
     );
   };
@@ -227,6 +245,7 @@ function TabelaItens({
         if (!g && filtroTipo === "terceiro") return null;
         if (g && filtroTipo === "proprio") return null;
         if (filtroSituacao && (!parceiro || !liberada || situacaoDaParceira(parceiro) !== filtroSituacao)) return null;
+        if (filtroEtapa && (!g || g.etapa !== filtroEtapa)) return null;
         const s = subtotal(lista);
         const ciente = !!parceiro?.ciencia?.em;
         const conf = parceiro ? CONFIRMACAO[parceiro.confirmacao.status] : null;
@@ -403,7 +422,6 @@ function TabelaItens({
                 )}
               </tbody>
             </table>
-            {liberada && parceiro && <PainelParceiroFinanceiro f={parceiro} hojeIso={hojeIso} onDocumentoFaturamento={() => onDocumento(parceiro)} />}
           </div>
         );
       })}
@@ -429,6 +447,7 @@ function FechamentosPageContent() {
   const { data: todosParceiros } = useCollection<FechamentoParceiro>("fechamentoParceiros", []);
   const [filtroTipo, setFiltroTipo] = useState<"" | "proprio" | "terceiro">("");
   const [filtroSituacao, setFiltroSituacao] = useState<"" | SituacaoParceiro>("");
+  const [filtroEtapa, setFiltroEtapa] = useState<"" | StatusFechamento>("");
   const [acao, setAcao] = useState<Acao | null>(null);
   const [emNome, setEmNome] = useState<{ item: ItemExibido; g: GrupoParceira } | null>(null);
   const [processando, setProcessando] = useState(false);
@@ -495,11 +514,11 @@ function FechamentosPageContent() {
   const liberadas = grupos.filter((g) => g.etapa === "faturado").length;
   const prazoVencido = hojeIso > prazo && (grupos.length === 0 || liberadas < grupos.length);
   const contagemEtapas = ETAPAS_FECHAMENTO.map((e) => ({ etapa: e, qtd: grupos.filter((g) => g.etapa === e).length }));
-  const parceirosLiberados = parceirosSalvos.filter((x) => x.liberado);
-  const parceirosAguardandoCiencia = parceirosLiberados.filter((x) => !x.ciencia?.em).length;
-  const parceirosPendentes = parceirosLiberados.filter((x) => !!x.ciencia?.em && x.confirmacao.status === "pendente").length;
-  const parceirosContestados = parceirosLiberados.filter((x) => x.confirmacao.status === "contestado").length;
-  const parceirosConfirmados = parceirosLiberados.filter((x) => x.confirmacao.status === "confirmado").length;
+  // Situação real de cada parceira já liberada (mesma regra do cartão dela: confirmação dos consultores -> NF -> pagamento).
+  const situacoesLiberadas = grupos.filter((g) => g.etapa === "faturado" && g.salvo).map((g) => situacaoDaParceira(g.salvo!));
+  const contagemSituacoes = (Object.keys(SITUACAO_PARCEIRO_CONFIG) as SituacaoParceiro[])
+    .map((s) => ({ situacao: s, qtd: situacoesLiberadas.filter((x) => x === s).length }))
+    .filter((c) => c.qtd > 0 || c.situacao === filtroSituacao);
 
   const grupoDaAcao = acao ? grupos.find((g) => g.parceiraId === acao.parceiraId) ?? null : null;
   const bloqueantes = acao?.tipo === "fechar" ? bloqueantesDaParceira(acao.parceiraId) : [];
@@ -685,26 +704,50 @@ function FechamentosPageContent() {
       {erro && <p className="mb-4 rounded-md bg-[#fdeceb] p-3 text-sm font-medium text-[#b5392a]">{erro}</p>}
 
       {grupos.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-[12.5px]">
-          <span className="font-bold text-brand-navy-2">Parceiras:</span>
-          {contagemEtapas.map(({ etapa, qtd }) => (
-            <span
-              key={etapa}
-              className="rounded-full px-2.5 py-1 font-bold"
-              style={{ backgroundColor: STATUS_FECHAMENTO_CONFIG[etapa].bg, color: STATUS_FECHAMENTO_CONFIG[etapa].text }}
-            >
-              {qtd} {STATUS_FECHAMENTO_CONFIG[etapa].label.toLowerCase()}
-            </span>
-          ))}
+        <div className="mb-4 space-y-2 text-[12.5px]">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-40 shrink-0 font-bold text-brand-navy-2">Parceiras por etapa:</span>
+            {contagemEtapas.map(({ etapa, qtd }) => {
+              const ativo = filtroEtapa === etapa;
+              return (
+                <button
+                  key={etapa}
+                  type="button"
+                  disabled={qtd === 0 && !ativo}
+                  onClick={() => setFiltroEtapa(ativo ? "" : etapa)}
+                  aria-pressed={ativo}
+                  title={ativo ? "Clique para mostrar todas" : `Mostrar só as parceiras em "${STATUS_FECHAMENTO_CONFIG[etapa].label}"`}
+                  className={`rounded-full px-2.5 py-1 font-bold transition-shadow disabled:cursor-default disabled:opacity-50 ${ativo ? "ring-2 ring-brand-navy-2 ring-offset-1" : "hover:brightness-95"}`}
+                  style={{ backgroundColor: STATUS_FECHAMENTO_CONFIG[etapa].bg, color: STATUS_FECHAMENTO_CONFIG[etapa].text }}
+                >
+                  {qtd} {STATUS_FECHAMENTO_CONFIG[etapa].label.toLowerCase()}
+                </button>
+              );
+            })}
+          </div>
+          {contagemSituacoes.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-40 shrink-0 font-bold text-brand-navy-2">Liberadas por situação:</span>
+              {contagemSituacoes.map(({ situacao, qtd }) => {
+                const ativo = filtroSituacao === situacao;
+                return (
+                  <button
+                    key={situacao}
+                    type="button"
+                    onClick={() => setFiltroSituacao(ativo ? "" : situacao)}
+                    aria-pressed={ativo}
+                    title={ativo ? "Clique para mostrar todas" : `Mostrar só as parceiras em "${SITUACAO_PARCEIRO_CONFIG[situacao].label}"`}
+                    className={`rounded-full px-2.5 py-1 font-bold transition-shadow ${ativo ? "ring-2 ring-brand-navy-2 ring-offset-1" : "hover:brightness-95"}`}
+                    style={{ backgroundColor: SITUACAO_PARCEIRO_CONFIG[situacao].bg, color: SITUACAO_PARCEIRO_CONFIG[situacao].text }}
+                  >
+                    {qtd} {SITUACAO_PARCEIRO_CONFIG[situacao].label.toLowerCase()}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-[11.5px] text-brand-faint">Clique num status para ver só as parceiras nele; clique de novo para voltar a ver todas.</p>
         </div>
-      )}
-      {parceirosLiberados.length > 0 && (
-        <p className="mb-4 text-[12.5px] text-brand-muted">
-          Conferência das parceiras liberadas: <strong className="text-[#a4650d]">{parceirosAguardandoCiencia} aguardando ciência</strong> ·{" "}
-          <strong className="text-[#a4650d]">{parceirosPendentes} a confirmar valores</strong> ·{" "}
-          <strong className="text-[#15754c]">{parceirosConfirmados} confirmada(s)</strong> ·{" "}
-          <strong className="text-[#b5392a]">{parceirosContestados} contestada(s)</strong>. A nota fiscal só é solicitada depois da confirmação.
-        </p>
       )}
       {fechamento?.anexos && fechamento.anexos.length > 0 && (
         <div className="mb-4 rounded-md bg-brand-hover p-3 text-[12.5px] text-brand-muted">
@@ -797,12 +840,13 @@ function FechamentosPageContent() {
               ))}
             </Select>
           </div>
-          {(filtroTipo || filtroSituacao) && (
+          {(filtroTipo || filtroSituacao || filtroEtapa) && (
             <button
               type="button"
               onClick={() => {
                 setFiltroTipo("");
                 setFiltroSituacao("");
+                setFiltroEtapa("");
               }}
               className="mb-2.5 text-[12.5px] font-semibold text-brand-accent hover:underline"
             >
@@ -828,6 +872,7 @@ function FechamentosPageContent() {
         hojeIso={hojeIso}
         filtroTipo={filtroTipo}
         filtroSituacao={filtroSituacao}
+        filtroEtapa={filtroEtapa}
         onDocumento={gerarDocumentoParceira}
         onAcao={(tipo, parceiraId) => setAcao({ tipo, parceiraId })}
         onConfirmarEmNome={(item, g) => setEmNome({ item, g })}

@@ -5,7 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronRight, MailCheck, MessageSquareWarnin
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal";
-import { NotaFiscalParceira } from "@/components/financeiro/NotaFiscalParceira";
+import { DocumentosDoFinanceiro, NotaFiscalParceira } from "@/components/financeiro/NotaFiscalParceira";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFechamentoParceira } from "@/lib/useFechamentoParceira";
 import { registrarCiencia, responderConfirmacao } from "@/lib/fechamentoDb";
@@ -210,6 +210,7 @@ function CartaoMes({ f }: { f: FechamentoParceiro }) {
               Um consultor contestou as horas. O Financeiro vai analisar e, se preciso, reabrir e reenviar o fechamento.
             </p>
           )}
+          <DocumentosDoFinanceiro f={f} />
           <NotaFiscalParceira f={f} />
           {!porConsultor && conf.status === "contestado" && f.confirmacao.motivo && (
             <p className="rounded-md bg-[#fdeceb] px-3 py-2 text-[12.5px] text-[#b5392a]">

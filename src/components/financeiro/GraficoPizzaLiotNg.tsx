@@ -88,7 +88,7 @@ export function GraficoPizzaLiotNg({ dados }: { dados: Record<SegmentoLiotNg, Re
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[15px] font-extrabold text-brand-navy-2">Vendas por segmento — LIOT x NG</p>
-          <p className="text-[12px] text-brand-faint">LIOT: propostas dos módulos QRH e KPH · NG: todos os outros módulos</p>
+          <p className="text-[12px] text-brand-faint">LIOT: propostas dos módulos QRH e KPH · NG: módulos MNH, MNF, MDH e SGH</p>
         </div>
         <button
           type="button"

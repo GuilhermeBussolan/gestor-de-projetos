@@ -115,7 +115,7 @@ function FaturamentoPrevistoPageContent() {
         </div>
       </div>
       <p className="mb-5 text-sm text-brand-muted">
-        Parcelas e marcos mês a mês, por situação: previsto, liberado, faturado, recebido e cancelado.
+        Parcelas e marcos mês a mês pela liberação do faturamento: o que já foi liberado entra no mês da liberação; o que ainda não foi, no mês previsto para liberar.
         Clique numa barra para ver o detalhe por cliente.
       </p>
 
@@ -173,13 +173,22 @@ function FaturamentoPrevistoPageContent() {
       {datasInvalidas.length > 0 && (
         <div className="mb-5 rounded-xl border border-[#f3d19b] bg-[#fff8ec] px-4 py-3 text-[12.5px] text-[#8a5a0b]">
           <p className="font-bold">
-            {datasInvalidas.length === 1 ? "1 parcela está" : `${datasInvalidas.length} parcelas estão`} com data inválida e ficaram fora deste relatório.
-            Corrija a data no financeiro do projeto:
+            {datasInvalidas.length === 1 ? "1 parcela ficou" : `${datasInvalidas.length} parcelas ficaram`} fora deste relatório (
+            {moeda(datasInvalidas.reduce((s, d) => s + d.valor, 0))}). Ajuste a data no financeiro do projeto:
           </p>
           <ul className="mt-1 list-disc pl-5">
             {datasInvalidas.slice(0, 10).map((d, i) => (
               <li key={`${d.projetoId}-${i}`}>
-                {d.cliente} — proposta {d.codigoProposta} · {d.identificacao} · data gravada: <strong>{d.data}</strong>
+                {d.cliente} — proposta {d.codigoProposta} · {d.identificacao} · {moeda(d.valor)} ·{" "}
+                {d.motivo === "sem_liberacao" ? (
+                  <strong>liberada sem a data da liberação</strong>
+                ) : d.motivo === "sem_previsao" ? (
+                  <strong>sem previsão de liberação</strong>
+                ) : (
+                  <>
+                    data inválida: <strong>{d.data}</strong>
+                  </>
+                )}
               </li>
             ))}
             {datasInvalidas.length > 10 && <li>e mais {datasInvalidas.length - 10}…</li>}

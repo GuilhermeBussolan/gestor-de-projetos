@@ -1,11 +1,11 @@
 import type { Projeto } from "@/types";
 
-/** LIOT = propostas dos módulos QRH e KPH; NG = todos os outros módulos. */
+/** LIOT = propostas dos módulos QRH e KPH; NG = módulos MNH, MNF, MDH e SGH. */
 export type SegmentoLiotNg = "LIOT" | "NG";
 
 export const SEGMENTO_CONFIG: Record<SegmentoLiotNg, { label: string; descricao: string; cor: string; corSuave: string }> = {
   LIOT: { label: "LIOT", descricao: "Módulos QRH e KPH", cor: "#2f6fe4", corSuave: "#e8efff" },
-  NG: { label: "NG", descricao: "Demais módulos", cor: "#152849", corSuave: "#e6eaf2" },
+  NG: { label: "NG", descricao: "Módulos MNH, MNF, MDH e SGH", cor: "#152849", corSuave: "#e6eaf2" },
 };
 
 export function segmentoDoModulo(modulo: string): SegmentoLiotNg {

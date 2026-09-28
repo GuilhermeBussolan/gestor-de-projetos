@@ -95,96 +95,124 @@ export interface ItemFaturamento {
   tipoFaturamento: TipoFaturamento;
 }
 
-/**
- * Um item por parcela/marco do ano, na situação em que ela está: "liberado", "faturado" e "recebido"
- * no mês em que foi liberada; "cancelado" no mês do cancelamento (ou, sem essa data, da previsão);
- * "previsto" quando ainda está Aguardando mas tem uma data prevista (parcelado) ou uma previsão de
- * faturamento (marco) caindo nesse mês.
- */
 /** Mês (YYYY-MM) com um ano plausível. Datas digitadas errado (ex.: ano "0022") ficam de fora do relatório. */
 const mesValido = (mes: string) => /^20\d\d-(0[1-9]|1[0-2])$/.test(mes);
 
+/** Parcela que ficou fora do relatório: data inválida (ano estranho) ou sem nenhuma data para posicioná-la num mês. */
 export interface LancamentoDataInvalida {
   projetoId: string;
   cliente: string;
   codigoProposta: string;
   identificacao: string;
-  /** A data como está gravada (para a pessoa achar e corrigir). */
+  valor: number;
+  /** data_invalida: ano estranho; sem_liberacao: já liberada, mas sem a data da liberação; sem_previsao: aguardando, sem previsão. */
+  motivo: "data_invalida" | "sem_liberacao" | "sem_previsao";
+  /** A data como está gravada (para a pessoa achar e corrigir); vazio quando não há data. */
   data: string;
 }
 
-/** Mês de referência de uma parcela no relatório (o mesmo critério de `montarItensFaturamento`), ou null se não entra. */
-function mesDaParcela(parc: Parcela, tipoFaturamento: TipoFaturamento): { mes: string; data: string } | null {
-  const dataPrevisao = tipoFaturamento === "marco_faturamento" ? parc.dataPrevisaoFaturamento : parc.dataPrevista;
-  if (TIPO_POR_STATUS[parc.status] && parc.dataLiberacao) {
-    const d = new Date(parc.dataLiberacao);
-    return { mes: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`, data: d.toLocaleDateString("pt-BR") };
-  }
-  const dataRef = parc.status === "CANCELADO" ? parc.dataCancelamento || dataPrevisao : parc.status === "AGUARDANDO" ? dataPrevisao : null;
-  return dataRef ? { mes: dataRef.slice(0, 7), data: dataRef.split("-").reverse().join("/") } : null;
+/** Projetos antigos não têm `tipoFaturamento`: valem como parcelado (o mesmo que o resto do sistema assume). */
+const tipoDoProjeto = (projeto: Projeto): TipoFaturamento => projeto.financeiro?.tipoFaturamento ?? "parcelado";
+
+const isoParaMes = (iso: string | null | undefined) => (iso ? { mes: iso.slice(0, 7), data: iso.split("-").reverse().join("/") } : null);
+
+/** Mês seguinte ("2026-09" -> "2026-10"). */
+function mesSeguinte(mes: string): string {
+  const [ano, m] = mes.split("-").map(Number);
+  return m === 12 ? `${ano + 1}-01` : `${ano}-${pad2(m + 1)}`;
 }
 
-/** Parcelas/marcos com data fora do normal (ano antes de 2000 ou depois de 2099): não entram no relatório e são avisadas. */
+/**
+ * Previsão de liberação de uma parcela ainda aguardando: a data prevista (parcelado) ou a previsão de faturamento
+ * (marco) — se a principal faltar, a outra. O banco de horas não tem previsão gravada: as horas de um mês são
+ * liberadas no mês seguinte, então vale o mês seguinte ao de referência.
+ */
+function previsaoDeLiberacao(parc: Parcela, tipoFaturamento: TipoFaturamento): { mes: string; data: string } | null {
+  const principal = tipoFaturamento === "marco_faturamento" ? parc.dataPrevisaoFaturamento : parc.dataPrevista;
+  const alternativa = tipoFaturamento === "marco_faturamento" ? parc.dataPrevista : parc.dataPrevisaoFaturamento;
+  const previsao = isoParaMes(principal) ?? isoParaMes(alternativa);
+  if (previsao) return previsao;
+  if (parc.periodoReferencia) {
+    const mes = mesSeguinte(parc.periodoReferencia.slice(0, 7));
+    return { mes, data: rotuloMesAno(mes) };
+  }
+  return null;
+}
+
+/**
+ * Em que mês a parcela entra no relatório e em que situação, sempre pela LIBERAÇÃO do faturamento:
+ *  - liberado/faturado/recebido: o mês em que foi liberada (data de liberação). Sem essa data, fica de fora e é avisada;
+ *  - aguardando ("previsto"): o mês em que está prevista a liberação (`previsaoDeLiberacao`);
+ *  - cancelado: o mês do cancelamento (ou, sem ele, o da previsão de liberação).
+ */
+function posicaoDaParcela(
+  parc: Parcela,
+  tipoFaturamento: TipoFaturamento
+): { mes: string; data: string; tipo: TipoItemFaturamento } | null {
+  const tipoRealizado = TIPO_POR_STATUS[parc.status];
+  if (tipoRealizado) {
+    if (!parc.dataLiberacao) return null;
+    const d = new Date(parc.dataLiberacao);
+    return { mes: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`, data: d.toLocaleDateString("pt-BR"), tipo: tipoRealizado };
+  }
+  if (parc.status === "CANCELADO") {
+    const ref = isoParaMes(parc.dataCancelamento) ?? previsaoDeLiberacao(parc, tipoFaturamento);
+    return ref ? { ...ref, tipo: "cancelado" } : null;
+  }
+  const previsao = previsaoDeLiberacao(parc, tipoFaturamento);
+  return previsao ? { ...previsao, tipo: "previsto" } : null;
+}
+
+/**
+ * Parcelas que ficaram de fora do relatório, para a tela avisar: data inválida (ano antes de 2000 ou depois de 2099)
+ * ou nenhuma data para posicioná-las num mês.
+ */
 export function lancamentosComDataInvalida(projetos: Projeto[], clientes: Cliente[]): LancamentoDataInvalida[] {
   const lista: LancamentoDataInvalida[] = [];
   for (const projeto of projetos) {
-    const tipoFaturamento = projeto.financeiro?.tipoFaturamento;
-    if (!tipoFaturamento || tipoFaturamento === "apontamento_horas") continue;
-    for (const parc of projeto.financeiro.parcelas) {
-      const ref = mesDaParcela(parc, tipoFaturamento);
-      if (!ref || mesValido(ref.mes)) continue;
+    const tipoFaturamento = tipoDoProjeto(projeto);
+    for (const parc of projeto.financeiro?.parcelas ?? []) {
+      const pos = posicaoDaParcela(parc, tipoFaturamento);
+      if (pos && mesValido(pos.mes)) continue;
       lista.push({
         projetoId: projeto.id,
         cliente: nomeExibicaoCliente(clientes.find((c) => c.id === projeto.clienteId)),
         codigoProposta: projeto.codigoProposta,
         identificacao: parc.descricao ? parc.descricao : `Parcela ${parc.numero}`,
-        data: ref.data,
+        valor: parc.valor,
+        motivo: pos ? "data_invalida" : TIPO_POR_STATUS[parc.status] ? "sem_liberacao" : "sem_previsao",
+        data: pos?.data ?? "",
       });
     }
   }
   return lista;
 }
 
+/**
+ * Um item por parcela/marco do período, no mês e na situação que `posicaoDaParcela` define. Entram todos os tipos de
+ * faturamento que têm parcelas (parcelado, marco e banco de horas); "apontamento de horas" não gera parcelas.
+ */
 export function montarItensFaturamento(projetos: Projeto[], clientes: Cliente[], ano: AnoFiltro): ItemFaturamento[] {
   const itens: ItemFaturamento[] = [];
   const noPeriodo = (mes: string) => mesValido(mes) && (ano === "todos" || mes.startsWith(`${ano}-`));
   for (const projeto of projetos) {
-    const tipoFaturamento = projeto.financeiro?.tipoFaturamento;
-    if (!tipoFaturamento || tipoFaturamento === "apontamento_horas") continue;
+    const tipoFaturamento = tipoDoProjeto(projeto);
     const cliente = nomeExibicaoCliente(clientes.find((c) => c.id === projeto.clienteId));
 
-    for (const parc of projeto.financeiro.parcelas) {
-      const identificacao = parc.descricao ? parc.descricao : `Parcela ${parc.numero}`;
-      const base = {
+    for (const parc of projeto.financeiro?.parcelas ?? []) {
+      const pos = posicaoDaParcela(parc, tipoFaturamento);
+      if (!pos || !noPeriodo(pos.mes)) continue;
+      itens.push({
         projetoId: projeto.id,
         clienteId: projeto.clienteId,
         cliente,
         codigoProposta: projeto.codigoProposta,
-        identificacao,
+        identificacao: parc.descricao ? parc.descricao : `Parcela ${parc.numero}`,
         valor: parc.valor,
         tipoFaturamento,
-      };
-      const dataPrevisao = tipoFaturamento === "marco_faturamento" ? parc.dataPrevisaoFaturamento : parc.dataPrevista;
-
-      const tipoRealizado = TIPO_POR_STATUS[parc.status];
-      if (tipoRealizado && parc.dataLiberacao) {
-        const d = new Date(parc.dataLiberacao);
-        const mes = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-        if (noPeriodo(mes)) itens.push({ ...base, mes, tipo: tipoRealizado });
-        continue;
-      }
-
-      if (parc.status === "CANCELADO") {
-        const dataRef = parc.dataCancelamento || dataPrevisao;
-        if (dataRef && noPeriodo(dataRef.slice(0, 7))) {
-          itens.push({ ...base, mes: dataRef.slice(0, 7), tipo: "cancelado" });
-        }
-        continue;
-      }
-
-      if (parc.status === "AGUARDANDO" && dataPrevisao && noPeriodo(dataPrevisao.slice(0, 7))) {
-        itens.push({ ...base, mes: dataPrevisao.slice(0, 7), tipo: "previsto" });
-      }
+        mes: pos.mes,
+        tipo: pos.tipo,
+      });
     }
   }
   return itens;

@@ -5,7 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronRight, FileText, MessageSquareWarning
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal";
-import { NotaFiscalParceira } from "@/components/financeiro/NotaFiscalParceira";
+import { DocumentosDoFinanceiro, NotaFiscalParceira } from "@/components/financeiro/NotaFiscalParceira";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMeuFechamento } from "@/lib/useMeuFechamento";
 import { responderConfirmacaoConsultor } from "@/lib/fechamentoDb";
@@ -70,7 +70,12 @@ function NotaFiscalDaEmpresa({ item, fechamento }: { item: ItemFechamento; fecha
       </div>
     );
   }
-  return <NotaFiscalParceira f={fechamento} titulo={`Nota fiscal da ${fechamento.parceiraNome}`} />;
+  return (
+    <div className="space-y-3">
+      <DocumentosDoFinanceiro f={fechamento} />
+      <NotaFiscalParceira f={fechamento} titulo={`Nota fiscal da ${fechamento.parceiraNome}`} />
+    </div>
+  );
 }
 
 function CartaoMes({

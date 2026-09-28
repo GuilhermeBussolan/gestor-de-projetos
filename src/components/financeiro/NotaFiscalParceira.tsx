@@ -23,6 +23,25 @@ const dataHora = (ms: number) => new Date(ms).toLocaleString("pt-BR", { dateStyl
 const dataBR = (iso: string) => iso.split("-").reverse().join("/");
 const NOME_ACAO: Record<string, string> = { enviada: "NF enviada", reenviada: "NF reenviada", validada: "NF validada", rejeitada: "NF rejeitada" };
 
+/** O que o Financeiro anexou ao liberar o faturamento da parceira (observação e documentos complementares). */
+export function DocumentosDoFinanceiro({ f }: { f: FechamentoParceiro }) {
+  const anexos = f.anexos ?? [];
+  if (!f.observacaoLiberacao && anexos.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-brand-border bg-brand-hover/60 px-4 py-3 text-[12.5px]">
+      <p className="mb-1 font-bold text-brand-navy-2">Enviado pelo Financeiro</p>
+      {f.observacaoLiberacao && <p className="mb-1.5 text-brand-muted">{f.observacaoLiberacao}</p>}
+      {anexos.length > 0 && (
+        <div className="flex flex-wrap gap-x-5 gap-y-1">
+          {anexos.map((a) => (
+            <LinkArquivo key={a.path} arquivo={a} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Passo 3 do fechamento, do lado de quem envia a NF da parceira (o contato 1 do cadastro, no "Meu fechamento", ou o
  * responsável da parceira): depois que todos os consultores confirmam as horas, envia a nota fiscal (número, data de
@@ -129,7 +148,9 @@ export function NotaFiscalParceira({ f, titulo = "3. Nota fiscal" }: { f: Fecham
           )}
           <p className={f.nf.status === "validada" ? "text-[#15754c]" : "text-[#0f7d9e]"}>
             {f.nf.status === "validada"
-              ? `Validada por ${f.nf.validadoPorNome ?? "—"}${f.nf.validadoEm ? ` em ${dataHora(f.nf.validadoEm)}` : ""}. O pagamento será registrado pelo Financeiro.`
+              ? `Validada por ${f.nf.validadoPorNome ?? "—"}${f.nf.validadoEm ? ` em ${dataHora(f.nf.validadoEm)}` : ""}.${
+                  pagamentos.length === 0 ? " O pagamento será registrado pelo Financeiro." : ""
+                }`
               : `Enviada em ${dataHora(f.nf.enviadoEm)} — aguardando a validação do Financeiro.`}
           </p>
         </div>
@@ -186,9 +207,16 @@ export function NotaFiscalParceira({ f, titulo = "3. Nota fiscal" }: { f: Fecham
           <p className="mb-1.5 text-[12.5px] font-bold text-brand-navy-2">Pagamentos registrados</p>
           <ul className="space-y-1 text-[12.5px] text-brand-muted">
             {pagamentos.map((p) => (
-              <li key={p.id}>
-                {dataBR(p.data)} · {p.forma} · <strong className="text-brand-navy-2">{moeda(p.valor)}</strong>
-                {p.referencia ? ` · ref. ${p.referencia}` : ""}
+              <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                <span>
+                  {dataBR(p.data)} · {p.forma} · <strong className="text-brand-navy-2">{moeda(p.valor)}</strong>
+                  {p.referencia ? ` · ref. ${p.referencia}` : ""}
+                </span>
+                {p.comprovante ? (
+                  <LinkArquivo arquivo={p.comprovante} rotulo="Ver comprovante" />
+                ) : (
+                  <span className="text-[11.5px] text-brand-faint">sem comprovante anexado</span>
+                )}
               </li>
             ))}
           </ul>
