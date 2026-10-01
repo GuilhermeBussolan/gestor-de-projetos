@@ -33,7 +33,8 @@ papaparse para relatórios e importações, lucide-react (ícones), date-fns. Va
 
 - **administrador**: tudo.
 - **coordenador**: projetos, calendário, apontamento e aprovação de horas, mapa de alocação. **Não vê NADA de financeiro**
-  (nem valores/parcelas no detalhe do projeto, nem faturamento nos formulários, nem valor/hora nos relatórios).
+  (nem valores/parcelas no detalhe do projeto, nem faturamento nos formulários, nem valor/hora nos relatórios) — exceto,
+  se for terceiro, as próprias horas/valores no "Meu fechamento".
 - **consultor**: só a própria agenda/apontamentos; pode importar nova versão do cronograma e editar principais
   envolvidos dos projetos em que está alocado; **não vê** dados comerciais (data de assinatura da proposta).
 - **financeiro**: módulo Financeiro (liberação de parcelas, faturamento previsto, fechamentos).
@@ -54,6 +55,8 @@ papaparse para relatórios e importações, lucide-react (ícones), date-fns. Va
   cronograma (marcadas "realizada em versão anterior") as tarefas com horas que saíram do arquivo.
 - **Progresso**: fração da folha = finalizada ? 1 : min(1, horas/previstas); apontamento tem flag "em andamento /
   finalizado"; percentual do projeto = média das folhas (por contagem). Código em `progressoEscopo.ts`/`dashboardCalc.ts`.
+  **Banco de horas** (tipo de atendimento "Banco de Horas", não o tipo de faturamento, que só admin/financeiro veem):
+  percentual = horas aprovadas ÷ (horas previstas consultor + coordenador), máx. 100%; sem horas previstas, usa o escopo.
 
 ## Agenda e Mapa de Alocação (`src/lib/cronograma.ts`, `agendaPrevista.ts`)
 
@@ -73,16 +76,19 @@ Fluxo **por parceira** (cada uma tem botões próprios; próprios não têm etap
 (valores congelados) → fechado → faturamento liberado (`FechamentoParceiro.etapa`; `etapaDaParceira` cobre docs antigos
 do mês inteiro). Coleções: `fechamentos/{YYYY-MM}` (só a subcoleção `historico`, auditoria com quem/quando/motivo/parceira),
 `fechamentoItens` (detalhe por consultor) e `fechamentoParceiros/{YYYY-MM_parceiraId}` (um por empresa parceira, com os
-recursos dentro). Após "Liberar faturamento" da parceira, **cada consultor terceiro confirma/contesta as próprias horas**
-no login dele (perfil `consultor`, tela `/meu-fechamento`, só aparece se ele tiver item liberado); o status fica em
-`FechamentoParceiro.statusConsultores` (recursoId → status) e a parceira só segue para a NF quando todos confirmam
-(`confirmacaoDaParceira`); uma contestação trava até o Financeiro reabrir/ajustar. O Financeiro pode "Confirmar em nome"
-de quem não tem acesso. O responsável da parceira só acompanha e envia a NF (docs antigos ainda usam ciência + confirmação dele).
+recursos dentro). **Já no "Enviar para revisão"**, cada terceiro (perfil `consultor` ou `coordenador` com recurso
+vinculado — `PERFIS_MEU_FECHAMENTO`) **confere e confirma/contesta as próprias horas** no login dele (tela `/meu-fechamento`,
+só aparece se ele tiver item com `liberado: true`, que agora significa "visível ao consultor"); o status fica em
+`FechamentoParceiro.statusConsultores` (recursoId → status). **"Fechar" só funciona quando todos confirmaram**
+(`confirmacaoDaParceira`); uma contestação trava até o Financeiro corrigir ("Atualizar valores") ou "Confirmar em nome"
+(para quem não tem acesso). "Atualizar valores" e "Reabrir" voltam todas as confirmações para pendente. A NF só vem depois
+de "Liberar faturamento" (`ItemFechamento.faturamentoLiberado`; item antigo sem o campo = já liberado). O contato 1 da
+parceira envia a NF (docs antigos ainda usam ciência + confirmação do responsável da parceira).
 Divergências: bloqueantes (lançamentos sem aprovação) e alertas. O prazo "dia 1 a 10 do mês seguinte" é só referência
 visual: **não existe regra de data limite**. Lógica em `src/lib/fechamento.ts` e `fechamentoDb.ts`; tela em
 `src/app/financeiro/fechamentos`.
 **Fases 2 e 3 (prontas)**: depois de confirmar os valores, o responsável da parceira envia a **nota fiscal** (número, data,
-valor, PDF no Firebase Storage) — o financeiro valida (checkbox de conferência; valor diferente exige justificativa) ou
+valor, PDF guardado no Firestore) — o financeiro valida (checkbox de conferência; valor diferente exige justificativa) ou
 rejeita com motivo; histórico da NF em `historicoNf`. Só com a NF validada dá para **registrar pagamento** (valor, data,
 TED/boleto/cheque, referência, comprovante); reconciliação alerta se pago ≠ calculado; "Extrato" por parceira; filtros
 por tipo e situação; exportações "NFs pendentes" e "Pagamentos atrasados" (vencimento = `calcularVencimentoFechamento`).
@@ -94,9 +100,17 @@ plano pago e o usuário quer tudo gratuito): PDFs/comprovantes ficam no Firestor
 
 - **OS (ordem de serviço)**: PDF gerado a partir de um apontamento; o consultor marca os participantes (principais
   envolvidos do projeto), que entram numa lista acima das atividades; sem campo de assinatura; texto fixo de aprovação
-  automática em 48h. Código em `src/lib/ordemServico.ts`.
+  automática em 48h. Na própria tela da OS dá para **"Incluir envolvido"** (quem pode editar o projeto): a pessoa é gravada
+  em `principaisEnvolvidos` do projeto e já entra marcada. Código em `src/lib/ordemServico.ts` e `ParticipantesOsModal.tsx`.
 - Cadastro de projeto permite importar o cronograma já na criação (vira a versão 1); escopo-padrão é opção secundária.
-- Apontamentos só contam nos cálculos quando **aprovados**. Consultor lança, coordenador aprova.
+- Apontamentos só contam nos cálculos quando **aprovados**. Consultor lança, coordenador aprova. O **administrador pode
+  "Reabrir"** um apontamento aprovado (Horas aprovadas): volta para aguardando aprovação, com `reabertoPorNome/Em` e motivo.
+- **Horas retroativas** (importação em lote, `retroativo: true`): entram já aprovadas, **aparecem no calendário e nas horas
+  aprovadas do consultor** (só leitura para ele) e contam no conflito de horário. A importação recusa nome de recurso repetido.
+- **Meu Workspace** (`/workspace`): anotações privadas (Kanban, lista, por projeto, lixeira de 15 dias, lembretes no sino)
+  para todos os perfis internos (`PERFIS_WORKSPACE`; o responsável da parceira não tem). **Cada um vê só as próprias** —
+  nem o admin vê as dos outros; as regras de `anotacoes` garantem. Código em `src/lib/workspace*.ts` e `src/components/workspace`.
+- Abas de módulo (Financeiro, Cadastros, Calendário) usam `AbasNavegacao`, fixas no topo ao rolar.
 
 ## Armadilhas técnicas
 
