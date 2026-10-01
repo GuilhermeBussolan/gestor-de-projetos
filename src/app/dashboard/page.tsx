@@ -6,6 +6,7 @@ import { deleteDoc, doc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { AlertTriangle, Calendar, CheckCircle2, MessageCircle, SlidersHorizontal, User, X } from "lucide-react";
 import { useCollection } from "@/lib/useCollection";
+import { COLECAO_FINANCEIRO_PROJETO, useProjetos, useRecursos } from "@/lib/dadosProtegidos";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ContatoModal } from "@/components/dashboard/ContatoModal";
 import { Drawer } from "@/components/ui/Drawer";
@@ -55,7 +56,7 @@ function DashboardPageContent() {
   const meuRecursoId = usuario?.recursoId ?? null;
   const hojeIso = new Date().toISOString().slice(0, 10);
 
-  const { data: projetosTodos } = useCollection<Projeto>("projetos");
+  const { data: projetosTodos } = useProjetos();
   const { data: clientes } = useCollection<Cliente>("clientes");
   // Um consultor só deve ver o CALENDÁRIO pessoal de outros restrito, mas dentro do contexto de um
   // projeto em que ele está alocado, precisa enxergar o que os colegas já fizeram no escopo (senão
@@ -72,7 +73,7 @@ function DashboardPageContent() {
     !souConsultor || meusProjetoIds.length > 0,
     [souConsultor, meusProjetoIds]
   );
-  const { data: recursos } = useCollection<Recurso>("recursos");
+  const { data: recursos } = useRecursos();
   const { data: tiposDocumento } = useCollection<TipoDocumento>("tiposDocumento", []);
   const { data: escopos } = useCollection<Escopo>("escopos", []);
 
@@ -267,6 +268,7 @@ function DashboardPageContent() {
     const cliente = clientes.find((c) => c.id === projeto.clienteId);
     if (!confirm(`Excluir o projeto de "${nomeExibicaoCliente(cliente)}"?`)) return;
     await deleteDoc(doc(db, "projetos", projeto.id));
+    await deleteDoc(doc(db, COLECAO_FINANCEIRO_PROJETO, projeto.id)).catch(() => {});
     setDetalheId(null);
   }
 

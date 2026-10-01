@@ -1,5 +1,4 @@
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { salvarDadosFinanceirosProjeto } from "@/lib/dadosProtegidos";
 import type { Parcela, Projeto, StatusParcela, Usuario } from "@/types";
 
 export interface DadosStatusParcela {
@@ -149,9 +148,7 @@ export async function alterarStatusParcela(
     parcelas = recalcularDatasFuturas(parcelas, numero, dados.dataLiberacaoIso!);
   }
 
-  await updateDoc(doc(db, "projetos", projeto.id), {
-    financeiro: { ...projeto.financeiro, parcelas },
-  });
+  await salvarDadosFinanceirosProjeto(projeto.id, { financeiro: { ...projeto.financeiro, parcelas } });
 }
 
 /** Previsão de faturamento de um marco (1.2) — editável enquanto a parcela está Aguardando. */
@@ -171,7 +168,5 @@ export async function atualizarPrevisaoFaturamentoMarco(
         }
       : p
   );
-  await updateDoc(doc(db, "projetos", projeto.id), {
-    financeiro: { ...projeto.financeiro, parcelas },
-  });
+  await salvarDadosFinanceirosProjeto(projeto.id, { financeiro: { ...projeto.financeiro, parcelas } });
 }

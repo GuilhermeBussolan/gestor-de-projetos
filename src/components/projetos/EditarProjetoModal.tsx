@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { doc, serverTimestamp, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { podeVerDadosFinanceiros, salvarDadosFinanceirosProjeto } from "@/lib/dadosProtegidos";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
@@ -193,7 +194,7 @@ function EditarProjetoForm({
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
   const { usuario: eu } = useAuth();
   // O coordenador não vê nada de financeiro: os dados financeiros do projeto ficam como estão.
-  const veFinanceiro = eu?.perfil !== "coordenador";
+  const veFinanceiro = podeVerDadosFinanceiros(eu);
 
   async function selecionarEscopo(escopo: Escopo, atividades: EscopoAtividade[], exclusoes: ExclusaoEscopo[]) {
     await updateDoc(doc(db, "projetos", projeto.id), {
@@ -286,28 +287,35 @@ function EditarProjetoForm({
           envolvidos.filter((e) => e.nome.trim()).length > 0
             ? envolvidos.filter((e) => e.nome.trim())
             : null,
-        ...(financeiro
-          ? {
-              contatoFaturamento: {
-                nome: contatoNome,
-                cnpj: contatoCnpj,
-                email: contatoEmail,
-                telefone: contatoTelefone,
-                emailNF: contatoEmailNF,
-                memo: contatoMemo,
-              },
-              financeiro,
-            }
-          : {}),
       };
       // Remove qualquer campo `undefined` residual — o Firestore rejeita a gravação inteira se
       // algum sobrar (ex: uma parcela financeira sem uma das datas ainda preenchida).
       const dadosSemUndefined = JSON.parse(JSON.stringify(dados));
 
-      await updateDoc(doc(db, "projetos", projeto.id), {
+      // Dados do projeto e a parte protegida (financeiro + contato de faturamento) numa operação só.
+      const lote = writeBatch(db);
+      lote.update(doc(db, "projetos", projeto.id), {
         ...dadosSemUndefined,
         updatedAt: serverTimestamp(),
       });
+      if (financeiro) {
+        await salvarDadosFinanceirosProjeto(
+          projeto.id,
+          {
+            financeiro,
+            contatoFaturamento: {
+              nome: contatoNome,
+              cnpj: contatoCnpj,
+              email: contatoEmail,
+              telefone: contatoTelefone,
+              emailNF: contatoEmailNF,
+              memo: contatoMemo,
+            },
+          },
+          lote
+        );
+      }
+      await lote.commit();
       onClose();
     } catch (err) {
       console.error("Falha ao salvar projeto:", err);

@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { CheckCheck, ChevronDown, ChevronUp, FileText, Upload } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
+import { useProjetos, useRecursos } from "@/lib/dadosProtegidos";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
@@ -771,9 +772,9 @@ function ApontamentoPageContent() {
     !souConsultor || !!meuRecursoId,
     [souConsultor, meuRecursoId]
   );
-  const { data: projetos } = useCollection<Projeto>("projetos");
+  const { data: projetos } = useProjetos();
   const { data: clientes } = useCollection<Cliente>("clientes");
-  const { data: recursos } = useCollection<Recurso>("recursos");
+  const { data: recursos } = useRecursos();
 
   const pendenciasAprovacao = useMemo(
     () => eventos.filter((e) => statusEfetivo(e) === "aguardando_aprovacao").length,

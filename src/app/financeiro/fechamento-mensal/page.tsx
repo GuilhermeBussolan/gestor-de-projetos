@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { useCollection } from "@/lib/useCollection";
+import { useProjetos, useRecursos } from "@/lib/dadosProtegidos";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { Button } from "@/components/ui/Button";
@@ -28,8 +29,8 @@ const dataBR = (iso: string) => iso.split("-").reverse().join("/");
 
 function FechamentoMensalPageContent() {
   const { data: eventos } = useCollection<EventoCalendario>("eventosCalendario", []);
-  const { data: recursos } = useCollection<Recurso>("recursos");
-  const { data: projetos } = useCollection<Projeto>("projetos");
+  const { data: recursos } = useRecursos();
+  const { data: projetos } = useProjetos();
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: parceiras } = useCollection<EmpresaParceira>("parceiras");
 

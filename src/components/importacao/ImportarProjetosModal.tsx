@@ -1,6 +1,7 @@
 "use client";
 
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { collection, doc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { salvarDadosFinanceirosProjeto } from "@/lib/dadosProtegidos";
 import { Download } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { ImportModal, type LinhaValidada } from "@/components/importacao/ImportModal";
@@ -248,7 +249,10 @@ export function ImportarProjetosModal({
         }));
 
         for (const p of validos) {
-          await addDoc(collection(db, "projetos"), {
+          // Projeto e parte protegida (financeiro + contato de faturamento) juntos, numa operação só.
+          const ref = doc(collection(db, "projetos"));
+          const lote = writeBatch(db);
+          lote.set(ref, {
             clienteId: p.clienteId,
             codigoProposta: p.codigoProposta,
             modulo: p.modulo,
@@ -257,17 +261,17 @@ export function ImportarProjetosModal({
             consultorIds: [],
             documentos: documentosPadrao,
             observacoes: p.observacoes,
-            financeiro: p.financeiro,
             horasPrevistasConsultor: p.horasPrevistasConsultor,
             horasPrevistasCoordenador: p.horasPrevistasCoordenador,
             dataInicio: p.dataInicio,
             dataFim: null,
             status: "ativo",
-            contatoFaturamento: p.contatoFaturamento,
             ultimoContato: null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
+          await salvarDadosFinanceirosProjeto(ref.id, { financeiro: p.financeiro, contatoFaturamento: p.contatoFaturamento }, lote);
+          await lote.commit();
         }
       }}
     />

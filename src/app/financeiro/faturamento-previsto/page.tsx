@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useCollection } from "@/lib/useCollection";
+import { useProjetos } from "@/lib/dadosProtegidos";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { Button } from "@/components/ui/Button";
@@ -53,7 +54,7 @@ function gruposPorAno(meses: string[]): { ano: string; quantidade: number }[] {
 }
 
 function FaturamentoPrevistoPageContent() {
-  const { data: projetos } = useCollection<Projeto>("projetos");
+  const { data: projetos } = useProjetos();
   const { data: clientes } = useCollection<Cliente>("clientes");
 
   const [ano, setAno] = useState<AnoFiltro>(ANO_ATUAL);

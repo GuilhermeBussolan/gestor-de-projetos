@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useCollection } from "@/lib/useCollection";
+import { useProjetos } from "@/lib/dadosProtegidos";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { Button } from "@/components/ui/Button";
@@ -60,7 +61,7 @@ function StatusCard({
 
 function FinanceiroLiberacaoPageContent() {
   const { usuario } = useAuth();
-  const { data: projetos } = useCollection<Projeto>("projetos");
+  const { data: projetos } = useProjetos();
   const { data: clientes } = useCollection<Cliente>("clientes");
 
   const [filtroMes, setFiltroMes] = useState("");

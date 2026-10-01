@@ -5,6 +5,7 @@ import { format, subMonths } from "date-fns";
 import { orderBy, where } from "firebase/firestore";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileDown, History, Lock, LockOpen, RotateCcw, Send, ShieldAlert } from "lucide-react";
 import { useCollection } from "@/lib/useCollection";
+import { useProjetos, useRecursos } from "@/lib/dadosProtegidos";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
@@ -432,8 +433,8 @@ function TabelaItens({
 function FechamentosPageContent() {
   const { usuario } = useAuth();
   const { data: eventos } = useCollection<EventoCalendario>("eventosCalendario", []);
-  const { data: recursos } = useCollection<Recurso>("recursos");
-  const { data: projetos } = useCollection<Projeto>("projetos");
+  const { data: recursos } = useRecursos();
+  const { data: projetos } = useProjetos();
   const { data: clientes } = useCollection<Cliente>("clientes");
   const { data: parceiras } = useCollection<EmpresaParceira>("parceiras");
   const { data: fechamentos } = useCollection<Fechamento>("fechamentos", []);

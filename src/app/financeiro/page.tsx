@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useCollection } from "@/lib/useCollection";
+import { useProjetos, useRecursos } from "@/lib/dadosProtegidos";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { AlterarStatusParcelaModal } from "@/components/financeiro/AlterarStatusParcelaModal";
@@ -22,9 +23,9 @@ const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curr
 
 function FinanceiroPageContent() {
   const { usuario } = useAuth();
-  const { data: projetos } = useCollection<Projeto>("projetos");
+  const { data: projetos } = useProjetos();
   const { data: clientes } = useCollection<Cliente>("clientes");
-  const { data: recursos } = useCollection<Recurso>("recursos");
+  const { data: recursos } = useRecursos();
   const { data: eventos } = useCollection<EventoCalendario>("eventosCalendario", []);
   // Mês de referência do banco de horas (padrão: o mês anterior, que é o que se fatura agora).
   const [mesBanco, setMesBanco] = useState(() => {

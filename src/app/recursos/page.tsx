@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
+import { COLECAO_VALOR_RECURSO, salvarValorHoraRecurso, useRecursos } from "@/lib/dadosProtegidos";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { CadastrosTabs } from "@/components/layout/CadastrosTabs";
 import { Button } from "@/components/ui/Button";
@@ -23,7 +24,7 @@ const RECURSO_VAZIO = {
 };
 
 function RecursosPageContent() {
-  const { data: recursos, loading } = useCollection<Recurso>("recursos");
+  const { data: recursos, loading } = useRecursos();
   const { data: parceiras } = useCollection<EmpresaParceira>("parceiras");
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Recurso | null>(null);
@@ -65,15 +66,16 @@ function RecursosPageContent() {
         tipo: form.tipo,
         nomeCompleto: form.nomeCompleto,
         codigo: form.codigo,
-        valorHora: Number(form.valorHora) || 0,
         tipoBox: form.tipoBox,
         parceiraId: form.tipoBox === "terceiro" ? form.parceiraId : null,
       };
-      if (editando) {
-        await updateDoc(doc(db, "recursos", editando.id), dados);
-      } else {
-        await addDoc(collection(db, "recursos"), { ...dados, createdAt: Date.now() });
-      }
+      // O valor/hora fica em recursosValores (só admin e financeiro leem); o resto do cadastro, em recursos.
+      const lote = writeBatch(db);
+      const ref = editando ? doc(db, "recursos", editando.id) : doc(collection(db, "recursos"));
+      if (editando) lote.update(ref, dados);
+      else lote.set(ref, { ...dados, createdAt: Date.now() });
+      await salvarValorHoraRecurso(ref.id, Number(form.valorHora) || 0, lote);
+      await lote.commit();
       setModalAberto(false);
     } catch (err) {
       console.error("Falha ao salvar recurso:", err);
@@ -86,6 +88,7 @@ function RecursosPageContent() {
   async function excluir(r: Recurso) {
     if (!confirm(`Excluir o recurso "${r.nomeCompleto}"?`)) return;
     await deleteDoc(doc(db, "recursos", r.id));
+    await deleteDoc(doc(db, COLECAO_VALOR_RECURSO, r.id)).catch(() => {});
   }
 
   return (

@@ -7,8 +7,10 @@ const COLECOES = [
   "usuarios",
   "clientes",
   "recursos",
+  "recursosValores",
   "tiposDocumento",
   "projetos",
+  "projetosFinanceiro",
   "eventosCalendario",
   "bloqueiosAgenda",
 ] as const;

@@ -1,13 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { addDoc, collection, orderBy, serverTimestamp } from "firebase/firestore";
+import { collection, doc, orderBy, serverTimestamp, writeBatch } from "firebase/firestore";
 import { CheckCircle2, Upload } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCollection } from "@/lib/useCollection";
 import { ImportarCronogramaModal } from "@/components/importacao/ImportarCronogramaModal";
 import { gravarVersaoInicialCronograma } from "@/lib/versaoCronogramaDb";
 import { db } from "@/lib/firebase";
+import { FINANCEIRO_VAZIO, podeVerDadosFinanceiros, salvarDadosFinanceirosProjeto } from "@/lib/dadosProtegidos";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
@@ -65,7 +66,7 @@ function ProjetoForm({
   const { data: todosProjetos } = useCollection<Projeto>("projetos", [orderBy("createdAt", "asc")], cronogramaAberto, [cronogramaAberto]);
   const financeiroRef = useRef<FinanceiroFieldsHandle>(null);
   // O coordenador não vê nada de financeiro: o projeto nasce com faturamento por apontamento e o financeiro ajusta depois.
-  const veFinanceiro = usuario?.perfil !== "coordenador";
+  const veFinanceiro = podeVerDadosFinanceiros(usuario);
 
   function selecionarEscopo(escopo: Escopo, atividades: EscopoAtividade[], exclusoes: ExclusaoEscopo[]) {
     setEscopoId(escopo.id);
@@ -120,7 +121,10 @@ function ProjetoForm({
           status: "A_INICIAR" as const,
         }));
 
-      const ref = await addDoc(collection(db, "projetos"), {
+      // O projeto e a parte protegida (financeiro + contato de faturamento) são gravados juntos, numa operação só.
+      const ref = doc(collection(db, "projetos"));
+      const lote = writeBatch(db);
+      lote.set(ref, {
         clienteId,
         codigoProposta,
         modulo,
@@ -152,21 +156,28 @@ function ProjetoForm({
           envolvidos.filter((e) => e.nome.trim()).length > 0
             ? envolvidos.filter((e) => e.nome.trim())
             : null,
-        contatoFaturamento: {
-          nome: contatoNome,
-          cnpj: contatoCnpj,
-          email: contatoEmail,
-          telefone: contatoTelefone,
-          emailNF: contatoEmailNF,
-          memo: contatoMemo,
-        },
-        financeiro: financeiroRef.current
-          ? financeiroRef.current.obterFinanceiro()
-          : { tipoFaturamento: "apontamento_horas", valorTotal: 0, numeroParcelas: 0, parcelas: [] },
         ultimoContato: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      if (veFinanceiro) {
+        await salvarDadosFinanceirosProjeto(
+          ref.id,
+          {
+            financeiro: financeiroRef.current ? financeiroRef.current.obterFinanceiro() : FINANCEIRO_VAZIO,
+            contatoFaturamento: {
+              nome: contatoNome,
+              cnpj: contatoCnpj,
+              email: contatoEmail,
+              telefone: contatoTelefone,
+              emailNF: contatoEmailNF,
+              memo: contatoMemo,
+            },
+          },
+          lote
+        );
+      }
+      await lote.commit();
       if (cronogramaRascunho && usuario) {
         await gravarVersaoInicialCronograma({
           projetoId: ref.id,

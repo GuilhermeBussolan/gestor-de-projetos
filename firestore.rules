@@ -23,6 +23,11 @@ service cloud.firestore {
       return isSignedIn() && meuUsuario().perfil == 'financeiro';
     }
 
+    // Usuário da NG (qualquer perfil, menos o responsável da parceira, que só enxerga o fechamento da própria empresa).
+    function isInterno() {
+      return isSignedIn() && meuUsuario().perfil != 'responsavel_parceira';
+    }
+
     function meuRecursoId() {
       // .get() com padrão evita erro em documentos antigos sem o campo
       // recursoId (acessar direto por ".recursoId" derruba a regra inteira
@@ -45,27 +50,27 @@ service cloud.firestore {
     }
 
     match /clientes/{id} {
-      allow read: if isSignedIn();
+      allow read: if isInterno();
       allow write: if isAdmin();
     }
 
     match /recursos/{id} {
-      allow read: if isSignedIn();
+      allow read: if isInterno();
       allow write: if isAdmin();
     }
 
     match /parceiras/{id} {
-      allow read: if isSignedIn();
+      allow read: if isInterno();
       allow write: if isAdmin();
     }
 
     match /tiposDocumento/{id} {
-      allow read: if isSignedIn();
+      allow read: if isInterno();
       allow write: if isAdmin();
     }
 
     match /escopos/{id} {
-      allow read: if isSignedIn();
+      allow read: if isInterno();
       allow write: if isAdmin();
     }
 
@@ -83,7 +88,7 @@ service cloud.firestore {
     // por administradores. Cada pessoa mantém a própria entrada (sem poder mudar o
     // perfil dela); o administrador mantém todas.
     match /diretorio/{uid} {
-      allow read: if isSignedIn();
+      allow read: if isInterno();
       allow create, update: if isAdmin() ||
         (isSignedIn() && request.auth.uid == uid &&
           request.resource.data.perfil == meuUsuario().get('perfil', ''));
@@ -105,7 +110,7 @@ service cloud.firestore {
     }
 
     match /projetos/{projetoId} {
-      allow read: if isSignedIn();
+      allow read: if isInterno();
       allow create, delete: if isAdmin() || isCoordenador();
       // Update normal é só admin/coordenador; um consultor alocado no projeto
       // pode atualizar exclusivamente o campo ultimoContato (registrar contato);
@@ -128,7 +133,7 @@ service cloud.firestore {
       // Contato pode ser registrado por admin/coordenador, ou pelo consultor
       // alocado naquele projeto (mas nunca editado/apagado depois).
       match /contatos/{contatoId} {
-        allow read: if isSignedIn();
+        allow read: if isInterno();
         allow create: if isAdmin() || isCoordenador() ||
           (isSignedIn() &&
             meuRecursoId() in get(/databases/$(database)/documents/projetos/$(projetoId)).data.consultorIds);
@@ -138,7 +143,7 @@ service cloud.firestore {
       // Histórico de versões do cronograma: cada importação grava uma foto completa + a
       // observação de quem importou. Admin/coordenador e o consultor alocado criam, todos leem, ninguém edita/apaga.
       match /versoesCronograma/{versaoId} {
-        allow read: if isSignedIn();
+        allow read: if isInterno();
         allow create: if isAdmin() || isCoordenador() ||
           (isSignedIn() &&
             request.resource.data.usuarioId == request.auth.uid &&
@@ -146,6 +151,19 @@ service cloud.firestore {
             get(/databases/$(database)/documents/projetos/$(projetoId)).data.get('status', 'ativo') != 'finalizado');
         allow update, delete: if false;
       }
+    }
+
+    // Dados sensíveis que saíram dos documentos que todo usuário logado lê (as regras liberam o documento inteiro,
+    // nunca um campo só): financeiro e contato de faturamento do projeto, e valor/hora do recurso.
+    // Só administrador e financeiro leem. O coordenador pode apagar o do projeto que ele exclui.
+    match /projetosFinanceiro/{projetoId} {
+      allow read, create, update: if isAdmin() || isFinanceiro();
+      allow delete: if isAdmin() || isFinanceiro() || isCoordenador();
+    }
+
+    match /recursosValores/{recursoId} {
+      allow read: if isAdmin() || isFinanceiro();
+      allow write: if isAdmin();
     }
 
     // Fechamento mensal de horas (só administrador e financeiro): um documento por mês ("YYYY-MM"),

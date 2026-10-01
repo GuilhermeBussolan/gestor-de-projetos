@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
+import { COLECAO_FINANCEIRO_PROJETO, useProjetos, useRecursos } from "@/lib/dadosProtegidos";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Field";
@@ -30,9 +31,9 @@ function ProjetosPageContent() {
   const searchParams = useSearchParams();
   const destaqueId = searchParams.get("projetoId");
 
-  const { data: projetos } = useCollection<Projeto>("projetos");
+  const { data: projetos } = useProjetos();
   const { data: clientes } = useCollection<Cliente>("clientes");
-  const { data: recursos } = useCollection<Recurso>("recursos");
+  const { data: recursos } = useRecursos();
   const { data: tiposDocumento } = useCollection<TipoDocumento>("tiposDocumento", []);
   const { data: eventos } = useCollection<EventoCalendario>("eventosCalendario", []);
   const { data: escopos } = useCollection<Escopo>("escopos", []);
@@ -67,6 +68,7 @@ function ProjetosPageContent() {
     const cliente = clientes.find((c) => c.id === projeto.clienteId);
     if (!confirm(`Excluir o projeto de "${nomeExibicaoCliente(cliente)}"?`)) return;
     await deleteDoc(doc(db, "projetos", projeto.id));
+    await deleteDoc(doc(db, COLECAO_FINANCEIRO_PROJETO, projeto.id)).catch(() => {});
     setDetalheId(null);
   }
 

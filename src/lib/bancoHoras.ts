@@ -1,5 +1,4 @@
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { salvarDadosFinanceirosProjeto } from "@/lib/dadosProtegidos";
 import { statusEfetivo } from "@/lib/statusHora";
 import type { EventoCalendario, Parcela, Projeto } from "@/types";
 
@@ -90,8 +89,5 @@ export async function gerarParcelaBancoDeHoras({
     valorHoraAplicado: valorHora,
   };
   const novas = [...parcelas, nova];
-  // Só o campo "financeiro": é o único que o perfil financeiro pode gravar no projeto (regras do Firestore).
-  await updateDoc(doc(db, "projetos", projeto.id), {
-    financeiro: JSON.parse(JSON.stringify({ ...financeiro, numeroParcelas: novas.length, parcelas: novas })),
-  });
+  await salvarDadosFinanceirosProjeto(projeto.id, { financeiro: { ...financeiro, numeroParcelas: novas.length, parcelas: novas } });
 }
