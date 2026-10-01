@@ -54,9 +54,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // O valor/hora fica em recursosValores (só admin e financeiro): não pode voltar a ser gravado aqui.
     match /recursos/{id} {
       allow read: if isInterno();
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() && !request.resource.data.keys().hasAny(['valorHora']);
+      allow delete: if isAdmin();
     }
 
     match /parceiras/{id} {
@@ -109,26 +111,29 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.destinatarioUid == request.auth.uid;
     }
 
+    // Financeiro e contato de faturamento ficam em projetosFinanceiro (só admin e financeiro): não podem voltar a
+    // ser gravados no projeto, que todo usuário da NG lê.
+    function semDadosProtegidos() {
+      return !request.resource.data.keys().hasAny(['financeiro', 'contatoFaturamento']);
+    }
+
     match /projetos/{projetoId} {
       allow read: if isInterno();
-      allow create, delete: if isAdmin() || isCoordenador();
+      allow create: if (isAdmin() || isCoordenador()) && semDadosProtegidos();
+      allow delete: if isAdmin() || isCoordenador();
       // Update normal é só admin/coordenador; um consultor alocado no projeto
-      // pode atualizar exclusivamente o campo ultimoContato (registrar contato);
-      // financeiro pode atualizar exclusivamente o campo financeiro (status de
-      // faturamento das parcelas, na Liberação de Faturamento).
-      allow update: if isAdmin() || isCoordenador() ||
+      // pode atualizar exclusivamente o campo ultimoContato (registrar contato).
+      allow update: if semDadosProtegidos() && (isAdmin() || isCoordenador() ||
         (isSignedIn() &&
           meuRecursoId() in resource.data.consultorIds &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoContato'])) ||
-        (isFinanceiro() &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['financeiro'])) ||
         // O consultor alocado (em projeto não finalizado) também atualiza o cronograma (importar uma
         // nova versão troca só os campos do escopo/cronograma) e os principais envolvidos (key users).
         (isSignedIn() &&
           meuRecursoId() in resource.data.consultorIds &&
           resource.data.get('status', 'ativo') != 'finalizado' &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-            ['escopoId', 'escopoNome', 'escopoAtividades', 'escopoExclusoes', 'cronogramaVersao', 'principaisEnvolvidos', 'updatedAt']));
+            ['escopoId', 'escopoNome', 'escopoAtividades', 'escopoExclusoes', 'cronogramaVersao', 'principaisEnvolvidos', 'updatedAt'])));
 
       // Contato pode ser registrado por admin/coordenador, ou pelo consultor
       // alocado naquele projeto (mas nunca editado/apagado depois).

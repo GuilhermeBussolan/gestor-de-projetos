@@ -15,8 +15,8 @@ import type { ContatoFaturamento, Financeiro, Projeto, Recurso, Usuario } from "
  * As telas continuam recebendo `Projeto` e `Recurso` completos: os hooks abaixo juntam a parte pública com a protegida
  * para quem pode ver. Para os demais perfis, o financeiro vem vazio e o valor/hora vem 0.
  *
- * Transição: enquanto a migração não roda, os campos ainda podem estar no documento antigo (projetos/recursos) e são
- * usados como reserva. Depois da migração eles deixam de existir lá.
+ * As regras do Firestore impedem gravar esses campos de volta em projetos/recursos (a migração que os tirou de lá foi
+ * feita em 01/10/2026).
  */
 
 export const COLECAO_FINANCEIRO_PROJETO = "projetosFinanceiro";
@@ -55,12 +55,8 @@ export function useProjetos() {
       const extra = porId.get(p.id);
       return {
         ...p,
-        financeiro: (privilegiado ? (extra?.financeiro ?? p.financeiro) : p.financeiro) ?? FINANCEIRO_VAZIO,
-        contatoFaturamento: privilegiado
-          ? extra && "contatoFaturamento" in extra
-            ? (extra.contatoFaturamento ?? null)
-            : (p.contatoFaturamento ?? null)
-          : (p.contatoFaturamento ?? null),
+        financeiro: extra?.financeiro ?? FINANCEIRO_VAZIO,
+        contatoFaturamento: extra?.contatoFaturamento ?? null,
       };
     });
   }, [projetos, protegidos, privilegiado]);
@@ -79,7 +75,7 @@ export function useRecursos() {
     const porId = new Map(privilegiado ? valores.map((v) => [v.id, v.valorHora]) : []);
     return recursos.map((r): Recurso => ({
       ...r,
-      valorHora: (privilegiado ? (porId.get(r.id) ?? r.valorHora) : r.valorHora) ?? 0,
+      valorHora: porId.get(r.id) ?? 0,
     }));
   }, [recursos, valores, privilegiado]);
 
