@@ -37,6 +37,7 @@ import {
   FILTROS_VAZIOS,
   filtrarAnotacoes,
   ordemAoSoltar,
+  PERFIS_WORKSPACE,
   porOrdem,
   PRIORIDADE_ANOTACAO,
   PRIORIDADES,
@@ -116,10 +117,12 @@ function WorkspaceContent() {
     const porCliente = new Map(clientes.map((c) => [c.id, nomeExibicaoCliente(c)]));
     return (p: Projeto) => `${porCliente.get(p.clienteId) ?? "Cliente"} — ${p.codigoProposta}`;
   }, [clientes]);
+  // Projetos que dá para vincular: o consultor, os que ele está alocado; os demais perfis, todos.
   const meuRecursoId = usuario?.recursoId ?? null;
+  const souConsultor = usuario?.perfil === "consultor";
   const meusProjetos = useMemo(
-    () => (meuRecursoId ? projetos.filter((p) => (p.consultorIds ?? []).includes(meuRecursoId)) : []),
-    [projetos, meuRecursoId]
+    () => (!souConsultor ? projetos : meuRecursoId ? projetos.filter((p) => (p.consultorIds ?? []).includes(meuRecursoId)) : []),
+    [projetos, meuRecursoId, souConsultor]
   );
   const contextoDe = (a: Anotacao) => contextoDaAnotacao(a, projetos, nomeProjeto);
   const textoContexto = (a: Anotacao) => Object.values(contextoDe(a)).filter(Boolean).join(" ");
@@ -528,7 +531,7 @@ function WorkspaceContent() {
 
 export default function WorkspacePage() {
   return (
-    <ProtectedPage perfis={["consultor"]}>
+    <ProtectedPage perfis={PERFIS_WORKSPACE}>
       {/* useSearchParams (abrir a anotação vinda de um lembrete) pede um limite de Suspense. */}
       <Suspense fallback={<p className="text-sm text-brand-faint">Carregando…</p>}>
         <WorkspaceContent />

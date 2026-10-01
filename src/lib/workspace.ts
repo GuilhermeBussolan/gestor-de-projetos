@@ -1,6 +1,12 @@
 import { fimDoBloco, nivelAtividade, temFilhos } from "@/lib/escopo";
 import { semAcento } from "@/lib/mencoes";
-import type { Anotacao, PrioridadeAnotacao, Projeto, StatusAnotacao } from "@/types";
+import type { Anotacao, Perfil, PrioridadeAnotacao, Projeto, StatusAnotacao } from "@/types";
+
+/**
+ * Quem tem o Meu Workspace: todos os usuários da NG (o responsável da parceira, externo, não).
+ * Cada pessoa só enxerga as próprias anotações — as regras do Firestore garantem isso.
+ */
+export const PERFIS_WORKSPACE: Perfil[] = ["administrador", "coordenador", "consultor", "financeiro"];
 
 /**
  * Workspace pessoal do consultor (anotações privadas organizadas num Kanban). Regra-mãe: é uma camada 100% pessoal —

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { deleteDoc, doc, where } from "firebase/firestore";
 import { format } from "date-fns";
-import { CheckCheck, ChevronDown, ChevronUp, FileText, Upload } from "lucide-react";
+import { CheckCheck, ChevronDown, ChevronUp, FileText, RotateCcw, Upload } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { useCollection } from "@/lib/useCollection";
 import { useProjetos, useRecursos } from "@/lib/dadosProtegidos";
@@ -21,7 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { formatarHoras } from "@/lib/horas";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { STATUS_HORA_CONFIG, statusEfetivo } from "@/lib/statusHora";
-import { aprovarHora, confirmarRealizado, confirmarRealizadosEmLote, rejeitarHora } from "@/lib/aprovacaoHoras";
+import { aprovarHora, confirmarRealizado, confirmarRealizadosEmLote, reabrirHora, rejeitarHora } from "@/lib/aprovacaoHoras";
 import {
   montarRelatorio,
   exportarRelatorioWord,
@@ -31,6 +31,7 @@ import { TIPO_BOX_CONFIG } from "@/lib/constants";
 import { idsFolhas } from "@/lib/escopo";
 import { gerarOrdemServicoPdf } from "@/lib/ordemServico";
 import { ParticipantesOsModal } from "@/components/apontamento/ParticipantesOsModal";
+import { podeImportarCronograma } from "@/components/projetos/CronogramaAcoes";
 import { BolinhaContagem } from "@/components/ui/BolinhaContagem";
 import type { Cliente, EventoCalendario, Projeto, Recurso, StatusHora, TipoBox, Usuario } from "@/types";
 
@@ -62,7 +63,10 @@ function LinhaHora({
   const [expandido, setExpandido] = useState(false);
   const [gerandoOS, setGerandoOS] = useState(false);
   const [escolhendoParticipantes, setEscolhendoParticipantes] = useState(false);
+  const { usuario } = useAuth();
   const projeto = projetos.find((p) => p.id === ev.projetoId);
+  // Quem pode editar os envolvidos do projeto também inclui uma pessoa nova direto na geração da OS.
+  const podeIncluirEnvolvido = !!projeto && podeImportarCronograma(usuario, projeto);
   const cliente = clientes.find((c) => c.id === projeto?.clienteId);
   const recurso = recursos.find((r) => r.id === ev.recursoId);
   const statusEv = statusEfetivo(ev);
@@ -78,7 +82,7 @@ function LinhaHora({
   const atividadesOS = atividadesFeitas.length > 0 ? atividadesFeitas : descricaoOS ? [descricaoOS] : [];
   const eventoOS = atividadesFeitas.length > 0 ? ev : { ...ev, descricao: "" };
   const temMotivo = statusEv === "rejeitado" && !!ev.motivoRejeicao;
-  const temDetalhe = !!ev.descricao || atividadesFeitas.length > 0 || temMotivo;
+  const temDetalhe = !!ev.descricao || atividadesFeitas.length > 0 || temMotivo || (statusEv !== "aprovado" && !!ev.reabertoPorNome);
   const mostrarDetalhe = !colapsavel || expandido;
 
   return (
@@ -111,6 +115,13 @@ function LinhaHora({
             <>
               {colapsavel && ev.descricao && (
                 <p className="mt-2 text-[12.5px] text-brand-muted">{ev.descricao}</p>
+              )}
+              {statusEv !== "aprovado" && ev.reabertoPorNome && (
+                <p className="mt-2 rounded-md bg-[#fff2de] px-3 py-2 text-[12.5px] text-[#a4650d]">
+                  <strong>Reaberto</strong> por {ev.reabertoPorNome}
+                  {ev.reabertoEm ? ` em ${new Date(ev.reabertoEm).toLocaleDateString("pt-BR")}` : ""}
+                  {ev.motivoReabertura ? ` — ${ev.motivoReabertura}` : ""}
+                </p>
               )}
               {temMotivo && (
                 <p className="mt-2 rounded-md bg-[#fdeceb] px-3 py-2 text-[12.5px] text-[#b5392a]">
@@ -159,8 +170,8 @@ function LinhaHora({
                   : "Gerar PDF da Ordem de Serviço com as atividades deste apontamento, para enviar ao cliente e pedir confirmação"
               }
               onClick={async () => {
-                // Com principais envolvidos cadastrados, o consultor marca quem participou da agenda.
-                if ((projeto.principaisEnvolvidos ?? []).length > 0) {
+                // Com principais envolvidos cadastrados (ou podendo incluir), marca quem participou da agenda.
+                if ((projeto.principaisEnvolvidos ?? []).length > 0 || podeIncluirEnvolvido) {
                   setEscolhendoParticipantes(true);
                   return;
                 }
@@ -183,7 +194,8 @@ function LinhaHora({
       {escolhendoParticipantes && projeto && (
         <ParticipantesOsModal
           open
-          envolvidos={projeto.principaisEnvolvidos ?? []}
+          projeto={projeto}
+          podeIncluir={podeIncluirEnvolvido}
           gerando={gerandoOS}
           onClose={() => setEscolhendoParticipantes(false)}
           onGerar={async (participantes) => {
@@ -536,6 +548,28 @@ function AbaAprovadas({
   const [filtroProjetoId, setFiltroProjetoId] = useState("");
   const [filtroMes, setFiltroMes] = useState("");
   const [ordenacao, setOrdenacao] = useState<"desc" | "asc">("desc");
+  // Só o administrador desfaz uma aprovação.
+  const podeReabrir = usuario.perfil === "administrador";
+  const [reabrindo, setReabrindo] = useState<EventoCalendario | null>(null);
+  const [motivoReabrir, setMotivoReabrir] = useState("");
+  const [salvandoReabrir, setSalvandoReabrir] = useState(false);
+  const [erroReabrir, setErroReabrir] = useState("");
+
+  async function confirmarReabertura(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reabrindo) return;
+    setSalvandoReabrir(true);
+    setErroReabrir("");
+    try {
+      await reabrirHora(reabrindo.id, usuario, motivoReabrir);
+      setReabrindo(null);
+    } catch (err) {
+      console.error("Erro ao reabrir apontamento:", err);
+      setErroReabrir("Não foi possível reabrir. Tente de novo.");
+    } finally {
+      setSalvandoReabrir(false);
+    }
+  }
 
   const aprovadasTodas = useMemo(
     () =>
@@ -623,7 +657,23 @@ function AbaAprovadas({
             recursos={recursos}
             mostrarRecurso={!souConsultor}
             colapsavel
-          />
+          >
+            {podeReabrir && (
+              <button
+                type="button"
+                onClick={() => {
+                  setReabrindo(ev);
+                  setMotivoReabrir("");
+                  setErroReabrir("");
+                }}
+                title="Desfazer a aprovação: o apontamento volta para a aprovação de horas"
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-semibold text-[#a4650d] hover:bg-[#fff2de]"
+              >
+                <RotateCcw size={13} />
+                Reabrir
+              </button>
+            )}
+          </LinhaHora>
         ))}
         {aprovadas.length === 0 && (
           <p className="rounded-2xl border border-dashed border-brand-border bg-white p-8 text-center text-brand-faint">
@@ -631,6 +681,34 @@ function AbaAprovadas({
           </p>
         )}
       </div>
+
+      <Modal open={!!reabrindo} onClose={() => setReabrindo(null)} title="Reabrir apontamento">
+        <form onSubmit={confirmarReabertura} className="space-y-4">
+          <p className="text-[13px] text-brand-muted">
+            A aprovação será desfeita: o apontamento volta para <strong>Aprovação de horas</strong>, deixa de contar nos cálculos
+            (progresso, relatórios e fechamento) até ser aprovado de novo, e o consultor pode ajustá-lo.
+          </p>
+          {reabrindo && (
+            <p className="rounded-md bg-brand-hover px-3 py-2 text-[12.5px] text-brand-navy-2">
+              {formatarDataBR(reabrindo.data)} · {reabrindo.horaInicio}–{reabrindo.horaFim} · {formatarHoras(reabrindo.totalHoras)}
+              {recursos.find((r) => r.id === reabrindo.recursoId) ? ` · ${recursos.find((r) => r.id === reabrindo.recursoId)?.nomeCompleto}` : ""}
+            </p>
+          )}
+          <FormRow label="Motivo (opcional)">
+            <Textarea rows={2} value={motivoReabrir} onChange={(e) => setMotivoReabrir(e.target.value)} maxLength={500} autoFocus />
+          </FormRow>
+          {erroReabrir && <p className="text-sm font-medium text-red-600">{erroReabrir}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setReabrindo(null)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={salvandoReabrir}>
+              <RotateCcw size={15} />
+              {salvandoReabrir ? "Reabrindo..." : "Reabrir apontamento"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {usuario.perfil === "administrador" && (
         <div className="mt-11 border-t border-brand-border pt-8">

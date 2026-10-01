@@ -25,6 +25,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePendenciasAprovacao } from "@/lib/usePendenciasAprovacao";
 import { useFechamentoParceira } from "@/lib/useFechamentoParceira";
 import { useMeuFechamento } from "@/lib/useMeuFechamento";
+import { PERFIS_WORKSPACE } from "@/lib/workspace";
 import type { Perfil } from "@/types";
 
 interface NavItem {
@@ -56,11 +57,11 @@ const PRINCIPAIS: NavItem[] = [
     perfis: ["administrador", "coordenador", "consultor"],
   },
   {
-    // Anotações pessoais e privadas do consultor (nem o administrador vê).
+    // Anotações pessoais e privadas: cada usuário só vê as próprias (nem o administrador vê as dos outros).
     href: "/workspace",
     label: "Meu Workspace",
     icon: StickyNote,
-    perfis: ["consultor"],
+    perfis: PERFIS_WORKSPACE,
   },
 ];
 

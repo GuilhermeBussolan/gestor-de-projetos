@@ -8,7 +8,7 @@ import { useCollection } from "@/lib/useCollection";
 import { TIPO_REGISTRO_CONFIG } from "@/lib/constants";
 import { marcarNotificacaoLida, marcarTodasLidas } from "@/lib/notificacoes";
 import { formatarDataHoraCurta } from "@/components/timeline/RegistroItem";
-import { lembretesAtivos } from "@/lib/workspace";
+import { lembretesAtivos, PERFIS_WORKSPACE } from "@/lib/workspace";
 import { marcarLembreteLido } from "@/lib/workspaceDb";
 import type { Anotacao, Notificacao, Usuario } from "@/types";
 
@@ -38,12 +38,12 @@ export function NotificacoesMenu({
   const naoLidas = ordenadas.filter((n) => !n.lida);
   const lista = (somenteNaoLidas ? naoLidas : ordenadas).slice(0, 50);
 
-  // Lembretes do Workspace (só consultor): a consulta traz só as anotações dele.
+  // Lembretes do Workspace: a consulta traz só as anotações da própria pessoa.
   const router = useRouter();
-  const souConsultor = usuario.perfil === "consultor";
-  const { data: anotacoes } = useCollection<Anotacao>("anotacoes", [where("usuarioId", "==", usuario.uid)], souConsultor, [usuario.uid, souConsultor]);
+  const temWorkspace = PERFIS_WORKSPACE.includes(usuario.perfil);
+  const { data: anotacoes } = useCollection<Anotacao>("anotacoes", [where("usuarioId", "==", usuario.uid)], temWorkspace, [usuario.uid, temWorkspace]);
   const hojeIso = new Date().toLocaleDateString("sv-SE");
-  const lembretes = souConsultor ? lembretesAtivos(anotacoes, hojeIso) : [];
+  const lembretes = temWorkspace ? lembretesAtivos(anotacoes, hojeIso) : [];
   const lembretesNaoLidos = lembretes.filter((l) => !l.lido);
   const listaLembretes = somenteNaoLidas ? lembretesNaoLidos : lembretes;
   const totalNaoLidas = naoLidas.length + lembretesNaoLidos.length;

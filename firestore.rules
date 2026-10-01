@@ -353,12 +353,12 @@ service cloud.firestore {
           (!apontamentoAprovado(resource.data) || meuRecursoEhCoordenador()));
     }
 
-    // Workspace pessoal do consultor: anotações PRIVADAS. Só o consultor dono lê e grava — nem o administrador,
-    // nem o coordenador, nem os colegas do projeto (vincular a um projeto não muda a visibilidade). Excluir manda para a
-    // lixeira (deletedAt); só o que já está na lixeira pode ser apagado de vez (pelo dono, ou sozinho depois de 15 dias).
-    // O histórico segue a mesma regra.
-    function isConsultor() {
-      return isSignedIn() && meuUsuario().perfil == 'consultor';
+    // Workspace pessoal (Meu Workspace): anotações PRIVADAS de qualquer usuário da NG. Só o dono lê e grava — nem o
+    // administrador, nem o coordenador, nem os colegas do projeto (vincular a um projeto não muda a visibilidade). Excluir
+    // manda para a lixeira (deletedAt); só o que já está na lixeira pode ser apagado de vez (pelo dono, ou sozinho depois
+    // de 15 dias). O histórico segue a mesma regra. O responsável da parceira (externo) não tem Workspace.
+    function temWorkspace() {
+      return isInterno();
     }
     function anotacaoValida(d) {
       return d.usuarioId == request.auth.uid &&
@@ -373,18 +373,18 @@ service cloud.firestore {
           (d.lembretesDiasAntes is list && d.lembretesDiasAntes.size() <= 10));
     }
     match /anotacoes/{anotacaoId} {
-      allow read: if isConsultor() && resource.data.usuarioId == request.auth.uid;
-      allow create: if isConsultor() && anotacaoValida(request.resource.data);
-      allow update: if isConsultor() && resource.data.usuarioId == request.auth.uid && anotacaoValida(request.resource.data);
-      allow delete: if isConsultor() && resource.data.usuarioId == request.auth.uid && resource.data.get('deletedAt', null) != null;
+      allow read: if temWorkspace() && resource.data.usuarioId == request.auth.uid;
+      allow create: if temWorkspace() && anotacaoValida(request.resource.data);
+      allow update: if temWorkspace() && resource.data.usuarioId == request.auth.uid && anotacaoValida(request.resource.data);
+      allow delete: if temWorkspace() && resource.data.usuarioId == request.auth.uid && resource.data.get('deletedAt', null) != null;
 
       match /historico/{historicoId} {
-        allow read: if isConsultor() &&
+        allow read: if temWorkspace() &&
           get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.usuarioId == request.auth.uid;
-        allow create: if isConsultor() && request.resource.data.usuarioId == request.auth.uid &&
+        allow create: if temWorkspace() && request.resource.data.usuarioId == request.auth.uid &&
           getAfter(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.usuarioId == request.auth.uid;
         allow update: if false;
-        allow delete: if isConsultor() &&
+        allow delete: if temWorkspace() &&
           get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.usuarioId == request.auth.uid &&
           get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.get('deletedAt', null) != null;
       }

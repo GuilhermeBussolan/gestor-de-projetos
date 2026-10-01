@@ -415,6 +415,10 @@ export interface EventoCalendario {
   motivoRejeicao?: string | null;
   aprovadoPorNome?: string | null;
   aprovadoEm?: number | null;
+  /** Administrador desfez a aprovação ("Reabrir"): quem, quando e por quê (o motivo é opcional). */
+  reabertoPorNome?: string | null;
+  reabertoEm?: number | null;
+  motivoReabertura?: string | null;
   /** Hora retroativa importada em lote: aprovada direto, some do calendário. */
   retroativo?: boolean;
   /** IDs das EscopoAtividade do projeto marcadas como realizadas nesse apontamento. */

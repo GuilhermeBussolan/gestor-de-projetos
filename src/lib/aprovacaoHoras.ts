@@ -22,6 +22,21 @@ export async function rejeitarHora(eventoId: string, motivo: string, usuario: Us
   });
 }
 
+/**
+ * Administrador volta atrás numa aprovação: o apontamento volta para "aguardando aprovação" (deixa de contar nos
+ * cálculos e o consultor pode ajustar) e fica registrado quem reabriu, quando e o motivo.
+ */
+export async function reabrirHora(eventoId: string, usuario: Usuario, motivo: string) {
+  await updateDoc(doc(db, "eventosCalendario", eventoId), {
+    status: "aguardando_aprovacao",
+    aprovadoPorNome: null,
+    aprovadoEm: null,
+    reabertoPorNome: usuario.nomeCompleto,
+    reabertoEm: Date.now(),
+    motivoReabertura: motivo.trim() || null,
+  });
+}
+
 export async function confirmarRealizado(eventoId: string) {
   await updateDoc(doc(db, "eventosCalendario", eventoId), { status: "aguardando_aprovacao" });
 }
