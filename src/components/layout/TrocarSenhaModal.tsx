@@ -6,6 +6,7 @@ import { FormRow, Input } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthContext";
 import { firebaseErrorCode } from "@/lib/errors";
+import { problemaDaSenha, REGRA_SENHA } from "@/lib/senha";
 
 export function TrocarSenhaModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { trocarSenha } = useAuth();
@@ -28,8 +29,13 @@ export function TrocarSenhaModal({ open, onClose }: { open: boolean; onClose: ()
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro("");
-    if (novaSenha.length < 6) {
-      setErro("A nova senha deve ter ao menos 6 caracteres.");
+    const problemaSenha = problemaDaSenha(novaSenha);
+    if (problemaSenha) {
+      setErro(problemaSenha);
+      return;
+    }
+    if (novaSenha === senhaAtual) {
+      setErro("A nova senha precisa ser diferente da atual.");
       return;
     }
     if (novaSenha !== confirmar) {
@@ -79,6 +85,7 @@ export function TrocarSenhaModal({ open, onClose }: { open: boolean; onClose: ()
               onChange={(e) => setNovaSenha(e.target.value)}
               required
             />
+            <p className="mt-1 text-[11.5px] text-brand-faint">{REGRA_SENHA}</p>
           </FormRow>
           <FormRow label="Confirmar nova senha">
             <Input

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebaseAdmin";
+import { problemaDaSenha } from "@/lib/senha";
 import type { Perfil } from "@/types";
 
 const PERFIS_VALIDOS: Perfil[] = ["administrador", "coordenador", "consultor", "financeiro", "responsavel_parceira"];
@@ -65,11 +66,13 @@ async function handlePOST(request: NextRequest) {
   const recursoId = typeof body?.recursoId === "string" && body.recursoId ? body.recursoId : null;
   const parceiraId = typeof body?.parceiraId === "string" && body.parceiraId ? body.parceiraId : null;
 
-  if (!nomeCompleto || !email || senha.length < 6) {
-    return NextResponse.json(
-      { erro: "Preencha nome, e-mail e uma senha com ao menos 6 caracteres." },
-      { status: 400 }
-    );
+  if (!nomeCompleto || !email || !senha) {
+    return NextResponse.json({ erro: "Preencha nome, e-mail e a senha inicial." }, { status: 400 });
+  }
+  // A regra de senha forte vale também aqui no servidor (não dá para contornar pela tela).
+  const problemaSenha = problemaDaSenha(senha);
+  if (problemaSenha) {
+    return NextResponse.json({ erro: problemaSenha }, { status: 400 });
   }
   if (!perfil || !PERFIS_VALIDOS.includes(perfil as Perfil)) {
     return NextResponse.json({ erro: "Perfil inválido." }, { status: 400 });

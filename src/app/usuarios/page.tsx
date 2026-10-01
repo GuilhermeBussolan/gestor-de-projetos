@@ -12,6 +12,7 @@ import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
 import { useAuth } from "@/contexts/AuthContext";
 import { sincronizarDiretorio } from "@/lib/diretorio";
 import { nomeExibicaoParceira } from "@/lib/parceira";
+import { gerarSenhaForte, problemaDaSenha, REGRA_SENHA } from "@/lib/senha";
 import type { EmpresaParceira, Perfil, Recurso, Usuario } from "@/types";
 
 const PERFIL_LABEL: Record<Perfil, string> = {
@@ -102,8 +103,9 @@ function UsuariosPageContent() {
   async function criarUsuario(e: React.FormEvent) {
     e.preventDefault();
     setCriandoErro("");
-    if (novoUsuario.senha.length < 6) {
-      setCriandoErro("A senha deve ter ao menos 6 caracteres.");
+    const problemaSenha = problemaDaSenha(novoUsuario.senha);
+    if (problemaSenha) {
+      setCriandoErro(problemaSenha);
       return;
     }
     setCriandoSalvando(true);
@@ -276,13 +278,21 @@ function UsuariosPageContent() {
             />
           </FormRow>
           <FormRow label="Senha inicial">
-            <Input
-              type="text"
-              value={novoUsuario.senha}
-              onChange={(e) => setNovoUsuario({ ...novoUsuario, senha: e.target.value })}
-              placeholder="Mínimo 6 caracteres"
-              required
-            />
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <Input
+                  type="text"
+                  value={novoUsuario.senha}
+                  onChange={(e) => setNovoUsuario({ ...novoUsuario, senha: e.target.value })}
+                  placeholder="Mínimo 10 caracteres"
+                  required
+                />
+              </div>
+              <Button type="button" variant="secondary" onClick={() => setNovoUsuario({ ...novoUsuario, senha: gerarSenhaForte() })}>
+                Gerar senha
+              </Button>
+            </div>
+            <p className="mt-1 text-[11.5px] text-brand-faint">{REGRA_SENHA}</p>
           </FormRow>
           <FormRow label="Perfil">
             <Select
