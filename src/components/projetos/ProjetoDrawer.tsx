@@ -274,7 +274,8 @@ export function ProjetoDrawerConteudo({
             : "Sem consultor"}
         </p>
 
-        {(previstoConsultor > 0 || horas.consultor > 0 || (!souConsultor && (previstoCoordenador > 0 || horas.coordenador > 0))) && (
+        {/* Barras de horas previstas x realizadas: só para a gestão (o consultor não vê o comparativo). */}
+        {!ehConsultor && (previstoConsultor > 0 || horas.consultor > 0 || previstoCoordenador > 0 || horas.coordenador > 0) && (
           <div className={`mb-5.5 grid gap-3.5 ${souConsultor ? "grid-cols-1" : "grid-cols-2"}`}>
             <BarraHorasDrawer label="Consultor" realizado={horas.consultor} previsto={previstoConsultor} />
             {!souConsultor && (
@@ -338,7 +339,7 @@ export function ProjetoDrawerConteudo({
                       <p className={feita ? "text-[#15754c]" : "text-brand-muted"}>
                         <span className="mr-1.5 text-[11px] text-brand-faint">{numeracaoEscopo[i]}</span>
                         <span
-                          className={`${pai ? "font-bold" : ""} ${feita && !pai ? "line-through decoration-[#15754c]/50" : ""}`}
+                          className={pai ? "font-bold" : ""}
                         >
                           {a.descricao}
                         </span>
@@ -366,7 +367,8 @@ export function ProjetoDrawerConteudo({
           </div>
         )}
 
-        {gruposRotina.length > 0 && (
+        {/* Comparativo de horas previstas x realizadas é controle da gestão: o consultor não vê. */}
+        {!ehConsultor && gruposRotina.length > 0 && (
           <div className="mb-5.5">
             <p className="mb-2.5 text-sm font-extrabold text-brand-navy-2">
               Horas Previstas x Realizadas (por grupo de rotina)

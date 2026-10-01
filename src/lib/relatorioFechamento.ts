@@ -32,6 +32,8 @@ export interface LinhaFechamento {
   /** HH:mm de desconto (ex.: almoço); "00:00" ou vazio quando não há. */
   horaDesconto: string;
   totalHoras: number;
+  /** Valor/hora do cadastro do recurso (o que justifica o repasse: horas × valor/hora). */
+  valorHora: number;
   valorRepasse: number;
   /** Outro lançamento do mesmo recurso, no mesmo dia, cruza este horário. */
   sobreposto: boolean;
@@ -179,6 +181,7 @@ export function montarFechamentoMensal(
       horaFim: ev.horaFim ?? "",
       horaDesconto: ev.horaDesconto ?? "",
       totalHoras: ev.totalHoras,
+      valorHora: recurso.valorHora,
       valorRepasse: Math.round(ev.totalHoras * recurso.valorHora * 100) / 100,
       sobreposto: false,
     });
@@ -211,6 +214,7 @@ function cabecalhoColunas(o: ColunasOpcionais): string[] {
     "Hora fim",
     ...(o.incluirDesconto ? ["Desconto"] : []),
     "Total de horas",
+    "Valor hora",
     "Valor de repasse",
   ];
 }
@@ -226,14 +230,15 @@ function celulasLinha(l: LinhaFechamento, o: ColunasOpcionais): string[] {
     l.horaFim || "—",
     ...(o.incluirDesconto ? [l.horaDesconto && l.horaDesconto !== "00:00" ? l.horaDesconto : "—"] : []),
     formatarHoras(l.totalHoras),
+    moeda(l.valorHora),
     moeda(l.valorRepasse),
   ];
 }
 
-/** "Total" fica na última coluna antes de "Total de horas". */
+/** "Total" fica na última coluna antes de "Total de horas"; o valor/hora não se soma (fica vazio no total). */
 function linhaTotal(totalHoras: number, totalRepasse: number, o: ColunasOpcionais): string[] {
-  const antesDasHoras = cabecalhoColunas(o).length - 2;
-  return [...Array(antesDasHoras - 1).fill(""), "Total", formatarHoras(totalHoras), moeda(totalRepasse)];
+  const antesDasHoras = cabecalhoColunas(o).length - 3;
+  return [...Array(antesDasHoras - 1).fill(""), "Total", formatarHoras(totalHoras), "", moeda(totalRepasse)];
 }
 
 export async function carregarImagemDataUrl(url: string): Promise<string | null> {
@@ -409,6 +414,7 @@ export async function exportarFechamentoExcel(
     "Hora fim": 10,
     Desconto: 10,
     "Total de horas": 14,
+    "Valor hora": 14,
     "Valor de repasse": 18,
   };
   planilha.columns = colunas.map((c) => ({ width: larguras[c] ?? 16 }));

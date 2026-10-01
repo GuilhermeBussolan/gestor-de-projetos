@@ -64,7 +64,7 @@ function FechamentoMensalPageContent() {
   const totalHoras = linhas.reduce((acc, l) => acc + l.totalHoras, 0);
   const totalRepasse = linhas.reduce((acc, l) => acc + l.valorRepasse, 0);
   const vencimento = mesAno ? calcularVencimentoFechamento(mesAno) : null;
-  const colunas = 8 + (escopo.incluirVinculo ? 1 : 0) + (escopo.incluirDesconto ? 1 : 0);
+  const colunas = 9 + (escopo.incluirVinculo ? 1 : 0) + (escopo.incluirDesconto ? 1 : 0);
   const sobrepostos = linhas.filter((l) => l.sobreposto).length;
 
   function alterarTipo(novo: "" | TipoBox) {
@@ -205,6 +205,7 @@ function FechamentoMensalPageContent() {
                 <th className="px-[18px] py-3.5">Hora fim</th>
                 {escopo.incluirDesconto && <th className="px-[18px] py-3.5">Desconto</th>}
                 <th className="px-[18px] py-3.5">Total de horas</th>
+                <th className="px-[18px] py-3.5" title="Valor/hora do cadastro do recurso">Valor hora</th>
                 <th className="px-[18px] py-3.5">Valor de repasse</th>
               </tr>
             </thead>
@@ -236,6 +237,7 @@ function FechamentoMensalPageContent() {
                     </td>
                   )}
                   <td className="px-[18px] py-[13px] text-brand-navy-2">{formatarHoras(l.totalHoras)}</td>
+                  <td className="px-[18px] py-[13px] whitespace-nowrap text-brand-muted">{moeda(l.valorHora)}</td>
                   <td className="px-[18px] py-[13px] font-bold text-brand-navy-2">{moeda(l.valorRepasse)}</td>
                 </tr>
               ))}
@@ -250,10 +252,11 @@ function FechamentoMensalPageContent() {
             {linhas.length > 0 && (
               <tfoot>
                 <tr className="border-t border-brand-border bg-brand-hover font-bold text-brand-navy-2">
-                  <td className="px-[18px] py-3.5" colSpan={colunas - 2}>
+                  <td className="px-[18px] py-3.5" colSpan={colunas - 3}>
                     Total
                   </td>
                   <td className="px-[18px] py-3.5">{formatarHoras(totalHoras)}</td>
+                  <td className="px-[18px] py-3.5" />
                   <td className="px-[18px] py-3.5">{moeda(totalRepasse)}</td>
                 </tr>
               </tfoot>

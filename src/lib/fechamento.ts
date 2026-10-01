@@ -228,6 +228,8 @@ export function linhasDosItens(itens: Pick<ItemFechamento, "recursoId" | "recurs
       horaFim: l.horaFim,
       horaDesconto: l.horaDesconto,
       totalHoras: l.totalHoras,
+      // Os itens congelados guardam horas e repasse; o valor/hora aplicado é a razão entre os dois.
+      valorHora: l.totalHoras > 0 ? Math.round((l.valorRepasse / l.totalHoras) * 100) / 100 : 0,
       valorRepasse: l.valorRepasse,
       sobreposto: false,
     }))

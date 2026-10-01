@@ -172,7 +172,11 @@ export function EventoModal({
       return;
     }
     if (precisaObservacao && !descricao.trim()) {
-      setErro("As horas apontadas ultrapassaram o previsto — informe uma observação justificando o excedente.");
+      setErro(
+        souConsultorEditandoMeuEvento
+          ? "Descreva o que foi feito neste apontamento."
+          : "As horas apontadas ultrapassaram o previsto — informe uma observação justificando o excedente."
+      );
       return;
     }
     setSalvando(true);
@@ -389,9 +393,19 @@ export function EventoModal({
           </div>
         )}
 
-        <ComparativoPrevistoRealizado blocos={avaliacaoBlocos} />
+        {/* Previsto x realizado é controle da gestão: o consultor não vê o comparativo. Quando as horas passam do
+            previsto, a descrição continua obrigatória (vira a justificativa na aprovação), mas sem citar o previsto. */}
+        {!souConsultorEditandoMeuEvento && <ComparativoPrevistoRealizado blocos={avaliacaoBlocos} />}
 
-        <FormRow label={precisaObservacao ? "Observação (obrigatória — horas acima do previsto)" : "Descrição (opcional)"}>
+        <FormRow
+          label={
+            !precisaObservacao
+              ? "Descrição (opcional)"
+              : souConsultorEditandoMeuEvento
+                ? "Descrição (obrigatória)"
+                : "Observação (obrigatória — horas acima do previsto)"
+          }
+        >
           <Textarea rows={2} value={descricao} onChange={(e) => setDescricao(e.target.value)} required={precisaObservacao} />
         </FormRow>
 

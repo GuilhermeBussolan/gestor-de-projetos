@@ -71,6 +71,11 @@ function LinhaHora({
     .filter((id) => folhasEscopo.has(id))
     .map((id) => projeto?.escopoAtividades?.find((a) => a.id === id)?.descricao)
     .filter((d): d is string => !!d);
+  // OS: as atividades do escopo marcadas; sem elas (apontamento avulso sem escopo), a descrição vira a atividade
+  // realizada — e aí sai da caixa de observações para não repetir no PDF.
+  const descricaoOS = ev.descricao?.trim() ?? "";
+  const atividadesOS = atividadesFeitas.length > 0 ? atividadesFeitas : descricaoOS ? [descricaoOS] : [];
+  const eventoOS = atividadesFeitas.length > 0 ? ev : { ...ev, descricao: "" };
   const temMotivo = statusEv === "rejeitado" && !!ev.motivoRejeicao;
   const temDetalhe = !!ev.descricao || atividadesFeitas.length > 0 || temMotivo;
   const mostrarDetalhe = !colapsavel || expandido;
@@ -143,11 +148,15 @@ function LinhaHora({
               {expandido ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
             </button>
           )}
-          {atividadesFeitas.length > 0 && projeto && (
+          {projeto && (
             <button
               type="button"
-              disabled={gerandoOS}
-              title="Gerar PDF da Ordem de Serviço com as atividades deste apontamento, para enviar ao cliente e pedir confirmação"
+              disabled={gerandoOS || atividadesOS.length === 0}
+              title={
+                atividadesOS.length === 0
+                  ? "Para gerar a OS, edite o apontamento e marque as atividades do escopo ou escreva a descrição do que foi feito"
+                  : "Gerar PDF da Ordem de Serviço com as atividades deste apontamento, para enviar ao cliente e pedir confirmação"
+              }
               onClick={async () => {
                 // Com principais envolvidos cadastrados, o consultor marca quem participou da agenda.
                 if ((projeto.principaisEnvolvidos ?? []).length > 0) {
@@ -156,7 +165,7 @@ function LinhaHora({
                 }
                 setGerandoOS(true);
                 try {
-                  await gerarOrdemServicoPdf(ev, projeto, cliente, recurso, atividadesFeitas);
+                  await gerarOrdemServicoPdf(eventoOS, projeto, cliente, recurso, atividadesOS);
                 } finally {
                   setGerandoOS(false);
                 }
@@ -179,7 +188,7 @@ function LinhaHora({
           onGerar={async (participantes) => {
             setGerandoOS(true);
             try {
-              await gerarOrdemServicoPdf(ev, projeto, cliente, recurso, atividadesFeitas, participantes);
+              await gerarOrdemServicoPdf(eventoOS, projeto, cliente, recurso, atividadesOS, participantes);
               setEscolhendoParticipantes(false);
             } finally {
               setGerandoOS(false);
