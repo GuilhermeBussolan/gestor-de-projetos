@@ -10,13 +10,16 @@ import type { EmpresaParceira, FechamentoParceiro, ItemFechamento, Perfil, Usuar
 export const PERFIS_MEU_FECHAMENTO: Perfil[] = ["consultor", "coordenador"];
 
 /**
- * Os fechamentos já liberados do próprio consultor (terceiro), para ele conferir e confirmar as horas com o login dele,
+ * Os fechamentos do próprio consultor (terceiro) desde o envio para revisão, para ele conferir e confirmar as horas com o login dele,
  * e quantos ainda esperam a resposta dele. Só abre a escuta para consultor/coordenador com recurso vinculado; recurso
  * interno nunca tem item de fechamento, então a lista dele fica sempre vazia.
  *
  * Quando o consultor é o contato 1 da parceira (quem envia a NF da empresa), também traz o fechamento da parceira de
  * cada mês, para ele acompanhar a confirmação dos colegas e enviar a nota fiscal.
  */
+/** Item antigo (sem o campo) só era visto depois de liberado o faturamento. */
+export const faturamentoLiberado = (i: Pick<ItemFechamento, "faturamentoLiberado">) => i.faturamentoLiberado ?? true;
+
 export function useMeuFechamento(usuario: Usuario | null) {
   const ativo = !!usuario && PERFIS_MEU_FECHAMENTO.includes(usuario.perfil) && !!usuario.recursoId;
   const { data, loading, erro } = useCollection<ItemFechamento>(
@@ -32,7 +35,8 @@ export function useMeuFechamento(usuario: Usuario | null) {
     !!parceiraId && ehResponsavelNf(parceiras.find((p) => p.id === parceiraId), usuario?.email);
   const fechamentosParceira = useDocumentos<FechamentoParceiro>(
     "fechamentoParceiros",
-    itens.filter((i) => souResponsavelNf(i.parceiraId)).map((i) => `${i.mesAno}_${i.parceiraId}`)
+    // O fechamento da parceira (com a NF) só é visível para o contato 1 depois de liberado o faturamento.
+    itens.filter((i) => faturamentoLiberado(i) && souResponsavelNf(i.parceiraId)).map((i) => `${i.mesAno}_${i.parceiraId}`)
   );
 
   const confirmacoesPendentes = itens.filter((i) => i.confirmacao.status === "pendente").length;

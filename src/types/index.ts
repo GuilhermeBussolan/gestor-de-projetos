@@ -585,8 +585,13 @@ export interface ItemFechamento {
     totalHoras: number;
     valorRepasse: number;
   }[];
-  /** true depois de "Liberar faturamento" — só então o consultor terceiro enxerga o item. */
+  /**
+   * true = o consultor terceiro enxerga o item e confirma/contesta as horas. Desde o fluxo novo, vale já ao "Enviar para
+   * revisão" (antes, só depois de "Liberar faturamento").
+   */
   liberado: boolean;
+  /** Faturamento da parceira liberado (aí vem a nota fiscal). Ausente em itens antigos: eles só eram vistos depois de liberado. */
+  faturamentoLiberado?: boolean;
   confirmacao: ConfirmacaoFechamento;
 }
 

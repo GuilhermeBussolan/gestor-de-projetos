@@ -128,8 +128,8 @@ function TabelaItens({
 
   const cols = 5;
   const linhaItem = (i: ItemExibido, g?: GrupoParceira) => {
-    // Confirmação do próprio consultor terceiro (só existe depois de liberado o faturamento da parceira).
-    const statusC = g?.etapa === "faturado" ? g.salvo?.statusConsultores?.[i.recursoId] : undefined;
+    // Confirmação do próprio consultor terceiro (começa no envio para revisão).
+    const statusC = g && g.etapa !== "rascunho" ? g.salvo?.statusConsultores?.[i.recursoId] : undefined;
     const cfgC = statusC ? CONFIRMACAO[statusC] : null;
     const aberto = abertos.has(i.id);
     return (
@@ -266,7 +266,7 @@ function TabelaItens({
                     {cfgEtapa.label}
                   </span>
                 )}
-                {liberada && parceiro?.statusConsultores && (
+                {g && g.etapa !== "rascunho" && parceiro?.statusConsultores && (
                   <>
                     {(() => {
                       const valores = Object.values(parceiro.statusConsultores);
@@ -280,7 +280,7 @@ function TabelaItens({
                         </span>
                       );
                     })()}
-                    {confirmacaoDaParceira(parceiro).status === "confirmado" && (
+                    {liberada && confirmacaoDaParceira(parceiro).status === "confirmado" && (
                       <span
                         className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
                         style={{
@@ -338,7 +338,16 @@ function TabelaItens({
                 )}
                 {g.etapa === "em_revisao" && (
                   <>
-                    <Button onClick={() => onAcao("fechar", g.parceiraId)} className="h-8 px-3 text-[12.5px]">
+                    <Button
+                      onClick={() => onAcao("fechar", g.parceiraId)}
+                      disabled={!!parceiro?.statusConsultores && confirmacaoDaParceira(parceiro).status !== "confirmado"}
+                      title={
+                        parceiro?.statusConsultores && confirmacaoDaParceira(parceiro).status !== "confirmado"
+                          ? "Aguardando a confirmação dos consultores (use “Confirmar em nome” para quem não tem acesso)"
+                          : undefined
+                      }
+                      className="h-8 px-3 text-[12.5px]"
+                    >
                       <Lock size={14} />
                       Fechar
                     </Button>
@@ -349,6 +358,13 @@ function TabelaItens({
                     <Button variant="secondary" onClick={() => onAcao("rascunho", g.parceiraId)} className="h-8 px-3 text-[12.5px]">
                       Voltar para rascunho
                     </Button>
+                    {parceiro?.statusConsultores && confirmacaoDaParceira(parceiro).status !== "confirmado" && (
+                      <span className="text-[12px] text-brand-muted">
+                        {confirmacaoDaParceira(parceiro).status === "contestado"
+                          ? "Há contestação: corrija e use “Atualizar valores”, ou confirme em nome do consultor."
+                          : "Os consultores estão conferindo no “Meu fechamento”. O botão Fechar libera quando todos confirmarem."}
+                      </span>
+                    )}
                   </>
                 )}
                 {g.etapa === "fechado" && (
@@ -559,7 +575,7 @@ function FechamentosPageContent() {
       setAcao(null);
     } catch (err) {
       console.error("Erro na ação do fechamento:", err);
-      setErro(err instanceof Error && (err.message === MENSAGEM_ERRO_ARQUIVO || err.message.includes("3 MB") || err.message.startsWith("Formato inválido") || err.message.includes("parceira")) ? err.message : "Não foi possível concluir a ação. Confira se as regras do Firestore foram publicadas e tente de novo.");
+      setErro(err instanceof Error && (err.message === MENSAGEM_ERRO_ARQUIVO || err.message.includes("3 MB") || err.message.startsWith("Formato inválido") || err.message.includes("parceira") || err.message.startsWith("Só dá")) ? err.message : "Não foi possível concluir a ação. Confira se as regras do Firestore foram publicadas e tente de novo.");
       setAcao(null);
     } finally {
       setProcessando(false);

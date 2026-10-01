@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal";
 import { DocumentosDoFinanceiro, NotaFiscalParceira } from "@/components/financeiro/NotaFiscalParceira";
 import { useAuth } from "@/contexts/AuthContext";
-import { PERFIS_MEU_FECHAMENTO, useMeuFechamento } from "@/lib/useMeuFechamento";
+import { faturamentoLiberado, PERFIS_MEU_FECHAMENTO, useMeuFechamento } from "@/lib/useMeuFechamento";
 import { responderConfirmacaoConsultor } from "@/lib/fechamentoDb";
 import { dataBR } from "@/lib/fechamento";
 import { formatarHoras } from "@/lib/horas";
@@ -194,12 +194,16 @@ function CartaoMes({
           {item.confirmacao.status === "confirmado" && (
             <p className="text-[12.5px] text-[#15754c]">
               Você confirmou{item.confirmacao.em ? ` em ${dataHora(item.confirmacao.em)}` : ""}.{" "}
-              {responsavelNf
-                ? "Quando todos os consultores da sua empresa confirmarem, você envia a nota fiscal logo abaixo."
-                : `Quando todos os consultores da sua empresa confirmarem, ${nomeResponsavelNf ?? "o responsável da empresa"} envia a nota fiscal.`}
+              {!faturamentoLiberado(item)
+                ? `Agora o Financeiro fecha o mês e libera o faturamento; depois disso ${responsavelNf ? "você envia" : `${nomeResponsavelNf ?? "o responsável da empresa"} envia`} a nota fiscal.`
+                : responsavelNf
+                  ? "Quando todos os consultores da sua empresa confirmarem, você envia a nota fiscal logo abaixo."
+                  : `Quando todos os consultores da sua empresa confirmarem, ${nomeResponsavelNf ?? "o responsável da empresa"} envia a nota fiscal.`}
             </p>
           )}
-          {item.confirmacao.status === "confirmado" && responsavelNf && <NotaFiscalDaEmpresa item={item} fechamento={fechamentoParceira} />}
+          {item.confirmacao.status === "confirmado" && responsavelNf && faturamentoLiberado(item) && (
+            <NotaFiscalDaEmpresa item={item} fechamento={fechamentoParceira} />
+          )}
           {item.confirmacao.status === "contestado" && item.confirmacao.motivo && (
             <p className="rounded-md bg-[#fdeceb] px-3 py-2 text-[12.5px] text-[#b5392a]">
               <strong>Sua contestação:</strong> {item.confirmacao.motivo}
@@ -258,8 +262,8 @@ function MeuFechamentoContent() {
     <div>
       <h1 className="mb-1 text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">Meu fechamento</h1>
       <p className="mb-5 text-sm text-brand-muted">
-        Quando o faturamento do mês da sua empresa é liberado, você confere as suas horas e os seus valores e confirma (ou contesta). A nota fiscal só é
-        enviada depois que todos os consultores da empresa confirmarem.
+        Quando o Financeiro envia o fechamento do mês para revisão, você confere as suas horas e os seus valores e confirma (ou contesta). O mês só é
+        fechado depois que todos os consultores da empresa confirmarem, e a nota fiscal é enviada depois que o faturamento for liberado.
       </p>
       {confirmacoesPendentes > 0 && (
         <p className="mb-4 rounded-md bg-[#fff2de] p-3 text-[13px] font-semibold text-[#a4650d]">
@@ -283,7 +287,7 @@ function MeuFechamentoContent() {
           />
         ))}
         {!loading && !erro && itens.length === 0 && (
-          <p className="rounded-2xl border border-dashed border-brand-border bg-white p-8 text-center text-sm text-brand-faint">Nenhum fechamento liberado para você ainda.</p>
+          <p className="rounded-2xl border border-dashed border-brand-border bg-white p-8 text-center text-sm text-brand-faint">Nenhum fechamento para você conferir ainda.</p>
         )}
       </div>
     </div>

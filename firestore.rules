@@ -195,7 +195,7 @@ service cloud.firestore {
     }
 
     // O que cada consultor tem a receber no mês (detalhe dos lançamentos). Administrador e financeiro: tudo.
-    // O consultor terceiro lê SÓ o próprio item, depois de liberado, e só pode gravar a confirmação/contestação dele.
+    // O consultor terceiro lê SÓ o próprio item, depois de liberado para ele (já no envio para revisão), e só grava a confirmação/contestação dele.
     match /fechamentoItens/{itemId} {
       allow read: if isAdmin() || isFinanceiro() ||
         (isSignedIn() && meuRecursoId() != null && resource.data.recursoId == meuRecursoId() && resource.data.liberado == true);
@@ -240,8 +240,10 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nf', 'historicoNf']) &&
           request.resource.data.nf.status == 'enviada' &&
           (resource.data.get('nf', null) == null || resource.data.nf.status == 'rejeitada')) ||
-        // O consultor terceiro só troca a PRÓPRIA chave em statusConsultores, enquanto a NF não foi enviada.
-        (isSignedIn() && meuRecursoId() != null && resource.data.liberado == true &&
+        // O consultor terceiro só troca a PRÓPRIA chave em statusConsultores, enquanto a NF não foi enviada — já na revisão
+        // (fluxo novo: ele confere antes do fechamento) ou depois de liberado o faturamento (meses antigos).
+        (isSignedIn() && meuRecursoId() != null &&
+          (resource.data.liberado == true || resource.data.get('etapa', '') == 'em_revisao') &&
           resource.data.get('nf', null) == null &&
           resource.data.get('statusConsultores', null) != null && meuRecursoId() in resource.data.statusConsultores.keys() &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statusConsultores']) &&

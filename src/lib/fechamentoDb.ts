@@ -1,6 +1,7 @@
 import { collection, doc, updateDoc, writeBatch, type WriteBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { idItemFechamento, type ItemBase, type ParceiroBase } from "@/lib/fechamento";
+import { confirmacaoDaParceira } from "@/lib/fechamentoNf";
 import type { ArquivoFechamento, FechamentoParceiro, StatusFechamento } from "@/types";
 
 export interface Ator {
@@ -59,8 +60,8 @@ export async function enviarParceiraParaRevisao({
   const lote = writeBatch(db);
   idsDosItens(mesAno, atual).forEach((id) => lote.delete(doc(db, "fechamentoItens", id)));
   for (const item of itens) {
-    // Cada consultor terceiro confirma as próprias horas (depois de liberado): o item guarda o detalhe e a resposta dele.
-    lote.set(doc(db, "fechamentoItens", item.id), limpar({ ...item, liberado: false, confirmacao: CONFIRMACAO_PENDENTE }));
+    // Cada consultor terceiro já confere e confirma as próprias horas na revisão: o item guarda o detalhe e a resposta dele.
+    lote.set(doc(db, "fechamentoItens", item.id), limpar({ ...item, liberado: true, faturamentoLiberado: false, confirmacao: CONFIRMACAO_PENDENTE }));
   }
   const de: StatusFechamento | null = atual ? (atual.etapa ?? "em_revisao") : null;
   lote.set(
@@ -94,8 +95,14 @@ export async function voltarParceiraParaRascunho({ mesAno, atual, ator, motivo }
   await lote.commit();
 }
 
-/** Em revisão -> fechado (só desta parceira). `justificativa` é obrigatória quando há divergências bloqueantes dela. */
+/**
+ * Em revisão -> fechado (só desta parceira). `justificativa` é obrigatória quando há divergências bloqueantes dela.
+ * Só fecha depois que todos os consultores terceiros confirmaram as horas (ou o Financeiro confirmou em nome deles).
+ */
 export async function fecharParceira({ mesAno, atual, ator, justificativa }: { mesAno: string; atual: FechamentoParceiro; ator: Ator; justificativa?: string }) {
+  if (atual.statusConsultores && confirmacaoDaParceira(atual).status !== "confirmado") {
+    throw new Error("Só dá para fechar esta parceira depois que todos os consultores confirmarem as horas.");
+  }
   const lote = writeBatch(db);
   lote.update(
     doc(db, "fechamentoParceiros", atual.id),
@@ -110,7 +117,7 @@ export async function fecharParceira({ mesAno, atual, ator, justificativa }: { m
   await lote.commit();
 }
 
-/** Fechado/faturado -> em revisão (erro detectado), só desta parceira. A ciência e a confirmação dela recomeçam. */
+/** Fechado/faturado -> em revisão (erro detectado), só desta parceira. A ciência e a confirmação dos consultores recomeçam. */
 export async function reabrirParceira({
   mesAno,
   atual,
@@ -125,7 +132,9 @@ export async function reabrirParceira({
   motivo: string;
 }) {
   const lote = writeBatch(db);
-  idsDosItens(mesAno, atual).forEach((id) => lote.set(doc(db, "fechamentoItens", id), { liberado: false, confirmacao: CONFIRMACAO_PENDENTE }, { merge: true }));
+  idsDosItens(mesAno, atual).forEach((id) =>
+    lote.set(doc(db, "fechamentoItens", id), { liberado: true, faturamentoLiberado: false, confirmacao: CONFIRMACAO_PENDENTE }, { merge: true })
+  );
   lote.update(
     doc(db, "fechamentoParceiros", atual.id),
     limpar({
@@ -162,7 +171,7 @@ export async function liberarParceira({
   anexos?: ArquivoFechamento[];
 }) {
   const lote = writeBatch(db);
-  idsDosItens(mesAno, atual).forEach((id) => lote.set(doc(db, "fechamentoItens", id), { liberado: true }, { merge: true }));
+  idsDosItens(mesAno, atual).forEach((id) => lote.set(doc(db, "fechamentoItens", id), { liberado: true, faturamentoLiberado: true }, { merge: true }));
   lote.update(
     doc(db, "fechamentoParceiros", atual.id),
     limpar({
