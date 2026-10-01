@@ -15,6 +15,7 @@ import {
   ListChecks,
   Menu,
   Receipt,
+  StickyNote,
   Users,
   Wallet,
   type LucideIcon,
@@ -53,6 +54,13 @@ const PRINCIPAIS: NavItem[] = [
     label: "Dashboard",
     icon: LayoutDashboard,
     perfis: ["administrador", "coordenador", "consultor"],
+  },
+  {
+    // Anotações pessoais e privadas do consultor (nem o administrador vê).
+    href: "/workspace",
+    label: "Meu Workspace",
+    icon: StickyNote,
+    perfis: ["consultor"],
   },
 ];
 

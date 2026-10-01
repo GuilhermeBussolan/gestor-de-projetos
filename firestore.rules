@@ -353,6 +353,43 @@ service cloud.firestore {
           (!apontamentoAprovado(resource.data) || meuRecursoEhCoordenador()));
     }
 
+    // Workspace pessoal do consultor: anotações PRIVADAS. Só o consultor dono lê e grava — nem o administrador,
+    // nem o coordenador, nem os colegas do projeto (vincular a um projeto não muda a visibilidade). Excluir manda para a
+    // lixeira (deletedAt); só o que já está na lixeira pode ser apagado de vez (pelo dono, ou sozinho depois de 15 dias).
+    // O histórico segue a mesma regra.
+    function isConsultor() {
+      return isSignedIn() && meuUsuario().perfil == 'consultor';
+    }
+    function anotacaoValida(d) {
+      return d.usuarioId == request.auth.uid &&
+        d.titulo is string && d.titulo.size() > 0 && d.titulo.size() <= 200 &&
+        d.status in ['a_fazer', 'em_andamento', 'concluido', 'arquivado'] &&
+        d.prioridade in ['baixa', 'normal', 'alta'] &&
+        (d.get('descricao', null) == null || (d.descricao is string && d.descricao.size() <= 5000)) &&
+        (d.get('tags', []) is list && d.get('tags', []).size() <= 20) &&
+        (d.get('lembreteDiasAntes', null) == null ||
+          (d.lembreteDiasAntes is number && d.lembreteDiasAntes >= 0 && d.lembreteDiasAntes <= 60)) &&
+        (d.get('lembretesDiasAntes', null) == null ||
+          (d.lembretesDiasAntes is list && d.lembretesDiasAntes.size() <= 10));
+    }
+    match /anotacoes/{anotacaoId} {
+      allow read: if isConsultor() && resource.data.usuarioId == request.auth.uid;
+      allow create: if isConsultor() && anotacaoValida(request.resource.data);
+      allow update: if isConsultor() && resource.data.usuarioId == request.auth.uid && anotacaoValida(request.resource.data);
+      allow delete: if isConsultor() && resource.data.usuarioId == request.auth.uid && resource.data.get('deletedAt', null) != null;
+
+      match /historico/{historicoId} {
+        allow read: if isConsultor() &&
+          get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.usuarioId == request.auth.uid;
+        allow create: if isConsultor() && request.resource.data.usuarioId == request.auth.uid &&
+          getAfter(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.usuarioId == request.auth.uid;
+        allow update: if false;
+        allow delete: if isConsultor() &&
+          get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.usuarioId == request.auth.uid &&
+          get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.get('deletedAt', null) != null;
+      }
+    }
+
     // Bloqueios de agenda (férias, curso...): nenhum apontamento pode cair dentro deles.
     // Administrador bloqueia a agenda de qualquer consultor; o consultor bloqueia só a própria
     // e só mexe nos bloqueios que ele mesmo criou (os do administrador ficam só para leitura).

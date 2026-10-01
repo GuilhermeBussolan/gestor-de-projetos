@@ -662,3 +662,53 @@ export interface PagamentoParceiro {
   registradoEm: number;
   registradoPorNome: string;
 }
+
+/** Workspace pessoal do consultor: anotações privadas (só o dono vê; nem o administrador). */
+export type StatusAnotacao = "a_fazer" | "em_andamento" | "concluido" | "arquivado";
+export type PrioridadeAnotacao = "baixa" | "normal" | "alta";
+
+export interface Anotacao {
+  id: string;
+  /** Dono (uid do Firebase Auth). Só ele lê e grava. */
+  usuarioId: string;
+  titulo: string;
+  descricao?: string | null;
+  status: StatusAnotacao;
+  prioridade: PrioridadeAnotacao;
+  /** Referências opcionais (só contexto: nunca alteram o projeto, a atividade ou o cronograma). */
+  projetoId?: string | null;
+  /** Id da atividade-raiz (fase) no escopo do projeto. */
+  faseId?: string | null;
+  /** Id da atividade (folha) no escopo do projeto. */
+  atividadeId?: string | null;
+  /** YYYY-MM-DD. */
+  dataLimite?: string | null;
+  /** Última vez que foi concluída (fica guardada mesmo se voltar para outro status). */
+  dataConclusao?: number | null;
+  /** Tags pessoais (só do dono). */
+  tags?: string[];
+  /** Posição no Kanban (menor = mais acima). */
+  ordem: number;
+  createdAt: number;
+  updatedAt: number;
+  /** Exclusão lógica: preenchido = excluída (não aparece mais). */
+  deletedAt?: number | null;
+  /**
+   * Lembretes no sino de notificações: com quantos dias de antecedência avisar (0 = no próprio dia). Pode ter vários
+   * (ex.: [2, 0] = 2 dias antes e no dia). Vazio/ausente = sem lembrete (padrão). Só vale com data limite.
+   */
+  lembretesDiasAntes?: number[] | null;
+  /** Formato antigo (um lembrete só); lido como [n]. Novas gravações usam lembretesDiasAntes. */
+  lembreteDiasAntes?: number | null;
+  /** Quando o dono marcou o lembrete como lido. Cada antecedência que chega faz o lembrete voltar como não lido. */
+  lembreteLidoEm?: number | null;
+}
+
+export interface HistoricoAnotacao {
+  id: string;
+  usuarioId: string;
+  acao: string;
+  valorAnterior?: string | null;
+  valorNovo?: string | null;
+  criadoEm: number;
+}
