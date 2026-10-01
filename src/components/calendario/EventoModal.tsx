@@ -82,7 +82,9 @@ export function EventoModal({
   const eraRejeitado = statusAtual === "rejeitado";
   // Apontamento já aprovado: o consultor não altera nem exclui (as regras do Firestore também bloqueiam).
   // Recurso do tipo coordenador se aprova sozinho, então continua podendo ajustar os próprios lançamentos.
-  const travadoPorAprovacao = souConsultorEditandoMeuEvento && statusAtual === "aprovado" && recurso?.tipo !== "coordenador";
+  // Hora retroativa (importada pelo administrador) é sempre só leitura para o consultor.
+  const travadoPorAprovacao =
+    souConsultorEditandoMeuEvento && statusAtual === "aprovado" && (recurso?.tipo !== "coordenador" || !!eventoEditando?.retroativo);
 
   const projetosDisponiveis = souConsultorEditandoMeuEvento
     ? projetos.filter((p) => p.consultorIds?.includes(meuRecursoId) && p.status !== "finalizado")
@@ -166,7 +168,6 @@ export function EventoModal({
         e.id !== eventoEditando?.id &&
         e.recursoId === recursoId &&
         e.data === dataEvento &&
-        !e.retroativo &&
         statusEfetivo(e) !== "cancelado" &&
         horaInicio < e.horaFim &&
         e.horaInicio < horaFim

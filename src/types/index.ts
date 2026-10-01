@@ -419,7 +419,7 @@ export interface EventoCalendario {
   reabertoPorNome?: string | null;
   reabertoEm?: number | null;
   motivoReabertura?: string | null;
-  /** Hora retroativa importada em lote: aprovada direto, some do calendário. */
+  /** Hora retroativa importada em lote: aprovada direto; aparece no calendário e nas horas aprovadas do consultor. */
   retroativo?: boolean;
   /** IDs das EscopoAtividade do projeto marcadas como realizadas nesse apontamento. */
   atividadesRealizadas?: string[] | null;

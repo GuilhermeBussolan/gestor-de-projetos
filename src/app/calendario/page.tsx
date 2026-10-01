@@ -123,7 +123,7 @@ function CalendarioPageContent() {
   function eventosDoDia(diaISO: string) {
     return eventos
       .filter(
-        (e) => !e.retroativo && e.data === diaISO && recursosVisiveis.some((r) => r.id === e.recursoId)
+        (e) => e.data === diaISO && recursosVisiveis.some((r) => r.id === e.recursoId)
       )
       .sort((a, b) => (a.horaInicio ?? "").localeCompare(b.horaInicio ?? ""));
   }
@@ -176,7 +176,6 @@ function CalendarioPageContent() {
     return eventos
       .filter(
         (e) =>
-          !e.retroativo &&
           e.data.startsWith(prefixo) &&
           recursosVisiveis.some((r) => r.id === e.recursoId) &&
           statusEfetivo(e) === "aprovado"
@@ -366,7 +365,7 @@ function CalendarioPageContent() {
                           className={`flex items-center gap-1 truncate rounded px-1.5 py-[3px] text-left text-[10.5px] leading-tight hover:brightness-95 ${
                             statusEv === "cancelado" ? "line-through" : ""
                           } ${statusEv === "previsto" ? "border border-dashed border-brand-border" : ""}`}
-                          title={`${ev.descricao ? ev.descricao + " · " : ""}${cfg.label}`}
+                          title={`${ev.descricao ? ev.descricao + " · " : ""}${cfg.label}${ev.retroativo ? " · hora retroativa (importada)" : ""}`}
                         >
                           {ev.origem === "recorrencia" && <Repeat size={9} className="shrink-0" />}
                           <span className="truncate">

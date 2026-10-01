@@ -57,9 +57,13 @@ function processar(
 
     const erros: string[] = [];
 
-    const recurso = recursos.find((r) => normalizar(r.nomeCompleto) === normalizar(nomeRecurso));
+    // O recurso define de quem é a hora (é por ele que o consultor enxerga no calendário e no histórico):
+    // nome repetido no cadastro poderia gravar no recurso errado, então bloqueia.
+    const mesmoNome = recursos.filter((r) => normalizar(r.nomeCompleto) === normalizar(nomeRecurso));
+    const recurso = mesmoNome.length === 1 ? mesmoNome[0] : undefined;
     if (!nomeRecurso) erros.push("Recurso vazio");
-    else if (!recurso) erros.push("Recurso não encontrado no cadastro");
+    else if (mesmoNome.length === 0) erros.push("Recurso não encontrado no cadastro");
+    else if (mesmoNome.length > 1) erros.push("Há mais de um recurso com esse nome no cadastro — ajuste o cadastro antes de importar");
 
     const projeto = projetos.find((p) => normalizar(p.codigoProposta) === normalizar(codigoProposta));
     if (!codigoProposta) {
@@ -142,8 +146,8 @@ export function ImportarHorasRetroativasModal({
           conferência), <strong>Data</strong> (DD/MM/AAAA), <strong>Hora Início</strong> (HH:MM),{" "}
           <strong>Hora Fim</strong> (HH:MM), <strong>Desconto</strong> (HH:MM, opcional — ex.: 01:00
           de almoço). O total de horas já sai calculado com o desconto aplicado, e cada linha entra
-          com status <strong>Aprovado</strong> direto. Essas horas não aparecem no Calendário — só
-          no histórico de Apontamento.
+          com status <strong>Aprovado</strong> direto. Elas aparecem para o consultor (e para quem vê a agenda
+          dele) no Calendário e no histórico de Apontamento (Horas aprovadas).
         </>
       }
       textoConfirmar="Importar horas"
