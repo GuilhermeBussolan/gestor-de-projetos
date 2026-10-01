@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { linhaCsv } from "@/lib/csv";
 import autoTable from "jspdf-autotable";
 import { saveAs } from "file-saver";
 import { classificarCenario, type CenarioComparativo } from "@/lib/comparativoHoras";
@@ -146,8 +147,8 @@ function linhasParaCelulas(linhas: LinhaRelatorioGrupo[]): string[][] {
 }
 
 export function exportarRelatorioCsv(linhas: LinhaRelatorioGrupo[]) {
-  const corpo = linhasParaCelulas(linhas).map((c) => c.map((v) => `"${v.replace(/"/g, '""')}"`).join(";"));
-  const csv = [CABECALHO.join(";"), ...corpo].join("\r\n");
+  const corpo = linhasParaCelulas(linhas).map(linhaCsv);
+  const csv = [linhaCsv(CABECALHO), ...corpo].join("\r\n");
   saveAs(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "previsto-x-realizado.csv");
 }
 

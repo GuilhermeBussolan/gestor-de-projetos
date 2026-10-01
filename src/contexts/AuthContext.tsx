@@ -19,6 +19,7 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { sincronizarDiretorio } from "@/lib/diretorio";
+import { registrarAtividade, useSaidaPorInatividade } from "@/lib/useSaidaPorInatividade";
 import type { Usuario } from "@/types";
 
 interface AuthContextValue {
@@ -31,6 +32,9 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+// Fora do componente para ser sempre a mesma função (o hook de inatividade depende dela).
+const sairDoFirebase = () => firebaseSignOut(auth);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -66,7 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, []);
 
+  // Sai sozinho depois de 8h sem atividade (computador compartilhado ou esquecido aberto).
+  useSaidaPorInatividade(!!firebaseUser, sairDoFirebase);
+
   async function login(email: string, senha: string) {
+    // Antes de entrar, para a sessão nova não ser tomada como "inativa" pelo horário da última visita.
+    registrarAtividade();
     const cred = await signInWithEmailAndPassword(auth, email, senha);
     // Conta no Auth sem perfil em "usuarios": não adianta manter a sessão aberta.
     const perfil = await getDoc(doc(db, "usuarios", cred.user.uid));

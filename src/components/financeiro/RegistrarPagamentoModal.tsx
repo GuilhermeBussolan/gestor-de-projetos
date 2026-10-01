@@ -48,7 +48,13 @@ export function RegistrarPagamentoModal({ f, onFechar }: { f: FechamentoParceiro
       onFechar();
     } catch (err) {
       console.error("Erro ao registrar o pagamento:", err);
-      setErro(comprovante ? MENSAGEM_ERRO_ARQUIVO : "Não foi possível registrar o pagamento. Tente novamente.");
+      setErro(
+        err instanceof Error && err.message.startsWith("Formato inválido")
+          ? err.message
+          : comprovante
+            ? MENSAGEM_ERRO_ARQUIVO
+            : "Não foi possível registrar o pagamento. Tente novamente."
+      );
     } finally {
       setSalvando(false);
     }

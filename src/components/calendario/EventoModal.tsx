@@ -80,6 +80,9 @@ export function EventoModal({
   const hojeISO = new Date().toISOString().slice(0, 10);
   const statusAtual = eventoEditando ? statusEfetivo(eventoEditando) : null;
   const eraRejeitado = statusAtual === "rejeitado";
+  // Apontamento já aprovado: o consultor não altera nem exclui (as regras do Firestore também bloqueiam).
+  // Recurso do tipo coordenador se aprova sozinho, então continua podendo ajustar os próprios lançamentos.
+  const travadoPorAprovacao = souConsultorEditandoMeuEvento && statusAtual === "aprovado" && recurso?.tipo !== "coordenador";
 
   const projetosDisponiveis = souConsultorEditandoMeuEvento
     ? projetos.filter((p) => p.consultorIds?.includes(meuRecursoId) && p.status !== "finalizado")
@@ -133,6 +136,7 @@ export function EventoModal({
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
+    if (travadoPorAprovacao) return;
     setErro("");
     if (!projetoId || !recursoId) return;
     if (souConsultorEditandoMeuEvento && dataEvento > hojeISO) {
@@ -252,6 +256,12 @@ export function EventoModal({
           >
             {STATUS_HORA_CONFIG[statusAtual].label}
           </span>
+        )}
+        {travadoPorAprovacao && (
+          <p className="rounded-md bg-[#e3f5ea] p-3 text-sm text-[#15754c]">
+            Este lançamento já foi <strong>aprovado</strong> e não pode mais ser alterado ou excluído por aqui. Se precisar de ajuste, peça ao
+            coordenador.
+          </p>
         )}
         {eraRejeitado && eventoEditando?.motivoRejeicao && (
           <p className="rounded-md bg-[#fdeceb] p-3 text-sm text-[#b5392a]">
@@ -428,7 +438,7 @@ export function EventoModal({
                   </Button>
                 </div>
               ) : (
-                <Button type="button" variant="danger" onClick={() => setConfirmandoExclusao(true)}>
+                <Button type="button" variant="danger" disabled={travadoPorAprovacao} onClick={() => setConfirmandoExclusao(true)}>
                   Excluir
                 </Button>
               ))}
@@ -437,7 +447,7 @@ export function EventoModal({
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={salvando || conflitosBloqueio.length > 0}>
+            <Button type="submit" disabled={salvando || conflitosBloqueio.length > 0 || travadoPorAprovacao}>
               {salvando ? "Salvando..." : eraRejeitado ? "Reenviar para aprovação" : "Salvar"}
             </Button>
           </div>

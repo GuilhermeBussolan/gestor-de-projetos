@@ -30,12 +30,43 @@ function lerComoBase64(arquivo: File): Promise<string> {
   });
 }
 
+/**
+ * Tipo REAL do arquivo pelos primeiros bytes (a "assinatura" de cada formato), sem confiar no que o navegador de quem
+ * enviou informou — senão uma página HTML com script poderia ser enviada como "PDF" e rodaria dentro do sistema ao
+ * ser aberta. Só estes três formatos abrem numa aba; qualquer outro arquivo é sempre baixado.
+ */
+type TipoSeguro = "application/pdf" | "image/png" | "image/jpeg";
+
+function tipoPelaAssinatura(bytes: Uint8Array): TipoSeguro | null {
+  const comeca = (...b: number[]) => b.every((v, i) => bytes[i] === v);
+  if (comeca(0x25, 0x50, 0x44, 0x46)) return "application/pdf"; // %PDF
+  if (comeca(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png";
+  if (comeca(0xff, 0xd8, 0xff)) return "image/jpeg";
+  return null;
+}
+
+/** O que cada tipo de arquivo do fechamento aceita: NF só PDF; comprovante PDF ou imagem; anexo do Financeiro, qualquer um. */
+const ACEITOS: Record<TipoArquivoFechamento, TipoSeguro[] | null> = {
+  nf: ["application/pdf"],
+  comprovante: ["application/pdf", "image/png", "image/jpeg"],
+  anexo: null,
+};
+
 /** Envia um arquivo (até 3 MB) e devolve os metadados a guardar no documento do fechamento (`path` = id do arquivo). */
 export async function enviarArquivo(
   contexto: { mesAno: string; parceiraId: string | null; tipo: TipoArquivoFechamento; autorUid: string },
   arquivo: File
 ): Promise<ArquivoFechamento> {
   if (arquivo.size > TAMANHO_MAXIMO_BYTES) throw new Error("O arquivo passa de 3 MB.");
+  const tipoReal = tipoPelaAssinatura(new Uint8Array(await arquivo.slice(0, 8).arrayBuffer()));
+  const aceitos = ACEITOS[contexto.tipo];
+  if (aceitos && (!tipoReal || !aceitos.includes(tipoReal))) {
+    throw new Error(
+      contexto.tipo === "nf"
+        ? "Formato inválido: a nota fiscal precisa ser um arquivo PDF."
+        : "Formato inválido: envie um PDF ou uma imagem (PNG ou JPG)."
+    );
+  }
   const base64 = await lerComoBase64(arquivo);
   const partes: string[] = [];
   for (let i = 0; i < base64.length; i += TAMANHO_PARTE) partes.push(base64.slice(i, i + TAMANHO_PARTE));
@@ -49,7 +80,8 @@ export async function enviarArquivo(
     tipo: contexto.tipo,
     nome: arquivo.name,
     tamanho: arquivo.size,
-    contentType: arquivo.type || "application/octet-stream",
+    // Gravado pelo conteúdo real; formatos fora da lista ficam como "arquivo genérico" (só para baixar).
+    contentType: tipoReal ?? "application/octet-stream",
     partes: partes.length,
     criadoEm: agora,
     criadoPorId: contexto.autorUid,
@@ -59,14 +91,18 @@ export async function enviarArquivo(
   return { nome: arquivo.name, path: ref.id, tamanho: arquivo.size, em: agora };
 }
 
-function base64ParaBlob(partes: string[], contentType: string): Blob {
+function base64ParaBytes(partes: string[]): Uint8Array<ArrayBuffer> {
   const binario = atob(partes.join(""));
   const bytes = new Uint8Array(binario.length);
   for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
-  return new Blob([bytes], { type: contentType });
+  return bytes;
 }
 
-/** Abre o arquivo em outra aba (reconstrói o conteúdo a partir das partes; o acesso segue as regras do Firestore). */
+/**
+ * Abre o arquivo (reconstrói o conteúdo a partir das partes; o acesso segue as regras do Firestore). PDF, PNG e JPG
+ * verdadeiros abrem numa aba; qualquer outro conteúdo — inclusive arquivos antigos gravados com um tipo "de fachada" —
+ * é baixado, nunca aberto, para não executar nada dentro do sistema.
+ */
 export async function abrirArquivo(arquivo: Pick<ArquivoFechamento, "path">): Promise<void> {
   // A aba é aberta antes da leitura para o navegador não bloquear como pop-up.
   const janela = window.open("", "_blank");
@@ -75,11 +111,24 @@ export async function abrirArquivo(arquivo: Pick<ArquivoFechamento, "path">): Pr
     const meta = await getDoc(ref);
     if (!meta.exists()) throw new Error("Arquivo não encontrado.");
     const partesSnap = await getDocs(query(collection(ref, "partes"), orderBy("n", "asc")));
-    const blob = base64ParaBlob(
-      partesSnap.docs.map((d) => String(d.data().dados ?? "")),
-      String(meta.data().contentType ?? "application/octet-stream")
-    );
-    const url = URL.createObjectURL(blob);
+    const bytes = base64ParaBytes(partesSnap.docs.map((d) => String(d.data().dados ?? "")));
+    const tipoReal = tipoPelaAssinatura(bytes);
+
+    if (!tipoReal) {
+      janela?.close();
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = String(meta.data().nome ?? "arquivo");
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60 * 1000);
+      return;
+    }
+
+    const url = URL.createObjectURL(new Blob([bytes], { type: tipoReal }));
     if (janela) janela.location.href = url;
     else window.location.href = url;
     setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000);

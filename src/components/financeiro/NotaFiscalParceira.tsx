@@ -113,7 +113,7 @@ export function NotaFiscalParceira({ f, titulo = "3. Nota fiscal" }: { f: Fecham
       setArquivo(null);
     } catch (err) {
       console.error("Erro ao enviar a nota fiscal:", err);
-      setErro(err instanceof Error && err.message.includes("3 MB") ? err.message : MENSAGEM_ERRO_ARQUIVO);
+      setErro(err instanceof Error && (err.message.includes("3 MB") || err.message.startsWith("Formato inválido")) ? err.message : MENSAGEM_ERRO_ARQUIVO);
     } finally {
       setEnviando(false);
     }

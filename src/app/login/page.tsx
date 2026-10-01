@@ -1,10 +1,20 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input, FormRow } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { CHAVE_SAIU_POR_INATIVIDADE } from "@/lib/useSaidaPorInatividade";
+
+const semInscricao = () => () => {};
+function lerSaiuPorInatividade() {
+  try {
+    return sessionStorage.getItem(CHAVE_SAIU_POR_INATIVIDADE) === "1";
+  } catch {
+    return false;
+  }
+}
 
 function mensagemErroLogin(err: unknown) {
   const code = (err as { code?: string } | null)?.code ?? "";
@@ -37,6 +47,8 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  // Aviso quando a sessão anterior foi encerrada por inatividade (no servidor, nunca mostra).
+  const saiuPorInatividade = useSyncExternalStore(semInscricao, lerSaiuPorInatividade, () => false);
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
@@ -44,6 +56,11 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, senha);
+      try {
+        sessionStorage.removeItem(CHAVE_SAIU_POR_INATIVIDADE);
+      } catch {
+        // sem armazenamento: nada a limpar
+      }
       router.push("/");
     } catch (err) {
       setErro(mensagemErroLogin(err));
@@ -61,6 +78,11 @@ export default function LoginPage() {
           <span className="mt-2.5 text-sm font-bold text-brand-navy-2">Gestor de Projetos</span>
         </div>
 
+        {saiuPorInatividade && (
+          <p className="mb-4 rounded-md bg-[#fff2de] px-3 py-2 text-[12.5px] font-medium text-[#a4650d]">
+            Sua sessão foi encerrada depois de 8 horas sem uso. Entre de novo para continuar.
+          </p>
+        )}
         <form onSubmit={handleLogin} className="space-y-4">
           <FormRow label="E-mail">
             <Input

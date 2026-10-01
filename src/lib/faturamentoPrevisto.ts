@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { linhaCsv } from "@/lib/csv";
 import autoTable from "jspdf-autotable";
 import { saveAs } from "file-saver";
 import { nomeExibicaoCliente } from "@/lib/cliente";
@@ -458,9 +459,9 @@ function rotuloArquivo(ano: AnoFiltro, meses: string[]): string {
 
 export function exportarMatrizCsv(linhas: LinhaMatrizAnual[], ano: AnoFiltro, meses: string[]) {
   const corpo = [...linhas.map(linhaMatrizParaCelulas), linhaTotalMatriz(linhas, meses.length)].map((c) =>
-    c.map((v) => `"${v.replace(/"/g, '""')}"`).join(";")
+    linhaCsv(c)
   );
-  const csv = [cabecalhoMatriz(ano, meses).join(";"), ...corpo].join("\r\n");
+  const csv = [linhaCsv(cabecalhoMatriz(ano, meses)), ...corpo].join("\r\n");
   saveAs(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), `faturamento-previsto-${rotuloArquivo(ano, meses)}.csv`);
 }
 

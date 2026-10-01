@@ -102,9 +102,16 @@ service cloud.firestore {
     // qualquer usuário logado cria, desde que se identifique como autor.
     match /notificacoes/{id} {
       allow read: if isSignedIn() && resource.data.destinatarioUid == request.auth.uid;
-      allow create: if isSignedIn() &&
+      // Só usuários da NG notificam, sempre no próprio nome (o nome vem do cadastro, não dá para se passar por outro),
+      // com os campos que o sistema usa, texto curto e um projeto que exista.
+      allow create: if isInterno() &&
+        request.resource.data.keys().hasOnly(
+          ['destinatarioUid', 'projetoId', 'projetoNome', 'contatoId', 'autorUid', 'autorNome', 'tipo', 'texto', 'criadoEm', 'lida']) &&
         request.resource.data.autorUid == request.auth.uid &&
-        request.resource.data.lida == false;
+        request.resource.data.autorNome == meuUsuario().get('nomeCompleto', '') &&
+        request.resource.data.lida == false &&
+        request.resource.data.texto is string && request.resource.data.texto.size() <= 200 &&
+        exists(/databases/$(database)/documents/projetos/$(request.resource.data.projetoId));
       allow update: if isSignedIn() &&
         resource.data.destinatarioUid == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lida']);
@@ -139,9 +146,12 @@ service cloud.firestore {
       // alocado naquele projeto (mas nunca editado/apagado depois).
       match /contatos/{contatoId} {
         allow read: if isInterno();
-        allow create: if isAdmin() || isCoordenador() ||
-          (isSignedIn() &&
-            meuRecursoId() in get(/databases/$(database)/documents/projetos/$(projetoId)).data.consultorIds);
+        // Cada registro fica no nome de quem está logado (não dá para escrever na linha do tempo como outra pessoa).
+        allow create: if request.resource.data.usuarioId == request.auth.uid &&
+          request.resource.data.usuarioNome == meuUsuario().get('nomeCompleto', '') &&
+          (isAdmin() || isCoordenador() ||
+            (isSignedIn() &&
+              meuRecursoId() in get(/databases/$(database)/documents/projetos/$(projetoId)).data.consultorIds));
         allow update, delete: if false;
       }
 
@@ -294,6 +304,28 @@ service cloud.firestore {
     // Calendário/apontamento unificados: cada consultor só enxerga e mexe nos
     // próprios eventos (onde recursoId é o recurso vinculado a ele); admin e
     // coordenador enxergam e gerenciam o calendário de todo mundo.
+    // Apontamentos: o consultor lança e confirma as próprias horas, mas quem APROVA é o coordenador/admin.
+    // Status que o consultor pode gravar (inclui os nomes antigos das recorrências).
+    function statusDoConsultor(d) {
+      return d.get('status', null) in ['previsto', 'aguardando_aprovacao', 'cancelado', 'pendente', 'cancelada'] ||
+        (d.get('status', null) == null && d.get('origem', '') != 'avulso');
+    }
+    // Apontamento já aprovado (avulso antigo sem status também conta como aprovado no sistema).
+    function apontamentoAprovado(d) {
+      return d.get('status', null) in ['aprovado', 'realizada'] ||
+        (d.get('status', null) == null && d.get('origem', '') == 'avulso');
+    }
+    // Recurso do tipo coordenador se aprova sozinho (regra de negócio do sistema).
+    function meuRecursoEhCoordenador() {
+      return meuRecursoId() != null &&
+        get(/databases/$(database)/documents/recursos/$(meuRecursoId())).data.get('tipo', '') == 'coordenador';
+    }
+    function gravacaoDoConsultorPermitida(d) {
+      return d.recursoId == meuRecursoId() &&
+        d.get('retroativo', false) != true &&
+        (statusDoConsultor(d) || meuRecursoEhCoordenador());
+    }
+
     match /eventosCalendario/{id} {
       // Além do próprio apontamento, um consultor também pode ler os apontamentos de outros
       // consultores DENTRO DE UM PROJETO em que ele esteja alocado — para ele enxergar o que já
@@ -307,11 +339,18 @@ service cloud.firestore {
       // Consultor não pode criar apontamento em projeto com status "finalizado"
       // (admin/coordenador continuam podendo, mesmo com o projeto finalizado).
       // .get() com padrão 'ativo' evita erro em projetos antigos sem o campo status.
+      // O consultor só cria com status de "lançado/aguardando" (nunca já aprovado ou retroativo).
       allow create: if isAdmin() || isCoordenador() ||
-        (isSignedIn() && request.resource.data.recursoId == meuRecursoId() &&
+        (isSignedIn() && gravacaoDoConsultorPermitida(request.resource.data) &&
           get(/databases/$(database)/documents/projetos/$(request.resource.data.projetoId)).data.get('status', 'ativo') != 'finalizado');
-      allow update, delete: if isAdmin() || isCoordenador() ||
-        (isSignedIn() && resource.data.recursoId == meuRecursoId());
+      // O consultor não mexe em apontamento já aprovado (nem para editar, nem para excluir) e não consegue se aprovar.
+      allow update: if isAdmin() || isCoordenador() ||
+        (isSignedIn() && resource.data.recursoId == meuRecursoId() &&
+          (!apontamentoAprovado(resource.data) || meuRecursoEhCoordenador()) &&
+          gravacaoDoConsultorPermitida(request.resource.data));
+      allow delete: if isAdmin() || isCoordenador() ||
+        (isSignedIn() && resource.data.recursoId == meuRecursoId() &&
+          (!apontamentoAprovado(resource.data) || meuRecursoEhCoordenador()));
     }
 
     // Bloqueios de agenda (férias, curso...): nenhum apontamento pode cair dentro deles.

@@ -552,14 +552,14 @@ function FechamentosPageContent() {
           anexos = await Promise.all(arquivos.map((a) => enviarArquivo({ mesAno, parceiraId: salvo.parceiraId, tipo: "anexo", autorUid: ator.uid }, a)));
         } catch (err) {
           console.error("Erro ao anexar documentos:", err);
-          throw new Error(err instanceof Error && err.message.includes("3 MB") ? err.message : MENSAGEM_ERRO_ARQUIVO);
+          throw new Error(err instanceof Error && (err.message.includes("3 MB") || err.message.startsWith("Formato inválido")) ? err.message : MENSAGEM_ERRO_ARQUIVO);
         }
         await liberarParceira({ mesAno, atual: salvo, ator, observacao: texto, anexos });
       } else await reabrirParceira({ mesAno, atual: salvo, de: grupoDaAcao.etapa, ator, motivo: texto });
       setAcao(null);
     } catch (err) {
       console.error("Erro na ação do fechamento:", err);
-      setErro(err instanceof Error && (err.message === MENSAGEM_ERRO_ARQUIVO || err.message.includes("3 MB") || err.message.includes("parceira")) ? err.message : "Não foi possível concluir a ação. Confira se as regras do Firestore foram publicadas e tente de novo.");
+      setErro(err instanceof Error && (err.message === MENSAGEM_ERRO_ARQUIVO || err.message.includes("3 MB") || err.message.startsWith("Formato inválido") || err.message.includes("parceira")) ? err.message : "Não foi possível concluir a ação. Confira se as regras do Firestore foram publicadas e tente de novo.");
       setAcao(null);
     } finally {
       setProcessando(false);
