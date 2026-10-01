@@ -23,6 +23,8 @@ import {
   calcularAtividadesConcluidas,
   calcularHorasRealizadas,
   calcularPercentualProjeto,
+  ehBancoDeHoras,
+  horasPrevistasDoProjeto,
   calcularRegistrosAtividades,
   resumoGruposRotina,
 } from "@/lib/dashboardCalc";
@@ -204,7 +206,7 @@ export function ProjetoDrawerConteudo({
         <div className="relative mb-2.5 flex items-end justify-between">
           <div>
             <div className="mb-1.5 text-[11px] font-bold tracking-[.1em] text-white/55 uppercase">
-              Andamento
+              {ehBancoDeHoras(projeto) && horasPrevistasDoProjeto(projeto) > 0 ? "Consumo do banco de horas" : "Andamento"}
             </div>
             <div className="text-[42px] leading-[.9] font-extrabold tracking-[-0.04em]">{percentual}%</div>
           </div>

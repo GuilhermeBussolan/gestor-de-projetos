@@ -3,16 +3,37 @@ import { apontamentoFinalizou, calcularProgressoFolhas, fracaoDaFolha, type Prog
 import { statusEfetivo } from "@/lib/statusHora";
 import type { AbaStatusProjeto, EscopoAtividade, EventoCalendario, Projeto, Recurso } from "@/types";
 
+/** Projeto de banco de horas (tipo de atendimento): o andamento é o consumo das horas contratadas. */
+export function ehBancoDeHoras(projeto: Pick<Projeto, "tipoAtendimento">): boolean {
+  return projeto.tipoAtendimento === "Banco de Horas";
+}
+
+/** Horas previstas do projeto (consultor + coordenador): no banco de horas, é o total contratado. */
+export function horasPrevistasDoProjeto(projeto: Pick<Projeto, "horasPrevistasConsultor" | "horasPrevistasCoordenador">): number {
+  return (projeto.horasPrevistasConsultor ?? 0) + (projeto.horasPrevistasCoordenador ?? 0);
+}
+
 /**
  * Percentual do projeto = andamento do escopo, não mais dos documentos (MITs): média do progresso de
  * cada atividade-folha — cada uma conta 1 a 1, sem pesar pela duração. Uma atividade finalizada vale
  * 100%; uma em andamento (apontada sem marcar "Finalizado") vale as horas apontadas sobre as previstas
  * (4h de 8h = 50%). Sem nenhuma atividade no escopo, o projeto é 0% (a iniciar).
+ *
+ * Banco de horas: o percentual é o consumo — horas aprovadas do projeto (consultor + coordenador) sobre as horas
+ * previstas, no máximo 100%. Sem horas previstas cadastradas, volta para o cálculo pelo escopo.
  */
 export function calcularPercentualProjeto(
-  projeto: Pick<Projeto, "id" | "escopoAtividades">,
+  projeto: Pick<Projeto, "id" | "escopoAtividades" | "tipoAtendimento" | "horasPrevistasConsultor" | "horasPrevistasCoordenador">,
   eventos: EventoCalendario[]
 ): number {
+  const previstas = horasPrevistasDoProjeto(projeto);
+  if (ehBancoDeHoras(projeto) && previstas > 0) {
+    const consumidas = eventos
+      .filter((e) => e.projetoId === projeto.id && statusEfetivo(e) === "aprovado")
+      .reduce((acc, e) => acc + e.totalHoras, 0);
+    return Math.round(Math.min(100, (consumidas / previstas) * 100) * 100) / 100;
+  }
+
   const atividades = projeto.escopoAtividades ?? [];
   const folhas = idsFolhas(atividades);
   const folhasEscopo = atividades.filter((a) => folhas.has(a.id));
