@@ -24,7 +24,7 @@ import { BolinhaContagem } from "@/components/ui/BolinhaContagem";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePendenciasAprovacao } from "@/lib/usePendenciasAprovacao";
 import { useFechamentoParceira } from "@/lib/useFechamentoParceira";
-import { useMeuFechamento } from "@/lib/useMeuFechamento";
+import { PERFIS_MEU_FECHAMENTO, useMeuFechamento } from "@/lib/useMeuFechamento";
 import { PERFIS_WORKSPACE } from "@/lib/workspace";
 import type { Perfil } from "@/types";
 
@@ -86,11 +86,11 @@ const OPERACAO: NavItem[] = [
     perfis: ["responsavel_parceira"],
   },
   {
-    // Consultor terceiro: confere e confirma as próprias horas do fechamento mensal (só aparece se ele tiver algum liberado).
+    // Consultor/coordenador terceiro: confere e confirma as próprias horas do fechamento mensal (só aparece se tiver algum liberado).
     href: "/meu-fechamento",
     label: "Meu fechamento",
     icon: Receipt,
-    perfis: ["consultor"],
+    perfis: PERFIS_MEU_FECHAMENTO,
   },
   {
     href: "/financeiro",

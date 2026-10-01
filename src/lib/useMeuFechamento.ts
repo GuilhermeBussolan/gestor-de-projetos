@@ -4,18 +4,21 @@ import { where } from "firebase/firestore";
 import { useCollection } from "@/lib/useCollection";
 import { useDocumentos } from "@/lib/useDocumentos";
 import { ehResponsavelNf, situacaoDaParceira } from "@/lib/fechamentoNf";
-import type { EmpresaParceira, FechamentoParceiro, ItemFechamento, Usuario } from "@/types";
+import type { EmpresaParceira, FechamentoParceiro, ItemFechamento, Perfil, Usuario } from "@/types";
+
+/** Quem confere as próprias horas no "Meu fechamento": o consultor e o coordenador terceiros (com recurso vinculado). */
+export const PERFIS_MEU_FECHAMENTO: Perfil[] = ["consultor", "coordenador"];
 
 /**
  * Os fechamentos já liberados do próprio consultor (terceiro), para ele conferir e confirmar as horas com o login dele,
- * e quantos ainda esperam a resposta dele. Só abre a escuta para o perfil consultor com recurso vinculado; consultor
+ * e quantos ainda esperam a resposta dele. Só abre a escuta para consultor/coordenador com recurso vinculado; recurso
  * interno nunca tem item de fechamento, então a lista dele fica sempre vazia.
  *
  * Quando o consultor é o contato 1 da parceira (quem envia a NF da empresa), também traz o fechamento da parceira de
  * cada mês, para ele acompanhar a confirmação dos colegas e enviar a nota fiscal.
  */
 export function useMeuFechamento(usuario: Usuario | null) {
-  const ativo = usuario?.perfil === "consultor" && !!usuario.recursoId;
+  const ativo = !!usuario && PERFIS_MEU_FECHAMENTO.includes(usuario.perfil) && !!usuario.recursoId;
   const { data, loading, erro } = useCollection<ItemFechamento>(
     "fechamentoItens",
     [where("recursoId", "==", usuario?.recursoId ?? ""), where("liberado", "==", true)],

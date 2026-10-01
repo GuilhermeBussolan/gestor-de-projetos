@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal";
 import { DocumentosDoFinanceiro, NotaFiscalParceira } from "@/components/financeiro/NotaFiscalParceira";
 import { useAuth } from "@/contexts/AuthContext";
-import { useMeuFechamento } from "@/lib/useMeuFechamento";
+import { PERFIS_MEU_FECHAMENTO, useMeuFechamento } from "@/lib/useMeuFechamento";
 import { responderConfirmacaoConsultor } from "@/lib/fechamentoDb";
 import { dataBR } from "@/lib/fechamento";
 import { formatarHoras } from "@/lib/horas";
@@ -292,7 +292,7 @@ function MeuFechamentoContent() {
 
 export default function MeuFechamentoPage() {
   return (
-    <ProtectedPage perfis={["consultor"]}>
+    <ProtectedPage perfis={PERFIS_MEU_FECHAMENTO}>
       <MeuFechamentoContent />
     </ProtectedPage>
   );
