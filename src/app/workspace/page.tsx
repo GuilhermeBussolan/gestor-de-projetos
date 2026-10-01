@@ -3,18 +3,34 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { where } from "firebase/firestore";
-import { Archive, Bell, CalendarClock, FolderKanban, LayoutGrid, List, Plus, Search, StickyNote, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  Archive,
+  CalendarDays,
+  FolderKanban,
+  LayoutGrid,
+  List,
+  Lock,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  StickyNote,
+  Trash2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Field";
 import { AnotacaoModal } from "@/components/workspace/AnotacaoModal";
 import { ListaAnotacoes } from "@/components/workspace/ListaAnotacoes";
 import { LixeiraModal } from "@/components/workspace/LixeiraModal";
+import { CartaoAnotacao } from "@/components/workspace/CartaoAnotacao";
+import { ICONE_STATUS } from "@/components/workspace/visual";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCollection } from "@/lib/useCollection";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import {
-  ATALHOS,
   COLUNAS_KANBAN,
   contextoDaAnotacao,
   estaAtrasada,
@@ -26,95 +42,30 @@ import {
   PRIORIDADES,
   resumoPorProjeto,
   STATUS_ANOTACAO,
-  antecedenciasDe,
   venceuNaLixeira,
+  type AtalhoWorkspace,
   type FiltrosWorkspace,
 } from "@/lib/workspace";
 import { arquivarAnotacao, criarAnotacao, excluirDefinitivamente, moverAnotacao } from "@/lib/workspaceDb";
 import type { Anotacao, Cliente, PrioridadeAnotacao, Projeto, StatusAnotacao } from "@/types";
 
-const dataCurta = (iso: string) => iso.split("-").reverse().slice(0, 2).join("/");
+type Visao = "kanban" | "lista" | "projetos";
+const VISOES: { id: Visao; label: string; icone: LucideIcon }[] = [
+  { id: "kanban", label: "Quadro", icone: LayoutGrid },
+  { id: "lista", label: "Lista", icone: List },
+  { id: "projetos", label: "Por projeto", icone: FolderKanban },
+];
 
-function CartaoAnotacao({
-  a,
-  contexto,
-  atrasada,
-  onAbrir,
-  onArquivar,
-  onArrastar,
-}: {
-  a: Anotacao;
-  contexto: { projeto: string | null; fase: string | null; atividade: string | null };
-  atrasada: boolean;
-  onAbrir: () => void;
-  onArquivar?: () => void;
-  onArrastar?: (e: React.DragEvent) => void;
-}) {
-  const prio = PRIORIDADE_ANOTACAO[a.prioridade];
-  return (
-    <div
-      draggable={!!onArrastar}
-      onDragStart={onArrastar}
-      onClick={onAbrir}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onAbrir()}
-      className={`cursor-pointer rounded-xl border bg-white p-3 shadow-[0_2px_8px_rgba(21,40,73,0.06)] transition-shadow hover:shadow-[0_6px_16px_rgba(21,40,73,0.1)] ${
-        atrasada ? "border-[#f3b8b0]" : "border-brand-border"
-      }`}
-    >
-      <p className={`text-[13.5px] leading-snug font-bold ${a.status === "concluido" || a.status === "arquivado" ? "text-brand-muted" : "text-brand-navy-2"}`}>
-        {a.titulo}
-      </p>
-      {contexto.projeto && (
-        <p className="mt-1 truncate text-[11.5px] text-brand-muted" title={[contexto.projeto, contexto.fase, contexto.atividade].filter(Boolean).join(" › ")}>
-          <FolderKanban size={11} className="mr-1 -mt-0.5 inline" />
-          {contexto.projeto}
-          {contexto.atividade ? ` › ${contexto.atividade}` : contexto.fase ? ` › ${contexto.fase}` : ""}
-        </p>
-      )}
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {a.prioridade !== "normal" && (
-          <span className="rounded-full px-2 py-0.5 text-[10.5px] font-bold" style={{ backgroundColor: prio.bg, color: prio.cor }}>
-            {prio.label}
-          </span>
-        )}
-        {a.dataLimite && (
-          <span
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
-              atrasada ? "bg-[#fdeceb] text-[#b5392a]" : "bg-brand-hover text-brand-muted"
-            }`}
-            title={`${atrasada ? "Atrasada" : "Data limite"}${antecedenciasDe(a).length > 0 ? " · com lembrete nas notificações" : ""}`}
-          >
-            <CalendarClock size={11} />
-            {atrasada ? `Atrasada · ${dataCurta(a.dataLimite)}` : dataCurta(a.dataLimite)}
-            {antecedenciasDe(a).length > 0 && <Bell size={10} />}
-          </span>
-        )}
-        {(a.tags ?? []).slice(0, 3).map((t) => (
-          <span key={t} className="rounded-full bg-brand-accent-soft px-2 py-0.5 text-[10.5px] font-semibold text-brand-accent">
-            #{t}
-          </span>
-        ))}
-        {(a.tags ?? []).length > 3 && <span className="text-[10.5px] text-brand-faint">+{(a.tags ?? []).length - 3}</span>}
-        {onArquivar && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onArquivar();
-            }}
-            className="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-brand-faint hover:bg-brand-hover hover:text-brand-navy-2"
-            title="Arquivar"
-          >
-            <Archive size={12} />
-            Arquivar
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
+/** Atalhos de prazo: cada um com a sua cor (vermelho = atrasado, âmbar = hoje). */
+const ATALHOS_PRAZO: { id: AtalhoWorkspace; label: string; icone: LucideIcon; ativo: string }[] = [
+  { id: "atrasadas", label: "Atrasadas", icone: AlertCircle, ativo: "border-[#f3b8b0] bg-[#fdeceb] text-[#b5392a]" },
+  { id: "hoje", label: "Vencem hoje", icone: CalendarDays, ativo: "border-[#f3dcb8] bg-[#fff2de] text-[#a4650d]" },
+  { id: "arquivado", label: "Arquivadas", icone: Archive, ativo: "border-brand-accent bg-brand-accent-soft text-brand-accent" },
+];
+
+const BOTAO_ICONE = "relative flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors";
+const BOTAO_ICONE_INATIVO = "border-brand-border bg-white text-brand-muted hover:bg-brand-hover";
+const BOTAO_ICONE_ATIVO = "border-brand-accent bg-brand-accent-soft text-brand-accent";
 
 function WorkspaceContent() {
   const { usuario } = useAuth();
@@ -125,7 +76,8 @@ function WorkspaceContent() {
   const { data: clientes } = useCollection<Cliente>("clientes");
 
   const [filtros, setFiltros] = useState<FiltrosWorkspace>(FILTROS_VAZIOS);
-  const [visao, setVisao] = useState<"kanban" | "lista" | "projetos">("kanban");
+  const [visao, setVisao] = useState<Visao>("kanban");
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [lixeiraAberta, setLixeiraAberta] = useState(false);
   const [editando, setEditando] = useState<Anotacao | null | "nova">(null);
   const [rapida, setRapida] = useState("");
@@ -189,9 +141,11 @@ function WorkspaceContent() {
     }
   }
 
-  const atrasadas = ativas.filter((a) => estaAtrasada(a, hojeIso)).length;
-  const pendentes = ativas.filter((a) => a.status === "a_fazer" || a.status === "em_andamento").length;
-  const concluidas = ativas.filter((a) => a.status === "concluido").length;
+  const contagemAtalho: Record<string, number> = {
+    atrasadas: ativas.filter((a) => estaAtrasada(a, hojeIso)).length,
+    hoje: ativas.filter((a) => a.dataLimite === hojeIso && a.status !== "concluido" && a.status !== "arquivado").length,
+    arquivado: ativas.filter((a) => a.status === "arquivado").length,
+  };
 
   /** Posição para ficar no topo da coluna. */
   const ordemTopo = (status: StatusAnotacao) => {
@@ -229,76 +183,132 @@ function WorkspaceContent() {
     }
   }
 
+  const concluir = (a: Anotacao) =>
+    void moverAnotacao(a, "concluido", ordemTopo("concluido")).catch(() => setErroAcao("Não foi possível concluir. Tente de novo."));
+  const arquivar = (a: Anotacao) => void arquivarAnotacao(a).catch(() => setErroAcao("Não foi possível arquivar. Tente de novo."));
+
   const alterarFiltro = <K extends keyof FiltrosWorkspace>(k: K, v: FiltrosWorkspace[K]) => setFiltros((f) => ({ ...f, [k]: v }));
+  const alternarAtalho = (id: AtalhoWorkspace) => alterarFiltro("atalho", filtros.atalho === id ? "todas" : id);
+  const filtrosExtras = [filtros.projetoId, filtros.prioridade, filtros.tag, filtros.prazoAte].filter(Boolean).length;
   const temFiltro = JSON.stringify(filtros) !== JSON.stringify(FILTROS_VAZIOS);
   const verArquivadas = filtros.atalho === "arquivado";
 
   return (
     <div>
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">
-          <StickyNote size={20} className="text-brand-accent" />
-          Meu Workspace
-        </h1>
+      {/* Cabeçalho */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">
+            <StickyNote size={20} className="text-brand-accent" />
+            Meu Workspace
+          </h1>
+          <p
+            className="mt-0.5 flex items-center gap-1 text-[12.5px] text-brand-muted"
+            title="Nem o administrador nem os colegas têm acesso. Vincular a um projeto não muda isso nem altera o projeto."
+          >
+            <Lock size={12} />
+            Anotações privadas — só você vê
+          </p>
+        </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setLixeiraAberta(true)}
+            aria-label={`Lixeira (${naLixeira.length})`}
+            title="Lixeira — o que você exclui fica 15 dias aqui"
+            className={`${BOTAO_ICONE} ${BOTAO_ICONE_INATIVO}`}
+          >
+            <Trash2 size={17} />
+            {naLixeira.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-navy-2 px-1 text-[10px] font-bold text-white">
+                {naLixeira.length}
+              </span>
+            )}
+          </button>
+          <Button onClick={() => setEditando("nova")}>
+            <Plus size={16} />
+            Nova anotação
+          </Button>
+        </div>
+      </div>
+
+      {/* Barra: visões, busca, atalhos e filtros */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="flex overflow-hidden rounded-[10px] border border-brand-border bg-white">
+          {VISOES.map((v, i) => {
+            const Icone = v.icone;
+            const ativa = visao === v.id;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setVisao(v.id)}
+                aria-pressed={ativa}
+                className={`flex h-10 items-center gap-1.5 px-3.5 text-[13px] font-semibold transition-colors ${i > 0 ? "border-l border-brand-border" : ""} ${
+                  ativa ? "bg-brand-accent-soft text-brand-accent" : "text-brand-muted hover:bg-brand-hover"
+                }`}
+              >
+                <Icone size={15} />
+                {v.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="relative w-64 max-w-full">
+          <Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-brand-faint" />
+          <Input value={filtros.busca} onChange={(e) => alterarFiltro("busca", e.target.value)} placeholder="Buscar…" className="pl-9" />
+        </div>
         <button
           type="button"
-          onClick={() => setLixeiraAberta(true)}
-          aria-label={`Lixeira (${naLixeira.length})`}
-          title="Lixeira — anotações excluídas ficam 15 dias e depois são apagadas"
-          className="relative flex h-10 w-10 items-center justify-center rounded-[10px] border border-brand-border bg-white text-brand-muted transition-colors hover:bg-brand-hover"
+          onClick={() => setFiltrosAbertos((v) => !v)}
+          aria-pressed={filtrosAbertos}
+          aria-label="Filtros"
+          title="Filtrar por projeto, prioridade, tag ou prazo"
+          className={`${BOTAO_ICONE} ${filtrosAbertos || filtrosExtras > 0 ? BOTAO_ICONE_ATIVO : BOTAO_ICONE_INATIVO}`}
         >
-          <Trash2 size={17} />
-          {naLixeira.length > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-navy-2 px-1 text-[10px] font-bold text-white">
-              {naLixeira.length}
+          <SlidersHorizontal size={17} />
+          {filtrosExtras > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-accent px-1 text-[10px] font-bold text-white">
+              {filtrosExtras}
             </span>
           )}
         </button>
-        <Button onClick={() => setEditando("nova")}>
-          <Plus size={16} />
-          Nova anotação
-        </Button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {ATALHOS_PRAZO.map((at) => {
+            const Icone = at.icone;
+            const ativo = filtros.atalho === at.id;
+            const n = contagemAtalho[at.id] ?? 0;
+            return (
+              <button
+                key={at.id}
+                type="button"
+                onClick={() => alternarAtalho(at.id)}
+                aria-pressed={ativo}
+                className={`flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-semibold transition-colors ${
+                  ativo ? at.ativo : "border-brand-border bg-white text-brand-muted hover:bg-brand-hover"
+                }`}
+              >
+                <Icone size={13} />
+                {at.label}
+                <span className={`font-bold ${n > 0 && at.id === "atrasadas" && !ativo ? "text-[#b5392a]" : ""}`}>{n}</span>
+              </button>
+            );
+          })}
         </div>
+        {temFiltro && (
+          <button
+            type="button"
+            onClick={() => setFiltros(FILTROS_VAZIOS)}
+            className="flex items-center gap-1 text-[12.5px] font-semibold text-brand-accent hover:underline"
+          >
+            <X size={13} />
+            Limpar
+          </button>
+        )}
       </div>
-      <p className="mb-4 text-sm text-brand-muted">
-        Suas anotações pessoais — lembretes, pendências e observações. <strong>Só você vê</strong>: nem o administrador nem os colegas do projeto têm acesso,
-        e vincular a um projeto não muda isso nem altera o projeto.
-      </p>
 
-      {/* Resumo */}
-      <div className="mb-4 flex flex-wrap gap-2.5 text-[13px]">
-        <button type="button" onClick={() => alterarFiltro("atalho", "atrasadas")} className="rounded-xl border border-[#f3b8b0] bg-[#fdeceb] px-3.5 py-2 font-bold text-[#b5392a] hover:brightness-95">
-          {atrasadas} atrasada{atrasadas === 1 ? "" : "s"}
-        </button>
-        <button type="button" onClick={() => alterarFiltro("atalho", "todas")} className="rounded-xl border border-[#f3dcb8] bg-[#fff2de] px-3.5 py-2 font-bold text-[#a4650d] hover:brightness-95">
-          {pendentes} pendente{pendentes === 1 ? "" : "s"}
-        </button>
-        <button type="button" onClick={() => alterarFiltro("atalho", "concluido")} className="rounded-xl border border-[#b9e2cb] bg-[#e3f5ea] px-3.5 py-2 font-bold text-[#15754c] hover:brightness-95">
-          {concluidas} concluída{concluidas === 1 ? "" : "s"}
-        </button>
-      </div>
-
-      {/* Criação rápida */}
-      <form onSubmit={criarRapida} className="mb-4 flex gap-2">
-        <div className="min-w-0 flex-1">
-          <Input value={rapida} onChange={(e) => setRapida(e.target.value)} maxLength={200} placeholder="Anotar algo rápido… ex.: Verificar erro de integração do TAF (Enter para salvar)" />
-        </div>
-        <Button type="submit" variant="secondary" disabled={!rapida.trim() || salvandoRapida}>
-          {salvandoRapida ? "Salvando..." : "Anotar"}
-        </Button>
-      </form>
-      {(erroAcao || erro) && (
-        <p className="mb-3 rounded-md bg-[#fdeceb] p-3 text-[13px] text-[#b5392a]">{erroAcao || "Não foi possível carregar suas anotações. Confira se as regras do Firestore foram publicadas."}</p>
-      )}
-
-      {/* Busca, atalhos e filtros */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative w-72 max-w-full">
-          <Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-brand-faint" />
-          <Input value={filtros.busca} onChange={(e) => alterarFiltro("busca", e.target.value)} placeholder="Buscar em título, descrição, projeto, tags…" className="pl-9" />
-        </div>
-        <div className="w-56">
+      {filtrosAbertos && (
+        <div className="mb-3 grid grid-cols-1 gap-2 rounded-2xl border border-brand-border bg-white p-3 shadow-card sm:grid-cols-2 lg:grid-cols-4">
           <Select value={filtros.projetoId} onChange={(e) => alterarFiltro("projetoId", e.target.value)} aria-label="Projeto">
             <option value="">Todos os projetos</option>
             <option value="sem">Sem projeto</option>
@@ -308,87 +318,37 @@ function WorkspaceContent() {
               </option>
             ))}
           </Select>
-        </div>
-        <div className="w-40">
           <Select value={filtros.prioridade} onChange={(e) => alterarFiltro("prioridade", e.target.value as "" | PrioridadeAnotacao)} aria-label="Prioridade">
-            <option value="">Toda prioridade</option>
+            <option value="">Qualquer prioridade</option>
             {PRIORIDADES.map((p) => (
               <option key={p} value={p}>
-                {PRIORIDADE_ANOTACAO[p].label}
+                Prioridade {PRIORIDADE_ANOTACAO[p].label.toLowerCase()}
               </option>
             ))}
           </Select>
-        </div>
-        <div className="w-40">
-          <Select value={filtros.tag} onChange={(e) => alterarFiltro("tag", e.target.value)} aria-label="Tag">
-            <option value="">Todas as tags</option>
+          <Select value={filtros.tag} onChange={(e) => alterarFiltro("tag", e.target.value)} aria-label="Tag" disabled={sugestoesTags.length === 0}>
+            <option value="">{sugestoesTags.length === 0 ? "Nenhuma tag criada" : "Todas as tags"}</option>
             {sugestoesTags.map((t) => (
               <option key={t} value={t}>
                 #{t}
               </option>
             ))}
           </Select>
+          <label className="flex items-center gap-2 text-[12.5px] whitespace-nowrap text-brand-muted">
+            Prazo até
+            <Input type="date" value={filtros.prazoAte} onChange={(e) => alterarFiltro("prazoAte", e.target.value)} />
+          </label>
         </div>
-        <label className="flex items-center gap-1.5 text-[12.5px] text-brand-muted">
-          Prazo até
-          <Input type="date" value={filtros.prazoAte} onChange={(e) => alterarFiltro("prazoAte", e.target.value)} className="w-40" />
-        </label>
-        {temFiltro && (
-          <button type="button" onClick={() => setFiltros(FILTROS_VAZIOS)} className="text-[12.5px] font-semibold text-brand-accent hover:underline">
-            Limpar filtros
-          </button>
-        )}
-      </div>
-      <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        {ATALHOS.map((at) => {
-          const ativo = filtros.atalho === at.id;
-          return (
-            <button
-              key={at.id}
-              type="button"
-              onClick={() => alterarFiltro("atalho", at.id)}
-              aria-pressed={ativo}
-              className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold transition-colors ${
-                ativo ? "border-brand-accent bg-brand-accent-soft text-brand-accent" : "border-brand-border bg-white text-brand-muted hover:bg-brand-hover"
-              }`}
-            >
-              {at.label}
-            </button>
-          );
-        })}
-        <div className="ml-auto flex overflow-hidden rounded-[10px] border border-brand-border bg-white">
-          <button
-            type="button"
-            onClick={() => setVisao("kanban")}
-            aria-pressed={visao === "kanban"}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-semibold ${visao === "kanban" ? "bg-brand-accent-soft text-brand-accent" : "text-brand-muted hover:bg-brand-hover"}`}
-          >
-            <LayoutGrid size={14} />
-            Kanban
-          </button>
-          <button
-            type="button"
-            onClick={() => setVisao("lista")}
-            aria-pressed={visao === "lista"}
-            className={`flex items-center gap-1.5 border-l border-brand-border px-3 py-1.5 text-[12.5px] font-semibold ${visao === "lista" ? "bg-brand-accent-soft text-brand-accent" : "text-brand-muted hover:bg-brand-hover"}`}
-          >
-            <List size={14} />
-            Lista
-          </button>
-          <button
-            type="button"
-            onClick={() => setVisao("projetos")}
-            aria-pressed={visao === "projetos"}
-            className={`flex items-center gap-1.5 border-l border-brand-border px-3 py-1.5 text-[12.5px] font-semibold ${visao === "projetos" ? "bg-brand-accent-soft text-brand-accent" : "text-brand-muted hover:bg-brand-hover"}`}
-          >
-            <FolderKanban size={14} />
-            Meus projetos
-          </button>
-        </div>
-      </div>
+      )}
+
+      {(erroAcao || erro) && (
+        <p className="mb-3 rounded-md bg-[#fdeceb] p-3 text-[13px] text-[#b5392a]">
+          {erroAcao || "Não foi possível carregar suas anotações. Confira se as regras do Firestore foram publicadas."}
+        </p>
+      )}
 
       {visao === "lista" ? (
-        <ListaAnotacoes anotacoes={filtradas} contextoDe={contextoDe} atrasada={(a) => estaAtrasada(a, hojeIso)} onAbrir={(a) => setEditando(a)} />
+        <ListaAnotacoes anotacoes={filtradas} contextoDe={contextoDe} hojeIso={hojeIso} onAbrir={(a) => setEditando(a)} />
       ) : visao === "projetos" ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {resumoPorProjeto(ativas)
@@ -396,6 +356,7 @@ function WorkspaceContent() {
             .map((r) => {
               const projeto = r.projetoId ? projetos.find((p) => p.id === r.projetoId) : undefined;
               const nome = r.projetoId ? (projeto ? nomeProjeto(projeto) : "Projeto removido") : "Sem projeto";
+              const status = (Object.keys(STATUS_ANOTACAO) as StatusAnotacao[]).filter((s) => r.porStatus[s] > 0);
               return (
                 <button
                   key={r.projetoId ?? "sem"}
@@ -404,24 +365,38 @@ function WorkspaceContent() {
                     setFiltros({ ...FILTROS_VAZIOS, projetoId: r.projetoId ?? "sem" });
                     setVisao("kanban");
                   }}
-                  className="rounded-2xl border border-brand-border bg-white p-4 text-left shadow-card hover:bg-brand-hover/60"
+                  title="Ver as anotações deste projeto no quadro"
+                  className="rounded-2xl border border-brand-border bg-white p-4 text-left shadow-card transition-colors hover:bg-brand-hover/60"
                 >
-                  <p className="truncate text-[14px] font-extrabold text-brand-navy-2">{nome}</p>
-                  <p className="mb-2 text-[12px] text-brand-muted">
-                    {r.total} anotaç{r.total === 1 ? "ão" : "ões"}
-                  </p>
-                  <ul className="space-y-0.5 text-[12.5px]">
-                    {(Object.keys(STATUS_ANOTACAO) as StatusAnotacao[])
-                      .filter((s) => r.porStatus[s] > 0)
-                      .map((s) => (
-                        <li key={s} className="flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: STATUS_ANOTACAO[s].cor }} />
-                          <span className="text-brand-navy-2">
-                            {r.porStatus[s]} {STATUS_ANOTACAO[s].label.toLowerCase()}
-                          </span>
-                        </li>
-                      ))}
-                  </ul>
+                  <div className="mb-3 flex items-start gap-2.5">
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${r.projetoId ? "bg-brand-accent-soft text-brand-accent" : "bg-brand-hover text-brand-faint"}`}
+                    >
+                      <FolderKanban size={16} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-[14px] font-extrabold text-brand-navy-2">{nome}</p>
+                      <p className="text-[12px] text-brand-muted">
+                        {r.total} anotaç{r.total === 1 ? "ão" : "ões"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mb-2 flex h-1.5 overflow-hidden rounded-full bg-brand-hover">
+                    {status.map((s) => (
+                      <span key={s} style={{ width: `${(r.porStatus[s] / r.total) * 100}%`, backgroundColor: STATUS_ANOTACAO[s].cor }} />
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px]">
+                    {status.map((s) => {
+                      const Icone = ICONE_STATUS[s];
+                      return (
+                        <span key={s} className="flex items-center gap-1 font-semibold" style={{ color: STATUS_ANOTACAO[s].cor }}>
+                          <Icone size={12} />
+                          {r.porStatus[s]} {STATUS_ANOTACAO[s].label.toLowerCase()}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </button>
               );
             })}
@@ -434,9 +409,11 @@ function WorkspaceContent() {
             Arquivadas ({filtradas.length})
           </p>
           <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
-            {[...filtradas].sort((a, b) => b.updatedAt - a.updatedAt).map((a) => (
-              <CartaoAnotacao key={a.id} a={a} contexto={contextoDe(a)} atrasada={false} onAbrir={() => setEditando(a)} />
-            ))}
+            {[...filtradas]
+              .sort((a, b) => b.updatedAt - a.updatedAt)
+              .map((a) => (
+                <CartaoAnotacao key={a.id} a={a} projeto={contextoDe(a).projeto} hojeIso={hojeIso} onAbrir={() => setEditando(a)} />
+              ))}
           </div>
           {filtradas.length === 0 && <p className="text-[13px] text-brand-faint">Nenhuma anotação arquivada.</p>}
         </div>
@@ -444,6 +421,7 @@ function WorkspaceContent() {
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
           {COLUNAS_KANBAN.map((status) => {
             const cfg = STATUS_ANOTACAO[status];
+            const Icone = ICONE_STATUS[status];
             const cartoes = filtradas.filter((a) => a.status === status).sort(porOrdem);
             const alvo = colunaAlvo === status && !!arrastando;
             return (
@@ -460,15 +438,36 @@ function WorkspaceContent() {
                   e.preventDefault();
                   void soltar(status, null);
                 }}
-                className={`flex min-h-[320px] flex-col rounded-2xl border p-3 transition-colors ${alvo ? "border-brand-accent bg-brand-accent-soft/40" : "border-brand-border bg-brand-hover/40"}`}
+                className={`flex min-h-[340px] flex-col rounded-2xl border border-t-[3px] p-3 transition-colors ${
+                  alvo ? "border-brand-accent bg-brand-accent-soft/40" : "border-brand-border bg-brand-hover/40"
+                }`}
+                style={alvo ? undefined : { borderTopColor: cfg.cor }}
               >
-                <div className="mb-2.5 flex items-center justify-between">
-                  <p className="flex items-center gap-2 text-[11.5px] font-bold tracking-[.08em] uppercase" style={{ color: cfg.cor }}>
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cfg.cor }} />
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="flex items-center gap-1.5 text-[13px] font-bold" style={{ color: cfg.cor }}>
+                    <Icone size={15} />
                     {cfg.label}
                   </p>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-brand-muted">{cartoes.length}</span>
+                  <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: cfg.bg, color: cfg.cor }}>
+                    {cartoes.length}
+                  </span>
                 </div>
+                {status === "a_fazer" && (
+                  <form onSubmit={criarRapida} className="mb-2">
+                    <div className="relative">
+                      <Plus size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-brand-faint" />
+                      <input
+                        value={rapida}
+                        onChange={(e) => setRapida(e.target.value)}
+                        maxLength={200}
+                        disabled={salvandoRapida}
+                        placeholder="Anotar algo rápido e tecle Enter"
+                        aria-label="Anotação rápida"
+                        className="h-10 w-full rounded-xl border border-dashed border-[#cfd5e2] bg-white/70 pr-3 pl-9 text-[13px] text-brand-navy-2 outline-none placeholder:text-brand-faint focus:border-brand-accent focus:bg-white"
+                      />
+                    </div>
+                  </form>
+                )}
                 <div className="flex flex-1 flex-col gap-2">
                   {cartoes.map((a) => (
                     <div
@@ -483,10 +482,11 @@ function WorkspaceContent() {
                     >
                       <CartaoAnotacao
                         a={a}
-                        contexto={contextoDe(a)}
-                        atrasada={estaAtrasada(a, hojeIso)}
+                        projeto={contextoDe(a).projeto}
+                        hojeIso={hojeIso}
                         onAbrir={() => setEditando(a)}
-                        onArquivar={status === "concluido" ? () => void arquivarAnotacao(a).catch(() => setErroAcao("Não foi possível arquivar. Tente de novo.")) : undefined}
+                        onConcluir={status !== "concluido" ? () => concluir(a) : undefined}
+                        onArquivar={status === "concluido" ? () => arquivar(a) : undefined}
                         onArrastar={(e) => {
                           e.dataTransfer.effectAllowed = "move";
                           e.dataTransfer.setData("text/plain", a.id);
@@ -496,8 +496,8 @@ function WorkspaceContent() {
                     </div>
                   ))}
                   {cartoes.length === 0 && (
-                    <p className="rounded-xl border border-dashed border-brand-border p-4 text-center text-[12px] text-brand-faint">
-                      {loading ? "Carregando…" : arrastando ? "Solte aqui" : "Nada por aqui"}
+                    <p className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-brand-border p-4 text-center text-[12px] text-brand-faint">
+                      {loading ? "Carregando…" : arrastando ? "Solte aqui" : status === "a_fazer" ? "Nada pendente" : "Arraste um cartão para cá"}
                     </p>
                   )}
                 </div>

@@ -100,13 +100,9 @@ export type AtalhoWorkspace = "todas" | "hoje" | "atrasadas" | "a_fazer" | "em_a
 
 export const ATALHOS: { id: AtalhoWorkspace; label: string }[] = [
   { id: "todas", label: "Todas" },
-  { id: "hoje", label: "Hoje" },
+  { id: "hoje", label: "Vencem hoje" },
   { id: "atrasadas", label: "Atrasadas" },
-  { id: "a_fazer", label: "A fazer" },
-  { id: "em_andamento", label: "Em andamento" },
-  { id: "concluido", label: "Concluídas" },
   { id: "arquivado", label: "Arquivadas" },
-  { id: "sem_projeto", label: "Sem projeto" },
 ];
 
 export interface FiltrosWorkspace {
@@ -135,7 +131,7 @@ export function filtrarAnotacoes(
   const termo = semAcento(filtros.busca.trim());
   return anotacoes.filter((a) => {
     if (filtros.atalho === "arquivado" ? a.status !== "arquivado" : a.status === "arquivado") return false;
-    if (filtros.atalho === "hoje" && a.dataLimite !== hojeIso) return false;
+    if (filtros.atalho === "hoje" && (a.dataLimite !== hojeIso || estaFinalizada(a))) return false;
     if (filtros.atalho === "atrasadas" && !estaAtrasada(a, hojeIso)) return false;
     if ((filtros.atalho === "a_fazer" || filtros.atalho === "em_andamento" || filtros.atalho === "concluido") && a.status !== filtros.atalho) return false;
     if (filtros.atalho === "sem_projeto" && a.projetoId) return false;

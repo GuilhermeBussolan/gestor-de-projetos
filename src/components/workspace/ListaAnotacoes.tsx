@@ -2,16 +2,15 @@
 
 import { useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { PRIORIDADE_ANOTACAO, STATUS_ANOTACAO } from "@/lib/workspace";
+import { STATUS_ANOTACAO } from "@/lib/workspace";
+import { ChipPrazo, ChipPrioridade, ICONE_STATUS } from "@/components/workspace/visual";
 import type { Anotacao, PrioridadeAnotacao, StatusAnotacao } from "@/types";
 
 type Contexto = { projeto: string | null; fase: string | null; atividade: string | null };
-type Coluna = "titulo" | "status" | "prioridade" | "projeto" | "dataLimite" | "atualizada";
+type Coluna = "titulo" | "status" | "prioridade" | "projeto" | "dataLimite";
 
 const ORDEM_STATUS: Record<StatusAnotacao, number> = { a_fazer: 0, em_andamento: 1, concluido: 2, arquivado: 3 };
 const ORDEM_PRIORIDADE: Record<PrioridadeAnotacao, number> = { alta: 0, normal: 1, baixa: 2 };
-const dataBR = (iso: string) => iso.split("-").reverse().join("/");
-const dataHoraCurta = (ms: number) => new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 type EstadoOrdem = { coluna: Coluna; asc: boolean };
 
@@ -47,12 +46,12 @@ function Cabecalho({
 export function ListaAnotacoes({
   anotacoes,
   contextoDe,
-  atrasada,
+  hojeIso,
   onAbrir,
 }: {
   anotacoes: Anotacao[];
   contextoDe: (a: Anotacao) => Contexto;
-  atrasada: (a: Anotacao) => boolean;
+  hojeIso: string;
   onAbrir: (a: Anotacao) => void;
 }) {
   const [ordem, setOrdem] = useState<EstadoOrdem>({ coluna: "status", asc: true });
@@ -63,8 +62,7 @@ export function ListaAnotacoes({
     if (c === "status") return ORDEM_STATUS[a.status];
     if (c === "prioridade") return ORDEM_PRIORIDADE[a.prioridade];
     if (c === "projeto") return (contextoDe(a).projeto ?? "￿").toLowerCase();
-    if (c === "dataLimite") return a.dataLimite ?? "9999-12-31";
-    return -a.updatedAt;
+    return a.dataLimite ?? "9999-12-31";
   };
   const linhas = [...anotacoes].sort((x, y) => {
     const a = valor(x, ordem.coluna);
@@ -82,18 +80,16 @@ export function ListaAnotacoes({
               <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="titulo">Título</Cabecalho>
               <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="status">Status</Cabecalho>
               <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="prioridade">Prioridade</Cabecalho>
-              <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="projeto">Projeto › fase/atividade</Cabecalho>
-              <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="dataLimite">Data limite</Cabecalho>
+              <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="projeto">Projeto</Cabecalho>
+              <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="dataLimite">Prazo</Cabecalho>
               <th className="px-3 py-2.5 uppercase">Tags</th>
-              <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="atualizada">Atualizada</Cabecalho>
             </tr>
           </thead>
           <tbody>
             {linhas.map((a) => {
               const ctx = contextoDe(a);
               const st = STATUS_ANOTACAO[a.status];
-              const pr = PRIORIDADE_ANOTACAO[a.prioridade];
-              const atraso = atrasada(a);
+              const IconeStatus = ICONE_STATUS[a.status];
               return (
                 <tr
                   key={a.id}
@@ -107,28 +103,24 @@ export function ListaAnotacoes({
                     {a.descricao && <p className="truncate text-[11.5px] text-brand-faint">{a.descricao}</p>}
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
-                    <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: st.bg, color: st.cor }}>
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: st.bg, color: st.cor }}>
+                      <IconeStatus size={11} />
                       {st.label}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
-                    <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: pr.bg, color: pr.cor }}>
-                      {pr.label}
-                    </span>
+                    <ChipPrioridade a={a} sempre />
                   </td>
                   <td className="max-w-[300px] px-3 py-2.5 text-brand-muted">
                     {ctx.projeto ? (
                       <span className="block truncate" title={[ctx.projeto, ctx.fase, ctx.atividade].filter(Boolean).join(" › ")}>
                         {ctx.projeto}
-                        {ctx.atividade ? ` › ${ctx.atividade}` : ctx.fase ? ` › ${ctx.fase}` : ""}
                       </span>
                     ) : (
                       <span className="text-brand-faint">—</span>
                     )}
                   </td>
-                  <td className={`px-3 py-2.5 whitespace-nowrap ${atraso ? "font-bold text-[#b5392a]" : "text-brand-muted"}`}>
-                    {a.dataLimite ? `${dataBR(a.dataLimite)}${atraso ? " · atrasada" : ""}` : "—"}
-                  </td>
+                  <td className="px-3 py-2.5">{a.dataLimite ? <ChipPrazo a={a} hojeIso={hojeIso} /> : <span className="text-brand-faint">—</span>}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex flex-wrap gap-1">
                       {(a.tags ?? []).map((t) => (
@@ -138,13 +130,12 @@ export function ListaAnotacoes({
                       ))}
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-[12px] text-brand-faint">{dataHoraCurta(a.updatedAt)}</td>
                 </tr>
               );
             })}
             {linhas.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-brand-faint">
+                <td colSpan={6} className="px-4 py-8 text-center text-brand-faint">
                   Nenhuma anotação com esses filtros.
                 </td>
               </tr>

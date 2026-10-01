@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { orderBy } from "firebase/firestore";
-import { Archive, Bell, History, RotateCcw, Trash2, X } from "lucide-react";
+import { Archive, Bell, Check, CircleCheck, Flag, History, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { useCollection } from "@/lib/useCollection";
+import { ICONE_STATUS } from "@/components/workspace/visual";
 import {
   atividadesDoContexto,
+  COLUNAS_KANBAN,
   faseDaAtividade,
   fasesDoProjeto,
   antecedenciasDe,
@@ -22,6 +24,8 @@ import {
 } from "@/lib/workspace";
 import { arquivarAnotacao, atualizarAnotacao, criarAnotacao, excluirAnotacao, restaurarAnotacao, type NomesContexto } from "@/lib/workspaceDb";
 import type { Anotacao, HistoricoAnotacao, PrioridadeAnotacao, Projeto, StatusAnotacao } from "@/types";
+
+const ACAO_ICONE = "flex h-9 w-9 items-center justify-center rounded-[10px] text-brand-faint transition-colors hover:bg-brand-hover hover:text-brand-navy-2 disabled:opacity-50";
 
 const dataHora = (ms: number) => new Date(ms).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
@@ -183,29 +187,73 @@ export function AnotacaoModal({
   }
 
   const arquivada = anotacao?.status === "arquivado";
-  // Status escolhíveis no formulário: arquivar é uma ação à parte (só para concluída).
-  const opcoesStatus: StatusAnotacao[] = arquivada ? ["arquivado"] : ["a_fazer", "em_andamento", "concluido"];
+  const segmento = (ativo: boolean) =>
+    `flex h-10 items-center justify-center gap-1.5 rounded-[10px] border text-[12.5px] font-bold transition-colors ${
+      ativo ? "border-transparent" : "border-brand-border bg-white text-brand-muted hover:bg-brand-hover"
+    }`;
 
   return (
     <Modal open onClose={onClose} title={anotacao ? "Anotação" : "Nova anotação"} wide>
       <form onSubmit={salvar} className="space-y-4">
+        {arquivada && anotacao && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-brand-hover p-3 text-[12.5px] text-brand-muted">
+            <Archive size={15} className="text-brand-faint" />
+            <span className="mr-auto font-semibold">Anotação arquivada</span>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={salvando}
+              className="h-8 px-3 text-[12px]"
+              onClick={() => executar(() => restaurarAnotacao(anotacao, "a_fazer", ordemTopo("a_fazer")))}
+            >
+              <RotateCcw size={13} />
+              Voltar para A fazer
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={salvando}
+              className="h-8 px-3 text-[12px]"
+              onClick={() => executar(() => restaurarAnotacao(anotacao, "em_andamento", ordemTopo("em_andamento")))}
+            >
+              <RotateCcw size={13} />
+              Voltar para Em andamento
+            </Button>
+          </div>
+        )}
+
         <FormRow label="Título">
-          <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={200} placeholder="Ex.: Verificar erro de integração do TAF" autoFocus required />
+          <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={200} placeholder="O que você precisa lembrar?" autoFocus required />
         </FormRow>
         <FormRow label="Descrição (opcional)">
-          <Textarea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={5000} />
+          <Textarea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={5000} placeholder="Detalhes, links, passos…" />
         </FormRow>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {!arquivada && (
           <FormRow label="Status">
-            <Select value={status} onChange={(e) => setStatus(e.target.value as StatusAnotacao)} disabled={arquivada}>
-              {opcoesStatus.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_ANOTACAO[s].label}
-                </option>
-              ))}
-            </Select>
+            <div className="grid grid-cols-3 gap-1.5">
+              {COLUNAS_KANBAN.map((s) => {
+                const Icone = ICONE_STATUS[s];
+                const cfg = STATUS_ANOTACAO[s];
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStatus(s)}
+                    aria-pressed={status === s}
+                    className={segmento(status === s)}
+                    style={status === s ? { backgroundColor: cfg.bg, color: cfg.cor } : undefined}
+                  >
+                    <Icone size={14} />
+                    {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
           </FormRow>
+        )}
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormRow label="Prioridade">
             <div className="grid grid-cols-3 gap-1.5">
               {PRIORIDADES.map((p) => (
@@ -214,62 +262,21 @@ export function AnotacaoModal({
                   type="button"
                   onClick={() => setPrioridade(p)}
                   aria-pressed={prioridade === p}
-                  className={`h-10 rounded-[10px] border text-[12.5px] font-bold transition-colors ${
-                    prioridade === p ? "border-transparent" : "border-brand-border bg-white text-brand-muted hover:bg-brand-hover"
-                  }`}
+                  className={segmento(prioridade === p)}
                   style={prioridade === p ? { backgroundColor: PRIORIDADE_ANOTACAO[p].bg, color: PRIORIDADE_ANOTACAO[p].cor } : undefined}
                 >
+                  {p !== "normal" && <Flag size={12} />}
                   {PRIORIDADE_ANOTACAO[p].label}
                 </button>
               ))}
             </div>
           </FormRow>
-          <FormRow label="Data limite (opcional)">
+          <FormRow label="Prazo (opcional)">
             <Input type="date" value={dataLimite} onChange={(e) => setDataLimite(e.target.value)} />
           </FormRow>
         </div>
 
-        <div className="space-y-3 rounded-xl border border-brand-border bg-brand-hover/50 p-3.5">
-          <p className="text-[12px] text-brand-muted">
-            Vínculo opcional, só para contexto: a anotação continua <strong>privada</strong> e não altera o projeto, a atividade nem o cronograma.
-          </p>
-          <FormRow label="Projeto">
-            <Select value={projetoId} onChange={(e) => trocarProjeto(e.target.value)}>
-              <option value="">Sem projeto</option>
-              {opcoesProjeto.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {nomeProjeto(p)}
-                </option>
-              ))}
-            </Select>
-          </FormRow>
-          {projetoId && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FormRow label="Fase (opcional)">
-                <Select value={faseId} onChange={(e) => trocarFase(e.target.value)} disabled={fases.length === 0}>
-                  <option value="">{fases.length === 0 ? "Projeto sem cronograma" : "Sem fase"}</option>
-                  {fases.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.descricao}
-                    </option>
-                  ))}
-                </Select>
-              </FormRow>
-              <FormRow label="Atividade (opcional)">
-                <Select value={atividadeId} onChange={(e) => trocarAtividade(e.target.value)} disabled={atividades.length === 0}>
-                  <option value="">{atividades.length === 0 ? "Sem atividades" : "Sem atividade"}</option>
-                  {atividades.map((a) => (
-                    <option key={a.id} value={a.id} title={a.caminho}>
-                      {faseId ? a.descricao : `${a.caminho ? `${a.caminho} › ` : ""}${a.descricao}`}
-                    </option>
-                  ))}
-                </Select>
-              </FormRow>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-brand-border p-3.5">
+        <div className={`rounded-xl border p-3 transition-colors ${lembreteAtivo && dataLimite ? "border-[#f3dcb8] bg-[#fffaf1]" : "border-brand-border"}`}>
           <label className={`flex items-center gap-2.5 ${dataLimite ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}>
             <button
               type="button"
@@ -277,51 +284,46 @@ export function AnotacaoModal({
               aria-checked={lembreteAtivo && !!dataLimite}
               disabled={!dataLimite}
               onClick={() => setLembreteAtivo((v) => !v)}
-              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${lembreteAtivo && dataLimite ? "bg-brand-accent" : "bg-[#cfd5e2]"}`}
+              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${lembreteAtivo && dataLimite ? "bg-[#d68a1c]" : "bg-[#cfd5e2]"}`}
             >
-              <span
-                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${lembreteAtivo && dataLimite ? "left-[18px]" : "left-0.5"}`}
-              />
+              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${lembreteAtivo && dataLimite ? "left-[18px]" : "left-0.5"}`} />
             </button>
             <span className="flex items-center gap-1.5 text-[13px] font-semibold text-brand-navy-2">
-              <Bell size={14} className="text-brand-faint" />
-              Me lembrar nas notificações
+              <Bell size={14} className={lembreteAtivo && dataLimite ? "text-[#a4650d]" : "text-brand-faint"} />
+              Me lembrar no sino
             </span>
-            {!dataLimite && <span className="text-[11.5px] text-brand-faint">— defina a data limite para ligar</span>}
+            {!dataLimite && <span className="text-[11.5px] text-brand-faint">— escolha um prazo primeiro</span>}
           </label>
           {lembreteAtivo && dataLimite && (
-            <div className="mt-3 space-y-2">
-              <p className="text-[11.5px] text-brand-faint">Escolha um ou mais avisos — cada um volta a aparecer como não lido no sino.</p>
-              <div className="flex flex-wrap items-center gap-2">
-                {OPCOES_LEMBRETE.map((o) => {
-                  const ativo = antecedencias.includes(o.dias);
-                  return (
-                    <button
-                      key={o.dias}
-                      type="button"
-                      onClick={() => alternarAntecedencia(o.dias)}
-                      aria-pressed={ativo}
-                      className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold transition-colors ${
-                        ativo ? "border-brand-accent bg-brand-accent-soft text-brand-accent" : "border-brand-border bg-white text-brand-muted hover:bg-brand-hover"
-                      }`}
-                    >
-                      {ativo ? "✓ " : ""}
-                      {o.label}
-                    </button>
-                  );
-                })}
-                {antecedenciasPersonalizadas.map((d) => (
-                  <span key={d} className="inline-flex items-center gap-1 rounded-full border border-brand-accent bg-brand-accent-soft px-3 py-1 text-[12.5px] font-semibold text-brand-accent">
-                    ✓ {rotuloAntecedencia(d)}
-                    <button type="button" onClick={() => alternarAntecedencia(d)} aria-label={`Remover ${rotuloAntecedencia(d)}`} className="hover:text-red-600">
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <div className="flex items-center gap-1.5 text-[12.5px] text-brand-muted">
-                Outro:
-                <Input
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              {OPCOES_LEMBRETE.map((o) => {
+                const ativo = antecedencias.includes(o.dias);
+                return (
+                  <button
+                    key={o.dias}
+                    type="button"
+                    onClick={() => alternarAntecedencia(o.dias)}
+                    aria-pressed={ativo}
+                    className={`flex items-center gap-1 rounded-full border px-3 py-1 text-[12.5px] font-semibold transition-colors ${
+                      ativo ? "border-[#f3dcb8] bg-[#fff2de] text-[#a4650d]" : "border-brand-border bg-white text-brand-muted hover:bg-brand-hover"
+                    }`}
+                  >
+                    {ativo && <Check size={12} strokeWidth={3} />}
+                    {o.label}
+                  </button>
+                );
+              })}
+              {antecedenciasPersonalizadas.map((d) => (
+                <span key={d} className="inline-flex items-center gap-1 rounded-full border border-[#f3dcb8] bg-[#fff2de] px-3 py-1 text-[12.5px] font-semibold text-[#a4650d]">
+                  <Check size={12} strokeWidth={3} />
+                  {rotuloAntecedencia(d)}
+                  <button type="button" onClick={() => alternarAntecedencia(d)} aria-label={`Remover ${rotuloAntecedencia(d)}`} className="hover:text-red-600">
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+              <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-brand-border bg-white py-0.5 pr-1 pl-2.5 text-[12.5px] text-brand-muted">
+                <input
                   type="number"
                   min={0}
                   max={MAX_DIAS_LEMBRETE}
@@ -334,17 +336,59 @@ export function AnotacaoModal({
                     }
                   }}
                   placeholder="nº"
-                  className="w-20"
+                  aria-label="Outra antecedência, em dias"
+                  className="w-9 border-0 bg-transparent text-center outline-none"
                 />
                 dias antes
-                <Button type="button" variant="secondary" onClick={adicionarOutro} className="h-8 px-3 text-[12px]">
-                  Adicionar
-                </Button>
-              </div>
-              {antecedencias.length === 0 && <p className="text-[11.5px] font-semibold text-[#a4650d]">Nenhum aviso escolhido: o lembrete fica desligado.</p>}
+                <button
+                  type="button"
+                  onClick={adicionarOutro}
+                  aria-label="Adicionar aviso"
+                  title="Adicionar aviso"
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-brand-accent hover:bg-brand-accent-soft"
+                >
+                  <Plus size={13} />
+                </button>
+              </span>
+              {antecedencias.length === 0 && <p className="w-full text-[11.5px] font-semibold text-[#a4650d]">Escolha pelo menos um aviso.</p>}
             </div>
           )}
         </div>
+
+        <FormRow label="Projeto (opcional, só para referência)">
+          <Select value={projetoId} onChange={(e) => trocarProjeto(e.target.value)}>
+            <option value="">Sem projeto</option>
+            {opcoesProjeto.map((p) => (
+              <option key={p.id} value={p.id}>
+                {nomeProjeto(p)}
+              </option>
+            ))}
+          </Select>
+        </FormRow>
+        {projetoId && (
+          <div className="grid grid-cols-1 gap-3 border-l-2 border-brand-accent-soft pl-3 sm:grid-cols-2">
+            <FormRow label="Fase (opcional)">
+              <Select value={faseId} onChange={(e) => trocarFase(e.target.value)} disabled={fases.length === 0}>
+                <option value="">{fases.length === 0 ? "Projeto sem cronograma" : "Sem fase"}</option>
+                {fases.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.descricao}
+                  </option>
+                ))}
+              </Select>
+            </FormRow>
+            <FormRow label="Atividade (opcional)">
+              <Select value={atividadeId} onChange={(e) => trocarAtividade(e.target.value)} disabled={atividades.length === 0}>
+                <option value="">{atividades.length === 0 ? "Sem atividades" : "Sem atividade"}</option>
+                {atividades.map((a) => (
+                  <option key={a.id} value={a.id} title={a.caminho}>
+                    {faseId ? a.descricao : `${a.caminho ? `${a.caminho} › ` : ""}${a.descricao}`}
+                  </option>
+                ))}
+              </Select>
+            </FormRow>
+          </div>
+        )}
 
         <FormRow label="Tags (opcional)">
           <div className="flex flex-wrap items-center gap-1.5 rounded-[10px] border border-brand-border bg-white px-2 py-1.5">
@@ -369,7 +413,7 @@ export function AnotacaoModal({
               }}
               onBlur={() => tagDigitada && adicionarTag(tagDigitada)}
               list="sugestoes-tags-workspace"
-              placeholder={tags.length === 0 ? "Digite e tecle Enter (ex.: eSocial, Cliente)" : ""}
+              placeholder={tags.length === 0 ? "Digite e tecle Enter (ex.: eSocial)" : ""}
               className="min-w-[160px] flex-1 border-0 bg-transparent py-1 text-[13.5px] text-brand-navy-2 outline-none"
             />
             <datalist id="sugestoes-tags-workspace">
@@ -383,45 +427,10 @@ export function AnotacaoModal({
         </FormRow>
 
         {anotacao?.dataConclusao && (anotacao.status === "concluido" || arquivada) && (
-          <p className="text-[12px] text-[#15754c]">Concluída em {dataHora(anotacao.dataConclusao)}.</p>
-        )}
-        {erro && <p className="text-sm font-medium text-red-600">{erro}</p>}
-
-        {anotacao && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-brand-border-soft pt-3">
-            {!arquivada && (
-              <Button type="button" variant="secondary" disabled={salvando} onClick={() => executar(() => arquivarAnotacao(anotacao))}>
-                <Archive size={15} />
-                Arquivar
-              </Button>
-            )}
-            {arquivada && (
-              <>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={salvando}
-                  onClick={() => executar(() => restaurarAnotacao(anotacao, "a_fazer", ordemTopo("a_fazer")))}
-                >
-                  <RotateCcw size={15} />
-                  Voltar para A fazer
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={salvando}
-                  onClick={() => executar(() => restaurarAnotacao(anotacao, "em_andamento", ordemTopo("em_andamento")))}
-                >
-                  <RotateCcw size={15} />
-                  Voltar para Em andamento
-                </Button>
-              </>
-            )}
-            <button type="button" onClick={() => setVerHistorico((v) => !v)} className="ml-auto flex items-center gap-1 text-[12.5px] font-semibold text-brand-accent hover:underline">
-              <History size={14} />
-              {verHistorico ? "Ocultar histórico" : "Ver histórico"}
-            </button>
-          </div>
+          <p className="flex items-center gap-1 text-[12px] font-semibold text-[#15754c]">
+            <CircleCheck size={13} />
+            Concluída em {dataHora(anotacao.dataConclusao)}
+          </p>
         )}
         {anotacao && verHistorico && (
           <ul className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-brand-border bg-white p-3 text-[12.5px]">
@@ -442,28 +451,53 @@ export function AnotacaoModal({
             ))}
           </ul>
         )}
+        {erro && <p className="text-sm font-medium text-red-600">{erro}</p>}
 
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <div>
-            {anotacao &&
-              (confirmandoExclusao ? (
-                <span className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-red-600">Mover para a lixeira? (fica 15 dias)</span>
-                  <Button type="button" variant="danger" disabled={salvando} onClick={() => executar(() => excluirAnotacao(anotacao))}>
-                    Sim, excluir
-                  </Button>
-                  <Button type="button" variant="secondary" onClick={() => setConfirmandoExclusao(false)}>
-                    Não
-                  </Button>
-                </span>
-              ) : (
-                <Button type="button" variant="ghost" onClick={() => setConfirmandoExclusao(true)} className="text-red-600">
-                  <Trash2 size={15} />
-                  Excluir
-                </Button>
-              ))}
-          </div>
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-brand-border-soft pt-4">
+          {anotacao && confirmandoExclusao ? (
+            <span className="flex items-center gap-2">
+              <span className="text-[13px] font-medium text-red-600">Mover para a lixeira?</span>
+              <Button type="button" variant="danger" disabled={salvando} onClick={() => executar(() => excluirAnotacao(anotacao))}>
+                Sim, excluir
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setConfirmandoExclusao(false)}>
+                Não
+              </Button>
+            </span>
+          ) : (
+            <div className="flex items-center gap-1">
+              {anotacao && (
+                <>
+                  <button type="button" onClick={() => setConfirmandoExclusao(true)} title="Excluir (vai para a lixeira por 15 dias)" aria-label="Excluir" className={ACAO_ICONE + " hover:text-red-600"}>
+                    <Trash2 size={16} />
+                  </button>
+                  {!arquivada && (
+                    <button
+                      type="button"
+                      disabled={salvando}
+                      onClick={() => executar(() => arquivarAnotacao(anotacao))}
+                      title="Arquivar"
+                      aria-label="Arquivar"
+                      className={ACAO_ICONE}
+                    >
+                      <Archive size={16} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setVerHistorico((v) => !v)}
+                    aria-pressed={verHistorico}
+                    title={verHistorico ? "Ocultar histórico" : "Ver histórico"}
+                    aria-label="Histórico"
+                    className={`${ACAO_ICONE} ${verHistorico ? "bg-brand-accent-soft text-brand-accent" : ""}`}
+                  >
+                    <History size={16} />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          <div className="ml-auto flex gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
