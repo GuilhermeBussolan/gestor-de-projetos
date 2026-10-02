@@ -1066,6 +1066,47 @@ function BancoAnterior() {
   );
 }
 
+function LoteParcelas() {
+  const linhas = [
+    { cliente: "Porto Seco", parcela: "Parcela 2", valor: "R$ 12.400" },
+    { cliente: "Caesb", parcela: "Banco de horas — set/2026", valor: "R$ 8.000" },
+    { cliente: "Alfa Ltda", parcela: "Marco 3", valor: "R$ 5.500" },
+  ];
+  const [marcadas, setMarcadas] = useState<Set<number>>(new Set([0, 1]));
+  const alternar = (i: number) =>
+    setMarcadas((m) => {
+      const n = new Set(m);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
+      return n;
+    });
+  return (
+    <Moldura dica="Marque as parcelas recebidas e informe uma data para todas">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[12.5px] font-bold text-brand-navy-2">Recebimento em lote</p>
+        <span className="rounded-md border border-brand-border px-2 py-0.5 text-[11px] font-semibold text-brand-navy-2">Recebido em 30/09</span>
+      </div>
+      <ul className="space-y-1 text-[11.5px]">
+        {linhas.map((l, i) => (
+          <li key={l.cliente}>
+            <label className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 ${marcadas.has(i) ? "bg-brand-accent-soft/50" : ""}`}>
+              <input type="checkbox" checked={marcadas.has(i)} onChange={() => alternar(i)} />
+              <span className="font-semibold text-brand-navy-2">{l.cliente}</span>
+              <span className="text-brand-muted">· {l.parcela}</span>
+              <span className="ml-auto font-semibold text-brand-navy-2">{l.valor}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2.5 flex justify-end">
+        <BotaoFalso escuro>
+          <Check size={13} /> Marcar {marcadas.size} como Recebido
+        </BotaoFalso>
+      </div>
+    </Moldura>
+  );
+}
+
 const PREVIAS: Record<PreviaId, () => ReactNode> = {
   "card-projeto": CardProjeto,
   "documentos-mit": DocumentosMit,
@@ -1106,6 +1147,7 @@ const PREVIAS: Record<PreviaId, () => ReactNode> = {
   "etapas-fechamento": EtapasFechamento,
   "meu-fechamento": MeuFechamento,
   "banco-anterior": BancoAnterior,
+  "lote-parcelas": LoteParcelas,
 };
 
 export function GuiaPrevia({ id }: { id: PreviaId }) {

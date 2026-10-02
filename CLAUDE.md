@@ -122,6 +122,10 @@ plano pago e o usuário quer tudo gratuito): PDFs/comprovantes ficam no Firestor
 - **Banco de horas no Financeiro**: além de "Gerar parcela do mês" (horas aprovadas × valor hora), há **"Lançar
   faturamento anterior"** (`lancarFaturamentoAnteriorBanco`): mês, horas opcionais, valor, situação Liberado/Faturado/Recebido,
   datas e NF — vira parcela já nessa situação e entra no Previsto x Realizado pelo mês da data de faturamento (`dataLiberacao`).
+- **Ações em lote na Liberação de Faturamento** (`LoteParcelasModal`): "Faturamento em lote" (NF por parcela liberada → Faturado)
+  e "Recebimento em lote" (só parcelas faturadas → Recebido, com uma data só). Gravação por
+  `alterarStatusEmLote` em `src/lib/parcela.ts`: agrupa por projeto (uma escrita por projeto, para uma parcela não apagar a
+  outra), usa as mesmas validações do lançamento individual e segue mesmo se um projeto falhar (lista os erros).
 - **Relatório do fechamento** (Excel/PDF/tela): com mais de um recurso, termina com o "Resumo por recurso" (`resumoPorRecurso`).
 - **Tabelas ordenáveis**: cabeçalhos clicáveis via `useOrdenacao` + `ThOrdenavel` (`src/components/ui/Ordenacao.tsx`;
   1º clique crescente, 2º decrescente, 3º volta ao normal; vazios no fim). Usar em toda tabela nova. Ficam de fora as

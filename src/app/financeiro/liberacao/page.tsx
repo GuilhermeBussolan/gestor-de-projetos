@@ -157,8 +157,8 @@ function FinanceiroLiberacaoPageContent() {
           Liberação de Faturamento
         </h1>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setModoLote("recebimento")}>Recebimento em lote</Button>
-          <Button onClick={() => setModoLote("nf")}>NF em lote</Button>
+          <Button onClick={() => setModoLote("nf")} title="Informar a NF de várias parcelas liberadas de uma vez">Faturamento em lote</Button>
+          <Button onClick={() => setModoLote("recebimento")} title="Informar o recebimento de várias parcelas faturadas de uma vez">Recebimento em lote</Button>
           <Button
             variant="secondary"
             disabled={liberacoesExibidas.length === 0}

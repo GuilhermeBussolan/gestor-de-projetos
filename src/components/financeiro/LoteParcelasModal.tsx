@@ -20,7 +20,7 @@ const semAcento = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLo
 
 /**
  * Ações em lote do faturamento, para a conferência de fim de mês:
- *  - recebimento: marca as parcelas escolhidas (liberadas ou faturadas) como Recebido, todas com a mesma data;
+ *  - recebimento: marca as parcelas escolhidas (só as faturadas) como Recebido, todas com a mesma data;
  *  - nf: informa a nota fiscal de cada parcela liberada; as que receberem NF viram Faturado.
  */
 export function LoteParcelasModal({
@@ -50,7 +50,7 @@ export function LoteParcelasModal({
   const proposta = useMemo(() => new Map(projetos.map((p) => [p.id, p.codigoProposta])), [projetos]);
 
   const elegiveis = useMemo(
-    () => linhas.filter((l) => (recebimento ? l.status === "LIBERADO" || l.status === "FATURADO" : l.status === "LIBERADO")),
+    () => linhas.filter((l) => l.status === (recebimento ? "FATURADO" : "LIBERADO")),
     [linhas, recebimento]
   );
   const termo = semAcento(busca.trim());
@@ -120,11 +120,11 @@ export function LoteParcelasModal({
 
   const th = "px-3 py-2.5";
   return (
-    <Modal open onClose={onClose} title={recebimento ? "Recebimento em lote" : "NF em lote"} extraWide>
+    <Modal open onClose={onClose} title={recebimento ? "Recebimento em lote" : "Faturamento em lote"} extraWide>
       <div className="space-y-4">
         <p className="text-[13px] text-brand-muted">
           {recebimento
-            ? "Selecione as parcelas que já foram recebidas e informe a data — todas são marcadas como Recebido de uma vez."
+            ? "Aparecem só as parcelas faturadas. Selecione as que já foram recebidas e informe a data — todas são marcadas como Recebido de uma vez."
             : "Informe a nota fiscal de cada parcela liberada. As que tiverem NF preenchida são marcadas como Faturado; as em branco ficam como estão."}
         </p>
 
@@ -207,7 +207,7 @@ export function LoteParcelasModal({
                   <td colSpan={7} className="px-4 py-8 text-center text-brand-faint">
                     {elegiveis.length === 0
                       ? recebimento
-                        ? "Nenhuma parcela liberada ou faturada aguardando recebimento."
+                        ? "Nenhuma parcela faturada aguardando recebimento."
                         : "Nenhuma parcela liberada aguardando nota fiscal."
                       : "Nenhuma parcela encontrada para essa busca."}
                   </td>

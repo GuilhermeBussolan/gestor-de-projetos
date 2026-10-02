@@ -54,7 +54,8 @@ export type PreviaId =
   | "tarefa-compartilhada"
   | "etapas-fechamento"
   | "meu-fechamento"
-  | "banco-anterior";
+  | "banco-anterior"
+  | "lote-parcelas";
 
 export interface Funcionalidade {
   titulo: string;
@@ -409,6 +410,12 @@ const MOD_FINANCEIRO: ModuloGuia = {
       descricao:
         "Acompanhe cada parcela: Liberado, Faturado, Recebido ou Cancelado. Cada mudança pede o dado obrigatório, como nota fiscal, data ou motivo. Ao liberar, você não pode pular a ordem das parcelas, e as datas previstas das parcelas futuras são recalculadas automaticamente, com prévia antes de confirmar.",
       previa: "parcela-status",
+    },
+    {
+      titulo: "Faturamento e recebimento em lote",
+      descricao:
+        "Na Liberação de Faturamento, para a conferência de fim de mês: \"Faturamento em lote\" lista as parcelas liberadas com um campo para a nota fiscal de cada uma; as que tiverem NF preenchida viram Faturado. \"Recebimento em lote\" lista só as parcelas faturadas — selecione as que foram recebidas, informe uma data para todas e confirme. Nada de entrar uma a uma.",
+      previa: "lote-parcelas",
     },
     {
       titulo: "Faturamento Previsto x Realizado",
