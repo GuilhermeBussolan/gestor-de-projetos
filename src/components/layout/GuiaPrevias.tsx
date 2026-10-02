@@ -770,6 +770,302 @@ function ContatosCliente() {
   );
 }
 
+// ---------- Cronograma, agenda e alocação ----------
+
+function VersaoCronograma() {
+  return (
+    <Moldura>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[12.5px] font-bold text-brand-navy-2">Cronograma — versão 3</p>
+        <Pilula bg="#e8efff" cor="#2456b8">v3 · atual</Pilula>
+      </div>
+      <div className="mt-2 rounded-lg border border-brand-border-soft bg-brand-hover/50 p-2.5 text-[11.5px] text-brand-muted">
+        <p className="font-semibold text-brand-navy-2">Observação (obrigatória)</p>
+        <p>Cliente pediu para adiantar a fase de testes.</p>
+      </div>
+      <ul className="mt-2 space-y-0.5 text-[11.5px] text-brand-muted">
+        <li>v3 · 12/09 · Ana Souza — adiantou a fase de testes</li>
+        <li>v2 · 28/08 · Carlos Lima — incluiu treinamento</li>
+        <li>v1 · 01/08 · importado na criação</li>
+      </ul>
+    </Moldura>
+  );
+}
+
+function BloqueioAgenda() {
+  return (
+    <Moldura>
+      <div className="mx-auto w-56 rounded-lg border border-brand-border-soft bg-[#f1f2f6] p-2.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[13px] font-bold text-brand-navy-2">22</span>
+          <Pilula bg="#6a7594" cor="#ffffff">Bloqueado</Pilula>
+        </div>
+        <p className="mt-2 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-brand-muted">Férias · dia inteiro</p>
+      </div>
+      <p className="mt-2 text-center text-[11.5px] text-[#b5392a]">Nenhum apontamento pode cair dentro de um bloqueio.</p>
+    </Moldura>
+  );
+}
+
+function MapaAlocacao() {
+  const linhas = [
+    { nome: "Ana", m: ["Alfa", "Alfa", "", "Beta"], t: ["Alfa", "", "", "Beta"] },
+    { nome: "Bruno", m: ["", "Beta", "Beta", ""], t: ["Gama", "Beta", "", ""] },
+  ];
+  const cel = (v: string, i: number) => (
+    <td key={i} className="px-0.5 py-0.5">
+      <span className={`block h-5 rounded text-center text-[9.5px] leading-5 font-bold ${v ? "bg-[#e8efff] text-[#2456b8]" : "bg-[#e3f5ea] text-[#15754c]"}`}>{v || "livre"}</span>
+    </td>
+  );
+  return (
+    <Moldura dica="Manhã e tarde de cada recurso; verde = livre">
+      <table className="w-full text-[10.5px]">
+        <thead>
+          <tr className="text-[9.5px] font-bold text-brand-faint uppercase">
+            <th className="text-left">Recurso</th>
+            {["seg", "ter", "qua", "qui"].map((d) => (
+              <th key={d}>{d}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.flatMap((l) => [
+            <tr key={`${l.nome}m`}>
+              <td className="pr-1 font-semibold text-brand-navy-2">{l.nome} · M</td>
+              {l.m.map(cel)}
+            </tr>,
+            <tr key={`${l.nome}t`}>
+              <td className="pr-1 text-brand-muted">{l.nome} · T</td>
+              {l.t.map(cel)}
+            </tr>,
+          ])}
+        </tbody>
+      </table>
+    </Moldura>
+  );
+}
+
+// ---------- Apontamento ----------
+
+function OsEnvolvidos() {
+  const [incluido, setIncluido] = useState(false);
+  return (
+    <Moldura dica="Clique em Incluir envolvido para testar">
+      <p className="mb-2 text-[12.5px] font-bold text-brand-navy-2">Ordem de Serviço — participantes</p>
+      <label className="flex items-center gap-2 text-[12px] text-brand-navy-2">
+        <input type="checkbox" defaultChecked readOnly /> Maria Souza <span className="text-brand-faint">· Gerente de RH</span>
+      </label>
+      {incluido && (
+        <label className="mt-1 flex items-center gap-2 text-[12px] text-brand-navy-2">
+          <input type="checkbox" defaultChecked readOnly /> João Lima <span className="text-[#15754c]">· novo, salvo no projeto</span>
+        </label>
+      )}
+      <div className="mt-2.5 flex items-center justify-between">
+        <button type="button" onClick={() => setIncluido(true)} className="text-[12px] font-semibold text-brand-accent hover:underline">
+          + Incluir envolvido
+        </button>
+        <BotaoFalso escuro>Gerar OS</BotaoFalso>
+      </div>
+    </Moldura>
+  );
+}
+
+function ReabrirHora() {
+  const [reaberto, setReaberto] = useState(false);
+  return (
+    <Moldura dica="Só o administrador vê o botão Reabrir">
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-brand-border-soft p-2.5">
+        <div>
+          <p className="text-[12.5px] font-bold text-brand-navy-2">Cliente X · 03/09 · 08:00–12:00</p>
+          {reaberto ? (
+            <Pilula bg={STATUS_HORA_CONFIG.aguardando_aprovacao.bg} cor={STATUS_HORA_CONFIG.aguardando_aprovacao.text}>
+              {STATUS_HORA_CONFIG.aguardando_aprovacao.label}
+            </Pilula>
+          ) : (
+            <Pilula bg={STATUS_HORA_CONFIG.aprovado.bg} cor={STATUS_HORA_CONFIG.aprovado.text}>
+              {STATUS_HORA_CONFIG.aprovado.label}
+            </Pilula>
+          )}
+        </div>
+        {!reaberto && (
+          <button type="button" onClick={() => setReaberto(true)} className="text-[12px] font-semibold text-[#a4650d] hover:underline">
+            ↺ Reabrir
+          </button>
+        )}
+      </div>
+    </Moldura>
+  );
+}
+
+function RecursoInativo() {
+  return (
+    <Moldura>
+      <div className="grid grid-cols-2 gap-2 text-[11.5px]">
+        <div>
+          <Rotulo>Situação</Rotulo>
+          <p className="mt-1 rounded-md border border-brand-border px-2 py-1 font-semibold text-brand-navy-2">Inativo</p>
+        </div>
+        <div>
+          <Rotulo>Data de inativação</Rotulo>
+          <p className="mt-1 rounded-md border border-brand-border px-2 py-1 font-semibold text-brand-navy-2">02/10/2026</p>
+        </div>
+      </div>
+      <p className="mt-2.5 flex items-center gap-1.5 text-[11.5px] text-[#15754c]">
+        <Check size={13} /> Apontamento em 02/10 ou antes: permitido
+      </p>
+      <p className="mt-1 flex items-center gap-1.5 text-[11.5px] text-[#b5392a]">
+        <AlertTriangle size={13} /> Apontamento em 03/10 em diante: bloqueado
+      </p>
+    </Moldura>
+  );
+}
+
+function OrdenarTabela() {
+  const dados = ["Porto Seco", "Alfa Ltda", "Caesb"];
+  const [ordem, setOrdem] = useState<0 | 1 | 2>(0);
+  const lista = ordem === 0 ? dados : [...dados].sort((a, b) => (ordem === 1 ? a.localeCompare(b) : b.localeCompare(a)));
+  return (
+    <Moldura dica="Clique no título da coluna: A→Z, depois Z→A, depois volta ao normal">
+      <button
+        type="button"
+        onClick={() => setOrdem((o) => ((o + 1) % 3) as 0 | 1 | 2)}
+        className="mb-1.5 text-[10px] font-bold tracking-[.08em] text-brand-navy-2 uppercase"
+      >
+        Cliente {ordem === 0 ? "↕" : ordem === 1 ? "↑" : "↓"}
+      </button>
+      <ul className="space-y-0.5 text-[12px] text-brand-navy-2">
+        {lista.map((c) => (
+          <li key={c} className="border-t border-brand-border-soft pt-1">
+            {c}
+          </li>
+        ))}
+      </ul>
+    </Moldura>
+  );
+}
+
+// ---------- Workspace ----------
+
+function WorkspaceQuadro() {
+  const colunas = [
+    { t: "A fazer", cor: "#6a7594", cards: ["Ligar para o cliente", "Revisar folha"] },
+    { t: "Em andamento", cor: "#2456b8", cards: ["Checklist do go-live"] },
+    { t: "Concluído", cor: "#15754c", cards: ["Enviar ata"] },
+  ];
+  return (
+    <Moldura dica="Arraste os cartões entre as colunas; só você vê">
+      <div className="grid grid-cols-3 gap-1.5">
+        {colunas.map((c) => (
+          <div key={c.t} className="rounded-lg border-t-[3px] bg-brand-hover/60 p-1.5" style={{ borderTopColor: c.cor }}>
+            <p className="mb-1 text-[10px] font-bold" style={{ color: c.cor }}>
+              {c.t}
+            </p>
+            {c.cards.map((x) => (
+              <p key={x} className="mb-1 rounded-md bg-white px-1.5 py-1 text-[10.5px] font-semibold text-brand-navy-2 shadow-sm">
+                {x}
+              </p>
+            ))}
+          </div>
+        ))}
+      </div>
+    </Moldura>
+  );
+}
+
+function TarefaCompartilhada() {
+  return (
+    <Moldura>
+      <div className="rounded-lg border border-brand-border-soft p-2.5">
+        <p className="text-[12.5px] font-bold text-brand-navy-2">Pagar NF da KRONOS</p>
+        <p className="mt-0.5 text-[11px] font-semibold text-[#7c3aed]">👥 com Fernanda (Financeiro)</p>
+      </div>
+      <div className="mt-2 space-y-1.5 rounded-lg bg-[#faf7ff] p-2 text-[11.5px]">
+        <p className="mr-6 rounded-md bg-[#f1ebff] px-2 py-1">
+          <strong>Fernanda:</strong> NF conferida, pagamento agendado para 10/10.
+        </p>
+        <p className="ml-6 rounded-md bg-white px-2 py-1">
+          <strong>Você:</strong> Ótimo, obrigado!
+        </p>
+      </div>
+    </Moldura>
+  );
+}
+
+// ---------- Fechamento ----------
+
+function EtapasFechamento() {
+  const etapas = ["Rascunho", "Em revisão", "Fechado", "Faturamento liberado"];
+  return (
+    <Moldura>
+      <div className="flex flex-wrap items-center gap-1 text-[11px] font-bold">
+        {etapas.map((e, i) => (
+          <span key={e} className="flex items-center gap-1">
+            <span className={`rounded-full px-2 py-0.5 ${i === 1 ? "bg-brand-accent text-white" : "bg-brand-hover text-brand-muted"}`}>{e}</span>
+            {i < etapas.length - 1 && <ArrowRight size={12} className="text-brand-faint" />}
+          </span>
+        ))}
+      </div>
+      <p className="mt-2.5 text-[11.5px] text-brand-muted">
+        Na revisão, cada terceiro confere as horas no “Meu fechamento”:
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        <Pilula bg="#e3f5ea" cor="#15754c">Rodrigo · confirmou</Pilula>
+        <Pilula bg="#fff2de" cor="#a4650d">José · não confirmou</Pilula>
+      </div>
+      <p className="mt-2 text-[11.5px] text-brand-muted">“Fechar” só libera quando todos confirmarem.</p>
+    </Moldura>
+  );
+}
+
+function MeuFechamento() {
+  const [resp, setResp] = useState<"" | "ok">("");
+  return (
+    <Moldura dica="Clique em Confirmar para testar">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-[13px] font-extrabold text-brand-navy-2">Setembro de 2026</p>
+          <p className="text-[11px] text-brand-muted">KRONOS · 13 lançamentos · 104:00</p>
+        </div>
+        {resp ? <Pilula bg="#e3f5ea" cor="#15754c">Confirmado</Pilula> : <Pilula bg="#fff2de" cor="#a4650d">Aguardando você</Pilula>}
+      </div>
+      {!resp && (
+        <div className="mt-2.5 flex justify-end gap-2">
+          <BotaoFalso>Contestar</BotaoFalso>
+          <button type="button" onClick={() => setResp("ok")}>
+            <BotaoFalso escuro>
+              <Check size={13} /> Confirmar minhas horas
+            </BotaoFalso>
+          </button>
+        </div>
+      )}
+    </Moldura>
+  );
+}
+
+function BancoAnterior() {
+  return (
+    <Moldura>
+      <p className="mb-2 text-[12.5px] font-bold text-brand-navy-2">Lançar faturamento anterior</p>
+      <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+        {[
+          ["Mês", "jun/2026"],
+          ["Horas", "80"],
+          ["Valor", "R$ 8.000"],
+          ["Situação", "Recebido"],
+          ["Faturado em", "05/07"],
+          ["Recebido em", "20/07"],
+        ].map(([r, v]) => (
+          <div key={r}>
+            <Rotulo>{r}</Rotulo>
+            <p className="mt-0.5 rounded-md border border-brand-border px-1.5 py-1 font-semibold text-brand-navy-2">{v}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] text-brand-muted">Vira parcela já recebida e entra no Previsto x Realizado.</p>
+    </Moldura>
+  );
+}
+
 const PREVIAS: Record<PreviaId, () => ReactNode> = {
   "card-projeto": CardProjeto,
   "documentos-mit": DocumentosMit,
@@ -798,6 +1094,18 @@ const PREVIAS: Record<PreviaId, () => ReactNode> = {
   "kpis-financeiro": KpisFinanceiro,
   "parcela-status": ParcelaStatus,
   fechamento: Fechamento,
+  "versao-cronograma": VersaoCronograma,
+  "bloqueio-agenda": BloqueioAgenda,
+  "mapa-alocacao": MapaAlocacao,
+  "os-envolvidos": OsEnvolvidos,
+  "reabrir-hora": ReabrirHora,
+  "recurso-inativo": RecursoInativo,
+  "ordenar-tabela": OrdenarTabela,
+  "workspace-quadro": WorkspaceQuadro,
+  "tarefa-compartilhada": TarefaCompartilhada,
+  "etapas-fechamento": EtapasFechamento,
+  "meu-fechamento": MeuFechamento,
+  "banco-anterior": BancoAnterior,
 };
 
 export function GuiaPrevia({ id }: { id: PreviaId }) {

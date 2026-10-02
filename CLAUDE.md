@@ -110,6 +110,22 @@ plano pago e o usuário quer tudo gratuito): PDFs/comprovantes ficam no Firestor
 - **Meu Workspace** (`/workspace`): anotações privadas (Kanban, lista, por projeto, lixeira de 15 dias, lembretes no sino)
   para todos os perfis internos (`PERFIS_WORKSPACE`; o responsável da parceira não tem). **Cada um vê só as próprias** —
   nem o admin vê as dos outros; as regras de `anotacoes` garantem. Código em `src/lib/workspace*.ts` e `src/components/workspace`.
+  **Tarefas compartilhadas** (só admin e financeiro, entre eles — `PERFIS_COMPARTILHAM`): o dono marca participantes
+  (`participantesUids`); eles veem, atualizam e registram o andamento na conversa (subcoleção `comentarios`); só o dono
+  exclui, escolhe participantes e liga lembretes. Avisos no sino são `notificacoes` com `origem: "workspace"` + `anotacaoId`
+  (marcação, comentário, mudança de status). Consultor e coordenador nunca marcam ninguém. O menu "Meu Workspace" mostra a
+  bolinha com as pendências não lidas do sino (`usePendenciasWorkspace`); abrir a tarefa marca os avisos/lembrete como lidos.
+- **Recurso ativo/inativo** (`Recurso.ativo` + `dataInativacao`; ausente = ativo; helpers em `src/lib/recursoAtivo.ts`):
+  inativo só aceita apontamento **até a data de inativação, inclusive**. Validado no calendário, na ocorrência de
+  recorrência, na importação de horas retroativas e nas regras (`recursoAceitaData`, conferido no create e quando a
+  data/recurso de um apontamento muda).
+- **Banco de horas no Financeiro**: além de "Gerar parcela do mês" (horas aprovadas × valor hora), há **"Lançar
+  faturamento anterior"** (`lancarFaturamentoAnteriorBanco`): mês, horas opcionais, valor, situação Liberado/Faturado/Recebido,
+  datas e NF — vira parcela já nessa situação e entra no Previsto x Realizado pelo mês da data de faturamento (`dataLiberacao`).
+- **Relatório do fechamento** (Excel/PDF/tela): com mais de um recurso, termina com o "Resumo por recurso" (`resumoPorRecurso`).
+- **Tabelas ordenáveis**: cabeçalhos clicáveis via `useOrdenacao` + `ThOrdenavel` (`src/components/ui/Ordenacao.tsx`;
+  1º clique crescente, 2º decrescente, 3º volta ao normal; vazios no fim). Usar em toda tabela nova. Ficam de fora as
+  árvores do cronograma (Previsto x Realizado, prévias de importação) e a grade do Mapa de Alocação.
 - Abas de módulo (Financeiro, Cadastros, Calendário) usam `AbasNavegacao`, fixas no topo ao rolar.
 
 ## Armadilhas técnicas
