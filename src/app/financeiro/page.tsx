@@ -8,7 +8,7 @@ import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { AlterarStatusParcelaModal } from "@/components/financeiro/AlterarStatusParcelaModal";
 import { CartaoParcelasProjeto } from "@/components/financeiro/CartaoParcelasProjeto";
 import { GraficoPizzaLiotNg } from "@/components/financeiro/GraficoPizzaLiotNg";
-import { gerarParcelaBancoDeHoras, horasApontadasNoMes, horasDoProjetoPorMesEStatus } from "@/lib/bancoHoras";
+import { gerarParcelaBancoDeHoras, horasApontadasNoMes, horasDoProjetoPorMesEStatus, lancarFaturamentoAnteriorBanco } from "@/lib/bancoHoras";
 import { segmentarLiotNg } from "@/lib/segmentacaoLiotNg";
 import { Input } from "@/components/ui/Field";
 import { TIPO_RECURSO_CONFIG } from "@/lib/constants";
@@ -219,6 +219,8 @@ function FinanceiroPageContent() {
                         valorHora: p.financeiro?.valorHora ?? 0,
                         valor,
                       }),
+                    onLancarAnterior: (dados) =>
+                      lancarFaturamentoAnteriorBanco({ projeto: p, dados, ator: { uid: usuario?.uid ?? "", nome: usuario?.nomeCompleto ?? "" } }),
                   }
                 : undefined
             }

@@ -1,13 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, History } from "lucide-react";
 import { PeriodoBadge } from "@/components/projetos/PeriodoBadge";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Field";
+import { FormRow, Input, Select } from "@/components/ui/Field";
 import { STATUS_PARCELA_CONFIG, STATUS_PARCELA_ORDEM, TIPO_FATURAMENTO_CONFIG } from "@/lib/constants";
 import { nomeExibicaoCliente } from "@/lib/cliente";
-import { formatarHorasDecimais, parcelaDoMes, resumoBancoDeHoras, rotuloMes, valorDoBancoDeHoras } from "@/lib/bancoHoras";
+import {
+  formatarHorasDecimais,
+  parcelaDoMes,
+  resumoBancoDeHoras,
+  rotuloMes,
+  valorDoBancoDeHoras,
+  type FaturamentoAnteriorBanco,
+} from "@/lib/bancoHoras";
 import type { Cliente, Projeto, StatusParcela } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -19,6 +26,134 @@ export interface BancoDeHorasDoMes {
   /** Horas do projeto em outros meses/status, para explicar um mês zerado. */
   outrasHoras?: string[];
   onGerarParcela: (valor: number) => Promise<void>;
+  /** Lançar um faturamento de meses anteriores (antes do sistema), já faturado ou recebido. */
+  onLancarAnterior: (dados: FaturamentoAnteriorBanco) => Promise<void>;
+}
+
+const hojeIso = () => new Date().toLocaleDateString("sv-SE");
+const ANTERIOR_VAZIO = { mes: "", valor: "", horas: "", status: "FATURADO" as FaturamentoAnteriorBanco["status"], dataFaturamento: "", notaFiscal: "", dataRecebimento: "" };
+
+/** Formulário para incluir o valor de um faturamento anterior do banco de horas (com as datas, como nos parcelados). */
+function FaturamentoAnterior({ projeto, banco }: { projeto: Projeto; banco: BancoDeHorasDoMes }) {
+  const [aberto, setAberto] = useState(false);
+  const [f, setF] = useState(ANTERIOR_VAZIO);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [ok, setOk] = useState("");
+  const campo = (k: keyof typeof ANTERIOR_VAZIO, v: string) => setF((x) => ({ ...x, [k]: v }));
+  const valorHora = projeto.financeiro?.valorHora ?? 0;
+  const jaTemNoMes = f.mes ? parcelaDoMes(projeto, f.mes) : undefined;
+
+  async function salvar() {
+    setErro("");
+    setOk("");
+    const valor = Number(f.valor.replace(",", "."));
+    const horas = f.horas.trim() ? Number(f.horas.replace(",", ".")) : null;
+    if (!f.mes) return setErro("Informe o mês de referência das horas.");
+    if (f.mes > hojeIso().slice(0, 7)) return setErro("O mês de referência não pode ser futuro.");
+    if (!Number.isFinite(valor) || valor <= 0) return setErro("Informe o valor faturado (maior que zero).");
+    if (horas !== null && (!Number.isFinite(horas) || horas < 0)) return setErro("Horas inválidas.");
+    if (!f.dataFaturamento) return setErro("Informe a data do faturamento.");
+    if (f.status === "RECEBIDO" && !f.dataRecebimento) return setErro("Informe a data do recebimento.");
+    if (jaTemNoMes) return setErro(`Já existe a parcela ${jaTemNoMes.numero} de ${rotuloMes(f.mes)}. Para corrigir, altere essa parcela.`);
+    setSalvando(true);
+    try {
+      await banco.onLancarAnterior({ ...f, valor, horas, status: f.status });
+      setOk(`Faturamento de ${rotuloMes(f.mes)} incluído.`);
+      setF(ANTERIOR_VAZIO);
+    } catch (err) {
+      console.error("Erro ao lançar faturamento anterior:", err);
+      setErro("Não foi possível incluir. Tente novamente.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  if (!aberto) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="secondary" onClick={() => setAberto(true)} className="h-9 px-3 text-[12.5px]">
+          <History size={14} />
+          Lançar faturamento anterior
+        </Button>
+        <span className="text-[12px] text-brand-faint">Para meses já faturados antes do sistema (ou sem apontamento aqui).</span>
+        {ok && <span className="text-[12.5px] font-semibold text-[#15754c]">{ok}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-brand-border bg-white p-4">
+      <p className="flex items-center gap-1.5 text-[13px] font-bold text-brand-navy-2">
+        <History size={15} className="text-brand-faint" />
+        Faturamento anterior do banco de horas
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <FormRow label="Mês das horas">
+          <Input type="month" value={f.mes} max={hojeIso().slice(0, 7)} onChange={(e) => campo("mes", e.target.value)} />
+        </FormRow>
+        <FormRow label="Horas (opcional)">
+          <Input type="number" step="0.01" min="0" value={f.horas} onChange={(e) => campo("horas", e.target.value)} placeholder="ex.: 80" />
+        </FormRow>
+        <FormRow label="Valor faturado (R$)">
+          <Input type="number" step="0.01" min="0" value={f.valor} onChange={(e) => campo("valor", e.target.value)} placeholder="0,00" />
+        </FormRow>
+        <FormRow label="Situação">
+          <Select value={f.status} onChange={(e) => campo("status", e.target.value)}>
+            <option value="LIBERADO">{STATUS_PARCELA_CONFIG.LIBERADO.label}</option>
+            <option value="FATURADO">{STATUS_PARCELA_CONFIG.FATURADO.label}</option>
+            <option value="RECEBIDO">{STATUS_PARCELA_CONFIG.RECEBIDO.label}</option>
+          </Select>
+        </FormRow>
+        <FormRow label="Data do faturamento">
+          <Input type="date" value={f.dataFaturamento} max={hojeIso()} onChange={(e) => campo("dataFaturamento", e.target.value)} />
+        </FormRow>
+        <FormRow label="Nota fiscal (opcional)">
+          <Input value={f.notaFiscal} onChange={(e) => campo("notaFiscal", e.target.value)} placeholder="nº da NF" />
+        </FormRow>
+        {f.status === "RECEBIDO" && (
+          <FormRow label="Data do recebimento">
+            <Input type="date" value={f.dataRecebimento} max={hojeIso()} onChange={(e) => campo("dataRecebimento", e.target.value)} />
+          </FormRow>
+        )}
+      </div>
+      {f.horas.trim() && valorHora > 0 && Number(f.horas.replace(",", ".")) > 0 && (
+        <p className="text-[12px] text-brand-muted">
+          Pelo valor hora do projeto: {resumoBancoDeHoras(Number(f.horas.replace(",", ".")), valorHora)}.{" "}
+          {f.valor === "" && (
+            <button
+              type="button"
+              onClick={() => campo("valor", String(valorDoBancoDeHoras(Number(f.horas.replace(",", ".")), valorHora)))}
+              className="font-semibold text-brand-accent hover:underline"
+            >
+              Usar este valor
+            </button>
+          )}
+        </p>
+      )}
+      <p className="text-[11.5px] text-brand-faint">
+        Entra na lista de parcelas já na situação escolhida e conta no Faturamento Previsto x Realizado pelo mês da data do faturamento.
+      </p>
+      {erro && <p className="text-[12.5px] font-semibold text-red-600">{erro}</p>}
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={salvando}
+          onClick={() => {
+            setAberto(false);
+            setF(ANTERIOR_VAZIO);
+            setErro("");
+          }}
+        >
+          Cancelar
+        </Button>
+        <Button type="button" onClick={salvar} disabled={salvando}>
+          {salvando ? "Incluindo..." : "Incluir faturamento"}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -185,6 +320,8 @@ export function CartaoParcelasProjeto({
               )}
             </div>
           )}
+
+          {ehBanco && banco && <FaturamentoAnterior projeto={p} banco={banco} />}
 
           {porApontamento ? (
             <p className="text-sm text-brand-faint">Faturamento por apontamento de horas — sem parcelas fixas.</p>

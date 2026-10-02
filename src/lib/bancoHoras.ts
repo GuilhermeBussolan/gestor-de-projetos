@@ -1,6 +1,6 @@
 import { salvarDadosFinanceirosProjeto } from "@/lib/dadosProtegidos";
 import { statusEfetivo } from "@/lib/statusHora";
-import type { EventoCalendario, Parcela, Projeto } from "@/types";
+import type { EventoCalendario, Parcela, Projeto, StatusParcela } from "@/types";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -90,4 +90,58 @@ export async function gerarParcelaBancoDeHoras({
   };
   const novas = [...parcelas, nova];
   await salvarDadosFinanceirosProjeto(projeto.id, { financeiro: { ...financeiro, numeroParcelas: novas.length, parcelas: novas } });
+}
+
+/** O que foi faturado antes de o projeto estar no sistema (ou antes de existir apontamento dele aqui). */
+export interface FaturamentoAnteriorBanco {
+  /** YYYY-MM das horas faturadas. */
+  mes: string;
+  valor: number;
+  /** Opcional: horas daquele faturamento (só informação). */
+  horas: number | null;
+  status: Extract<StatusParcela, "LIBERADO" | "FATURADO" | "RECEBIDO">;
+  /** YYYY-MM-DD em que o faturamento foi liberado/faturado — é o mês em que entra no Previsto x Realizado. */
+  dataFaturamento: string;
+  notaFiscal: string;
+  /** YYYY-MM-DD, obrigatória quando já foi recebido. */
+  dataRecebimento: string;
+}
+
+/**
+ * Lança um faturamento anterior do banco de horas já na situação em que está (liberado, faturado ou recebido), com as
+ * datas — como os parcelados e os marcos, que já nascem com essas datas. Entra na lista de parcelas do projeto e nos
+ * relatórios pelo mês da data de faturamento.
+ */
+export async function lancarFaturamentoAnteriorBanco({
+  projeto,
+  dados,
+  ator,
+}: {
+  projeto: Projeto;
+  dados: FaturamentoAnteriorBanco;
+  ator: { uid: string; nome: string };
+}) {
+  const financeiro = projeto.financeiro;
+  const parcelas = financeiro?.parcelas ?? [];
+  const numero = parcelas.reduce((m, p) => Math.max(m, p.numero), 0) + 1;
+  const valorHora = financeiro?.valorHora ?? 0;
+  const horas = dados.horas && dados.horas > 0 ? Math.round(dados.horas * 100) / 100 : null;
+  const nova: Parcela = {
+    numero,
+    descricao: `Banco de horas — ${rotuloMes(dados.mes)}${horas && valorHora > 0 ? ` (${resumoBancoDeHoras(horas, valorHora)})` : ""} · faturamento anterior`,
+    valor: Math.round(dados.valor * 100) / 100,
+    status: dados.status,
+    periodoReferencia: dados.mes,
+    horasApontadas: horas,
+    valorHoraAplicado: valorHora > 0 ? valorHora : null,
+    // Meio-dia evita que o fuso jogue a data para o dia anterior.
+    dataLiberacao: new Date(`${dados.dataFaturamento}T12:00:00`).getTime(),
+    liberadoPor: ator,
+    notaFiscal: dados.notaFiscal.trim() || null,
+    dataRecebimento: dados.status === "RECEBIDO" ? dados.dataRecebimento : null,
+  };
+  const novas = [...parcelas, nova];
+  await salvarDadosFinanceirosProjeto(projeto.id, {
+    financeiro: JSON.parse(JSON.stringify({ ...financeiro, numeroParcelas: novas.length, parcelas: novas })),
+  });
 }
