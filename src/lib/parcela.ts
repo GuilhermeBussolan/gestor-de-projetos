@@ -113,14 +113,14 @@ export function validarDadosStatusParcela(
   return null;
 }
 
-export async function alterarStatusParcela(
-  projeto: Projeto,
+/** Aplica uma troca de status numa lista de parcelas (validando antes) e devolve a lista nova — sem gravar. */
+function aplicarStatus(
+  parcelasAtuais: Parcela[],
   numero: number,
   status: StatusParcela,
-  dados: DadosStatusParcela = {},
+  dados: DadosStatusParcela,
   usuario?: Usuario
-) {
-  const parcelasAtuais = projeto.financeiro.parcelas;
+): Parcela[] {
   const erro = validarDadosStatusParcela(status, dados, parcelasAtuais, numero);
   if (erro) throw new Error(erro);
 
@@ -147,8 +147,49 @@ export async function alterarStatusParcela(
   if (status === "LIBERADO") {
     parcelas = recalcularDatasFuturas(parcelas, numero, dados.dataLiberacaoIso!);
   }
+  return parcelas;
+}
 
+export async function alterarStatusParcela(
+  projeto: Projeto,
+  numero: number,
+  status: StatusParcela,
+  dados: DadosStatusParcela = {},
+  usuario?: Usuario
+) {
+  const parcelas = aplicarStatus(projeto.financeiro.parcelas, numero, status, dados, usuario);
   await salvarDadosFinanceirosProjeto(projeto.id, { financeiro: { ...projeto.financeiro, parcelas } });
+}
+
+export interface MudancaEmLote {
+  projeto: Projeto;
+  numero: number;
+  status: StatusParcela;
+  dados: DadosStatusParcela;
+}
+
+/**
+ * Troca o status de várias parcelas de uma vez (recebimento ou NF em lote). As parcelas do mesmo projeto são gravadas
+ * juntas, numa escrita só, para uma não apagar a outra. Devolve quantas deram certo e os erros (por projeto), sem
+ * parar no primeiro.
+ */
+export async function alterarStatusEmLote(mudancas: MudancaEmLote[], usuario?: Usuario): Promise<{ ok: number; erros: string[] }> {
+  const porProjeto = new Map<string, MudancaEmLote[]>();
+  for (const m of mudancas) porProjeto.set(m.projeto.id, [...(porProjeto.get(m.projeto.id) ?? []), m]);
+  let ok = 0;
+  const erros: string[] = [];
+  for (const lista of porProjeto.values()) {
+    const projeto = lista[0].projeto;
+    try {
+      let parcelas = projeto.financeiro.parcelas;
+      for (const m of [...lista].sort((a, b) => a.numero - b.numero)) parcelas = aplicarStatus(parcelas, m.numero, m.status, m.dados, usuario);
+      await salvarDadosFinanceirosProjeto(projeto.id, { financeiro: { ...projeto.financeiro, parcelas } });
+      ok += lista.length;
+    } catch (err) {
+      erros.push(`Proposta ${projeto.codigoProposta}: ${err instanceof Error ? err.message : "não foi possível salvar"}`);
+    }
+  }
+  return { ok, erros };
 }
 
 /** Previsão de faturamento de um marco (1.2) — editável enquanto a parcela está Aguardando. */

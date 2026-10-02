@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { FormRow, Input } from "@/components/ui/Field";
 import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { AlterarStatusParcelaModal } from "@/components/financeiro/AlterarStatusParcelaModal";
+import { LoteParcelasModal, type ModoLote } from "@/components/financeiro/LoteParcelasModal";
 import { STATUS_FATURAMENTO_ORDEM, STATUS_PARCELA_CONFIG, STATUS_PARCELA_ORDEM } from "@/lib/constants";
 import { alterarStatusParcela, type DadosStatusParcela } from "@/lib/parcela";
 import { useAuth } from "@/contexts/AuthContext";
@@ -74,6 +75,9 @@ function FinanceiroLiberacaoPageContent() {
     numero: number;
     status: StatusParcela;
   } | null>(null);
+
+  // Recebimento ou NF em lote (conferência de fim de mês).
+  const [modoLote, setModoLote] = useState<ModoLote | null>(null);
 
   const todasLiberacoes = useMemo(() => montarRelatorioLiberacao(projetos, clientes), [projetos, clientes]);
 
@@ -152,7 +156,9 @@ function FinanceiroLiberacaoPageContent() {
         <h1 className="text-xl font-extrabold tracking-[-0.01em] text-brand-navy-2">
           Liberação de Faturamento
         </h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setModoLote("recebimento")}>Recebimento em lote</Button>
+          <Button onClick={() => setModoLote("nf")}>NF em lote</Button>
           <Button
             variant="secondary"
             disabled={liberacoesExibidas.length === 0}
@@ -290,6 +296,17 @@ function FinanceiroLiberacaoPageContent() {
         onCancelar={() => setAlterando(null)}
         onConfirmar={confirmarAlteracao}
       />
+
+      {modoLote && (
+        <LoteParcelasModal
+          key={modoLote}
+          modo={modoLote}
+          linhas={todasLiberacoes}
+          projetos={projetos}
+          usuario={usuario}
+          onClose={() => setModoLote(null)}
+        />
+      )}
     </div>
   );
 }
