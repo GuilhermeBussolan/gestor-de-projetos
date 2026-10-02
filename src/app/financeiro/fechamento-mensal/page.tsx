@@ -17,6 +17,7 @@ import {
   descreverEscopo,
   exportarFechamentoExcel,
   exportarFechamentoPdf,
+  resumoPorRecurso,
   montarFechamentoMensal,
   parceirasComRecursos,
   recursosDoFiltro,
@@ -64,6 +65,7 @@ function FechamentoMensalPageContent() {
 
   const totalHoras = linhas.reduce((acc, l) => acc + l.totalHoras, 0);
   const totalRepasse = linhas.reduce((acc, l) => acc + l.valorRepasse, 0);
+  const resumo = resumoPorRecurso(linhas);
   const vencimento = mesAno ? calcularVencimentoFechamento(mesAno) : null;
   const colunas = 9 + (escopo.incluirVinculo ? 1 : 0) + (escopo.incluirDesconto ? 1 : 0);
   const sobrepostos = linhas.filter((l) => l.sobreposto).length;
@@ -264,6 +266,48 @@ function FechamentoMensalPageContent() {
             )}
           </table>
           </div>
+
+          {resumo.length > 1 && (
+            <div className="border-t border-brand-border">
+              <p className="px-[18px] pt-4 pb-2 text-[13.5px] font-extrabold text-brand-navy-2">Resumo por recurso</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13.5px]">
+                  <thead>
+                    <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
+                      <th className="px-[18px] py-3">Nome do recurso</th>
+                      {escopo.incluirVinculo && <th className="px-[18px] py-3">Vínculo</th>}
+                      <th className="px-[18px] py-3">Lançamentos</th>
+                      <th className="px-[18px] py-3">Total de horas</th>
+                      <th className="px-[18px] py-3">Valor hora</th>
+                      <th className="px-[18px] py-3">Valor de repasse</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resumo.map((r) => (
+                      <tr key={r.recursoId} className="border-t border-brand-border-soft">
+                        <td className="px-[18px] py-3 font-bold text-brand-navy-2">{r.recursoNome}</td>
+                        {escopo.incluirVinculo && <td className="px-[18px] py-3 text-brand-muted">{r.vinculo}</td>}
+                        <td className="px-[18px] py-3 text-brand-muted">{r.lancamentos}</td>
+                        <td className="px-[18px] py-3 text-brand-navy-2">{formatarHoras(r.totalHoras)}</td>
+                        <td className="px-[18px] py-3 whitespace-nowrap text-brand-muted">{moeda(r.valorHora)}</td>
+                        <td className="px-[18px] py-3 font-bold text-brand-navy-2">{moeda(r.valorRepasse)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-brand-border bg-brand-hover font-bold text-brand-navy-2">
+                      <td className="px-[18px] py-3">Total geral ({resumo.length} recursos)</td>
+                      {escopo.incluirVinculo && <td className="px-[18px] py-3" />}
+                      <td className="px-[18px] py-3">{linhas.length}</td>
+                      <td className="px-[18px] py-3">{formatarHoras(totalHoras)}</td>
+                      <td className="px-[18px] py-3" />
+                      <td className="px-[18px] py-3">{moeda(totalRepasse)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
       </div>
     </div>
   );

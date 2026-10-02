@@ -199,6 +199,39 @@ export function montarFechamentoMensal(
   return linhas;
 }
 
+/** Resumo geral de um recurso no relatório: soma de tudo o que é dele no período. */
+export interface ResumoRecurso {
+  recursoId: string;
+  recursoNome: string;
+  vinculo: string;
+  lancamentos: number;
+  totalHoras: number;
+  /** Valor/hora do cadastro (o mesmo em todos os lançamentos do recurso). */
+  valorHora: number;
+  valorRepasse: number;
+}
+
+/** Uma linha por recurso, em ordem alfabética — vai no fim do relatório quando ele tem mais de um recurso. */
+export function resumoPorRecurso(linhas: LinhaFechamento[]): ResumoRecurso[] {
+  const mapa = new Map<string, ResumoRecurso>();
+  for (const l of linhas) {
+    const r = mapa.get(l.recursoId) ?? {
+      recursoId: l.recursoId,
+      recursoNome: l.recursoNome,
+      vinculo: l.vinculo,
+      lancamentos: 0,
+      totalHoras: 0,
+      valorHora: l.valorHora,
+      valorRepasse: 0,
+    };
+    r.lancamentos += 1;
+    r.totalHoras += l.totalHoras;
+    r.valorRepasse = Math.round((r.valorRepasse + l.valorRepasse) * 100) / 100;
+    mapa.set(l.recursoId, r);
+  }
+  return [...mapa.values()].sort((a, b) => a.recursoNome.localeCompare(b.recursoNome, "pt-BR"));
+}
+
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dataBR = (iso: string) => iso.split("-").reverse().join("/");
 export const nomeArquivoSeguro = (s: string) => s.replace(/[\\/:*?"<>|]/g, "-");
@@ -239,6 +272,23 @@ function celulasLinha(l: LinhaFechamento, o: ColunasOpcionais): string[] {
 function linhaTotal(totalHoras: number, totalRepasse: number, o: ColunasOpcionais): string[] {
   const antesDasHoras = cabecalhoColunas(o).length - 3;
   return [...Array(antesDasHoras - 1).fill(""), "Total", formatarHoras(totalHoras), "", moeda(totalRepasse)];
+}
+
+const TITULO_RESUMO = "Resumo por recurso";
+
+function cabecalhoResumo(o: ColunasOpcionais): string[] {
+  return ["Nome do recurso", ...(o.incluirVinculo ? ["Vínculo"] : []), "Lançamentos", "Total de horas", "Valor hora", "Valor de repasse"];
+}
+
+function celulasResumo(r: ResumoRecurso, o: ColunasOpcionais): string[] {
+  return [r.recursoNome, ...(o.incluirVinculo ? [r.vinculo] : []), String(r.lancamentos), formatarHoras(r.totalHoras), moeda(r.valorHora), moeda(r.valorRepasse)];
+}
+
+function totalResumo(resumo: ResumoRecurso[], o: ColunasOpcionais): string[] {
+  const lancamentos = resumo.reduce((s, r) => s + r.lancamentos, 0);
+  const horas = resumo.reduce((s, r) => s + r.totalHoras, 0);
+  const repasse = resumo.reduce((s, r) => s + r.valorRepasse, 0);
+  return [`Total geral (${resumo.length} recursos)`, ...(o.incluirVinculo ? [""] : []), String(lancamentos), formatarHoras(horas), "", moeda(repasse)];
 }
 
 export async function carregarImagemDataUrl(url: string): Promise<string | null> {
@@ -358,6 +408,28 @@ export async function exportarFechamentoPdf(
     margin: { left: 14, right: 14 },
   });
 
+  // Resumo geral de cada recurso no fim (só quando o relatório tem mais de um).
+  const resumo = resumoPorRecurso(linhas);
+  if (resumo.length > 1) {
+    const fimTabela = (pdf as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
+    let yResumo = fimTabela + 10;
+    if (yResumo > pdf.internal.pageSize.getHeight() - 30) {
+      pdf.addPage();
+      yResumo = 16;
+    }
+    pdf.setFontSize(11);
+    pdf.text(TITULO_RESUMO, 14, yResumo);
+    autoTable(pdf, {
+      startY: yResumo + 3,
+      head: [cabecalhoResumo(escopo)],
+      body: resumo.map((r) => celulasResumo(r, escopo)),
+      foot: [totalResumo(resumo, escopo)],
+      styles: { fontSize: 8 },
+      footStyles: { fontStyle: "bold", fillColor: [238, 241, 248], textColor: [21, 40, 73] },
+      margin: { left: 14, right: 14 },
+    });
+  }
+
   pdf.save(`fechamento-mensal-${nomeArquivoSeguro(escopo.rotulo)}-${mesAno}.pdf`);
 }
 
@@ -433,6 +505,19 @@ export async function exportarFechamentoExcel(
   const totalRepasse = linhas.reduce((acc, l) => acc + l.valorRepasse, 0);
   const total = planilha.addRow(linhaTotal(totalHoras, totalRepasse, escopo));
   total.font = { bold: true };
+
+  // Resumo geral de cada recurso nas últimas linhas (só quando o relatório tem mais de um).
+  const resumo = resumoPorRecurso(linhas);
+  if (resumo.length > 1) {
+    planilha.addRow([]);
+    const titulo = planilha.addRow([TITULO_RESUMO]);
+    titulo.font = { bold: true, size: 12 };
+    const cab = planilha.addRow(cabecalhoResumo(escopo));
+    cab.font = { bold: true };
+    resumo.forEach((r) => planilha.addRow(celulasResumo(r, escopo)));
+    const totalGeral = planilha.addRow(totalResumo(resumo, escopo));
+    totalGeral.font = { bold: true };
+  }
 
   const buffer = await workbook.xlsx.writeBuffer();
   saveAs(new Blob([buffer]), `fechamento-mensal-${nomeArquivoSeguro(escopo.rotulo)}-${mesAno}.xlsx`);
