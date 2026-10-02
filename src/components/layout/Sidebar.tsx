@@ -23,6 +23,7 @@ import {
 import { BolinhaContagem } from "@/components/ui/BolinhaContagem";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePendenciasAprovacao } from "@/lib/usePendenciasAprovacao";
+import { usePendenciasWorkspace } from "@/lib/usePendenciasWorkspace";
 import { useFechamentoParceira } from "@/lib/useFechamentoParceira";
 import { PERFIS_MEU_FECHAMENTO, useMeuFechamento } from "@/lib/useMeuFechamento";
 import { PERFIS_WORKSPACE } from "@/lib/workspace";
@@ -109,6 +110,7 @@ export function Sidebar() {
   const pendenciasAprovacao = usePendenciasAprovacao(usuario?.perfil);
   const fechamentoParceira = useFechamentoParceira(usuario);
   const meuFechamento = useMeuFechamento(usuario);
+  const pendenciasWorkspace = usePendenciasWorkspace(usuario);
   const [colapsada, setColapsada] = useState(
     () => localStorage.getItem(SIDEBAR_COLAPSADA_KEY) === "1"
   );
@@ -149,10 +151,14 @@ export function Sidebar() {
           ? fechamentoParceira.pendentes
           : item.href === "/meu-fechamento"
             ? meuFechamento.pendentes
-            : 0;
+            : item.href === "/workspace"
+              ? pendenciasWorkspace
+              : 0;
     const tituloPendencias = ehFechamento
       ? `${pendencias} fechamento${pendencias === 1 ? "" : "s"} aguardando sua resposta`
-      : `${pendencias} apontamento${pendencias === 1 ? "" : "s"} aguardando aprovação`;
+      : item.href === "/workspace"
+        ? `${pendencias} pendência${pendencias === 1 ? "" : "s"} do Workspace no sino (lembretes e tarefas)`
+        : `${pendencias} apontamento${pendencias === 1 ? "" : "s"} aguardando aprovação`;
     return (
       <Link
         href={item.href}

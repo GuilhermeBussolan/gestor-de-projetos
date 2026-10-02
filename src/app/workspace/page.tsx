@@ -30,6 +30,7 @@ import { CartaoAnotacao } from "@/components/workspace/CartaoAnotacao";
 import { ICONE_STATUS } from "@/components/workspace/visual";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCollection } from "@/lib/useCollection";
+import { marcarTodasLidas } from "@/lib/notificacoes";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import {
   COLUNAS_KANBAN,
@@ -39,6 +40,7 @@ import {
   filtrarAnotacoes,
   ordemAoSoltar,
   ehCompartilhada,
+  lembreteDaAnotacao,
   PERFIS_WORKSPACE,
   podeCompartilharTarefas,
   porOrdem,
@@ -50,8 +52,8 @@ import {
   type AtalhoWorkspace,
   type FiltrosWorkspace,
 } from "@/lib/workspace";
-import { arquivarAnotacao, criarAnotacao, excluirDefinitivamente, moverAnotacao } from "@/lib/workspaceDb";
-import type { Anotacao, Cliente, PessoaDiretorio, PrioridadeAnotacao, Projeto, StatusAnotacao } from "@/types";
+import { arquivarAnotacao, criarAnotacao, excluirDefinitivamente, marcarLembreteLido, moverAnotacao } from "@/lib/workspaceDb";
+import type { Anotacao, Cliente, Notificacao, PessoaDiretorio, PrioridadeAnotacao, Projeto, StatusAnotacao } from "@/types";
 
 type Visao = "kanban" | "lista" | "projetos";
 const VISOES: { id: Visao; label: string; icone: LucideIcon }[] = [
@@ -107,6 +109,16 @@ function WorkspaceContent() {
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [lixeiraAberta, setLixeiraAberta] = useState(false);
   const [editando, setEditando] = useState<Anotacao | null | "nova">(null);
+  // Avisos de tarefa compartilhada ainda não lidos: abrir a tarefa aqui também os marca como lidos (a bolinha do menu baixa).
+  const { data: avisos } = useCollection<Notificacao>("notificacoes", [where("destinatarioUid", "==", usuario?.uid ?? "")], !!usuario?.uid, [usuario?.uid]);
+  function abrirAnotacao(a: Anotacao) {
+    setEditando(a);
+    const naoLidos = avisos.filter((n) => n.origem === "workspace" && n.anotacaoId === a.id && !n.lida).map((n) => n.id);
+    if (naoLidos.length > 0) marcarTodasLidas(naoLidos).catch((err) => console.error("Erro ao marcar os avisos como lidos:", err));
+    // Lembrete da própria anotação que está no sino: abrir também conta como lido.
+    const lembrete = a.usuarioId === usuario?.uid ? lembreteDaAnotacao(a, new Date().toLocaleDateString("sv-SE")) : null;
+    if (lembrete && !lembrete.lido) marcarLembreteLido(a).catch((err) => console.error("Erro ao marcar o lembrete como lido:", err));
+  }
   const [rapida, setRapida] = useState("");
   const [salvandoRapida, setSalvandoRapida] = useState(false);
   const [arrastando, setArrastando] = useState<string | null>(null);
@@ -383,7 +395,7 @@ function WorkspaceContent() {
       )}
 
       {visao === "lista" ? (
-        <ListaAnotacoes anotacoes={filtradas} contextoDe={contextoDe} hojeIso={hojeIso} onAbrir={(a) => setEditando(a)} />
+        <ListaAnotacoes anotacoes={filtradas} contextoDe={contextoDe} hojeIso={hojeIso} onAbrir={(a) => abrirAnotacao(a)} />
       ) : visao === "projetos" ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {resumoPorProjeto(ativas)
@@ -447,7 +459,7 @@ function WorkspaceContent() {
             {[...filtradas]
               .sort((a, b) => b.updatedAt - a.updatedAt)
               .map((a) => (
-                <CartaoAnotacao key={a.id} a={a} projeto={contextoDe(a).projeto} compartilhamento={compartilhamentoDe(a)} hojeIso={hojeIso} onAbrir={() => setEditando(a)} />
+                <CartaoAnotacao key={a.id} a={a} projeto={contextoDe(a).projeto} compartilhamento={compartilhamentoDe(a)} hojeIso={hojeIso} onAbrir={() => abrirAnotacao(a)} />
               ))}
           </div>
           {filtradas.length === 0 && <p className="text-[13px] text-brand-faint">Nenhuma anotação arquivada.</p>}
@@ -520,7 +532,7 @@ function WorkspaceContent() {
                         projeto={contextoDe(a).projeto}
                         compartilhamento={compartilhamentoDe(a)}
                         hojeIso={hojeIso}
-                        onAbrir={() => setEditando(a)}
+                        onAbrir={() => abrirAnotacao(a)}
                         onConcluir={status !== "concluido" ? () => concluir(a) : undefined}
                         onArquivar={status === "concluido" ? () => arquivar(a) : undefined}
                         onArrastar={(e) => {
