@@ -10,8 +10,10 @@ import { CadastrosTabs } from "@/components/layout/CadastrosTabs";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormRow, Input, Select } from "@/components/ui/Field";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { TIPO_BOX_CONFIG, TIPO_RECURSO_CONFIG } from "@/lib/constants";
 import { nomeExibicaoParceira } from "@/lib/parceira";
+import { recursoAtivo } from "@/lib/recursoAtivo";
 import type { EmpresaParceira, Recurso, TipoBox, TipoRecurso } from "@/types";
 
 const RECURSO_VAZIO = {
@@ -21,7 +23,12 @@ const RECURSO_VAZIO = {
   valorHora: "",
   tipoBox: "proprio" as TipoBox,
   parceiraId: "",
+  ativo: true,
+  dataInativacao: "",
 };
+
+const hojeIso = () => new Date().toLocaleDateString("sv-SE");
+const dataBR = (iso: string) => iso.split("-").reverse().join("/");
 
 function RecursosPageContent() {
   const { data: recursos, loading } = useRecursos();
@@ -48,6 +55,8 @@ function RecursosPageContent() {
       valorHora: String(r.valorHora),
       tipoBox: r.tipoBox ?? "proprio",
       parceiraId: r.parceiraId ?? "",
+      ativo: recursoAtivo(r),
+      dataInativacao: r.dataInativacao ?? "",
     });
     setErro("");
     setModalAberto(true);
@@ -60,6 +69,10 @@ function RecursosPageContent() {
       setErro("Selecione a empresa parceira para um recurso BOX Terceiro.");
       return;
     }
+    if (!form.ativo && !form.dataInativacao) {
+      setErro("Informe a data de inativação do recurso.");
+      return;
+    }
     setSalvando(true);
     try {
       const dados = {
@@ -68,6 +81,8 @@ function RecursosPageContent() {
         codigo: form.codigo,
         tipoBox: form.tipoBox,
         parceiraId: form.tipoBox === "terceiro" ? form.parceiraId : null,
+        ativo: form.ativo,
+        dataInativacao: form.ativo ? null : form.dataInativacao,
       };
       // O valor/hora fica em recursosValores (só admin e financeiro leem); o resto do cadastro, em recursos.
       const lote = writeBatch(db);
@@ -84,6 +99,16 @@ function RecursosPageContent() {
       setSalvando(false);
     }
   }
+
+  const nomeParceira = (r: Recurso) => nomeExibicaoParceira(parceiras.find((p) => p.id === r.parceiraId));
+  const { ordenados, ordem, ordenar } = useOrdenacao(recursos, {
+    categoria: (r) => TIPO_RECURSO_CONFIG[r.tipo].label,
+    nome: (r) => r.nomeCompleto,
+    codigo: (r) => r.codigo,
+    valorHora: (r) => r.valorHora,
+    box: (r) => ((r.tipoBox ?? "proprio") === "terceiro" ? `Terceiro — ${nomeParceira(r)}` : "Próprio"),
+    situacao: (r) => (recursoAtivo(r) ? "0" : `1 ${r.dataInativacao ?? ""}`),
+  });
 
   async function excluir(r: Recurso) {
     if (!confirm(`Excluir o recurso "${r.nomeCompleto}"?`)) return;
@@ -103,17 +128,18 @@ function RecursosPageContent() {
         <table className="w-full text-[13.5px]">
           <thead>
             <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-              <th className="px-[18px] py-3.5">Categoria</th>
-              <th className="px-[18px] py-3.5">Nome completo</th>
-              <th className="px-[18px] py-3.5">Código</th>
-              <th className="px-[18px] py-3.5">Valor/hora</th>
-              <th className="px-[18px] py-3.5">BOX</th>
+              <ThOrdenavel chave="categoria" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Categoria</ThOrdenavel>
+              <ThOrdenavel chave="nome" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Nome completo</ThOrdenavel>
+              <ThOrdenavel chave="codigo" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Código</ThOrdenavel>
+              <ThOrdenavel chave="valorHora" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Valor/hora</ThOrdenavel>
+              <ThOrdenavel chave="box" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">BOX</ThOrdenavel>
+              <ThOrdenavel chave="situacao" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Situação</ThOrdenavel>
               <th className="px-[18px] py-3.5" />
             </tr>
           </thead>
           <tbody>
-            {recursos.map((r) => (
-              <tr key={r.id} className="border-t border-brand-border-soft hover:bg-brand-hover">
+            {ordenados.map((r) => (
+              <tr key={r.id} className={`border-t border-brand-border-soft hover:bg-brand-hover ${recursoAtivo(r) ? "" : "opacity-60"}`}>
                 <td className="px-[18px] py-[15px] text-brand-muted">{TIPO_RECURSO_CONFIG[r.tipo].label}</td>
                 <td className="px-[18px] py-[15px] font-bold text-brand-navy-2">{r.nomeCompleto}</td>
                 <td className="px-[18px] py-[15px] text-brand-muted">{r.codigo}</td>
@@ -122,8 +148,20 @@ function RecursosPageContent() {
                 </td>
                 <td className="px-[18px] py-[15px] text-brand-muted">
                   {(r.tipoBox ?? "proprio") === "terceiro"
-                    ? `Terceiro — ${nomeExibicaoParceira(parceiras.find((p) => p.id === r.parceiraId))}`
+                    ? `Terceiro — ${nomeParceira(r)}`
                     : "Próprio"}
+                </td>
+                <td className="px-[18px] py-[15px] whitespace-nowrap">
+                  {recursoAtivo(r) ? (
+                    <span className="rounded-full bg-[#e3f5ea] px-2.5 py-0.5 text-[11px] font-bold text-[#15754c]">Ativo</span>
+                  ) : (
+                    <span
+                      className="rounded-full bg-[#f1f2f6] px-2.5 py-0.5 text-[11px] font-bold text-[#6a7594]"
+                      title="Apontamentos só até a data de inativação"
+                    >
+                      Inativo{r.dataInativacao ? ` desde ${dataBR(r.dataInativacao)}` : ""}
+                    </span>
+                  )}
                 </td>
                 <td className="px-[18px] py-[15px] text-right">
                   <button
@@ -140,7 +178,7 @@ function RecursosPageContent() {
             ))}
             {!loading && recursos.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-brand-faint">
+                <td colSpan={7} className="px-4 py-8 text-center text-brand-faint">
                   Nenhum recurso cadastrado.
                 </td>
               </tr>
@@ -230,6 +268,31 @@ function RecursosPageContent() {
                 </p>
               )}
             </FormRow>
+          )}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormRow label="Situação">
+              <Select
+                value={form.ativo ? "ativo" : "inativo"}
+                onChange={(e) => {
+                  const ativo = e.target.value === "ativo";
+                  setForm({ ...form, ativo, dataInativacao: ativo ? "" : form.dataInativacao || hojeIso() });
+                }}
+              >
+                <option value="ativo">Ativo</option>
+                <option value="inativo">Inativo</option>
+              </Select>
+            </FormRow>
+            {!form.ativo && (
+              <FormRow label="Data de inativação">
+                <Input type="date" value={form.dataInativacao} onChange={(e) => setForm({ ...form, dataInativacao: e.target.value })} required />
+              </FormRow>
+            )}
+          </div>
+          {!form.ativo && (
+            <p className="-mt-2 text-[12px] text-brand-muted">
+              Apontamentos até {form.dataInativacao ? dataBR(form.dataInativacao) : "essa data"} (inclusive) continuam permitidos; depois dela, não.
+            </p>
           )}
 
           {erro && <p className="text-sm font-medium text-red-600">{erro}</p>}

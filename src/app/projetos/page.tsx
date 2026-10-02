@@ -21,7 +21,8 @@ import { Upload } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { nomeExibicaoCliente } from "@/lib/cliente";
 import { calcularPercentualProjeto } from "@/lib/dashboardCalc";
-import { TERMOMETRO_CONFIG } from "@/lib/constants";
+import { TERMOMETRO_CONFIG, TERMOMETRO_ORDEM } from "@/lib/constants";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { termometroEfetivo } from "@/lib/termometro";
 import { MODULOS, TIPOS_ATENDIMENTO } from "@/types";
 import type { Cliente, Escopo, EventoCalendario, Projeto, Recurso, TipoDocumento } from "@/types";
@@ -63,6 +64,17 @@ function ProjetosPageContent() {
       return alvo.includes(termo);
     });
   }, [projetos, clientes, busca, filtroModulo, filtroTipo]);
+
+  const { ordenados: projetosOrdenados, ordem, ordenar } = useOrdenacao(projetosFiltrados, {
+    termometro: (p) => TERMOMETRO_ORDEM.indexOf(termometroEfetivo(p)),
+    cliente: (p) => nomeExibicaoCliente(clientes.find((c) => c.id === p.clienteId)),
+    proposta: (p) => p.codigoProposta,
+    modulo: (p) => p.modulo,
+    tipo: (p) => p.tipoAtendimento,
+    coordenador: (p) => recursos.find((r) => r.id === p.coordenadorId)?.nomeCompleto,
+    periodo: (p) => p.dataInicio,
+    progresso: (p) => calcularPercentualProjeto(p, eventos),
+  });
 
   async function excluir(projeto: Projeto) {
     const cliente = clientes.find((c) => c.id === projeto.clienteId);
@@ -118,34 +130,32 @@ function ProjetosPageContent() {
           <table className="w-full min-w-[780px] text-[13.5px]">
             <thead>
               <tr className="bg-brand-hover">
-                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                  Termômetro
-                </th>
-                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                  Cliente
-                </th>
-                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                  Proposta
-                </th>
-                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                  Módulo
-                </th>
-                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                  Tipo
-                </th>
-                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                  Coordenador
-                </th>
-                <th className="px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                  Período
-                </th>
-                <th className="w-[210px] px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                  Progresso
-                </th>
+                {(
+                  [
+                    ["termometro", "Termômetro", ""],
+                    ["cliente", "Cliente", ""],
+                    ["proposta", "Proposta", ""],
+                    ["modulo", "Módulo", ""],
+                    ["tipo", "Tipo", ""],
+                    ["coordenador", "Coordenador", ""],
+                    ["periodo", "Período", ""],
+                    ["progresso", "Progresso", "w-[210px] "],
+                  ] as const
+                ).map(([chave, label, extra]) => (
+                  <ThOrdenavel
+                    key={chave}
+                    chave={chave}
+                    ordem={ordem}
+                    onOrdenar={ordenar}
+                    className={`${extra}px-[18px] py-3.5 text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase`}
+                  >
+                    {label}
+                  </ThOrdenavel>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {projetosFiltrados.map((p) => {
+              {projetosOrdenados.map((p) => {
                 const cliente = clientes.find((c) => c.id === p.clienteId);
                 const coordenador = recursos.find((r) => r.id === p.coordenadorId);
                 const percentual = calcularPercentualProjeto(p, eventos);

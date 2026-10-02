@@ -17,6 +17,7 @@ import { calcularTotalHoras, formatarHoras } from "@/lib/horas";
 import { STATUS_HORA_CONFIG, statusAoConfirmar, statusEfetivo, statusNaCriacao } from "@/lib/statusHora";
 import { bloqueiosQueConflitam, mensagemConflitoBloqueio } from "@/lib/bloqueioAgenda";
 import { useBloqueiosAgenda } from "@/lib/useBloqueiosAgenda";
+import { aceitaApontamentoEm, mensagemRecursoInativo, rotuloInativo } from "@/lib/recursoAtivo";
 import type { Cliente, EventoCalendario, Projeto, Recurso, Usuario } from "@/types";
 
 function timestampAtual(): number {
@@ -135,12 +136,20 @@ export function EventoModal({
     [projetoId, atividadesEscopo, atividadesMarcadas, totalHorasAtual, emAndamento, eventosDoProjeto, eventoEditando?.id]
   );
   const precisaObservacao = avaliacaoBlocos.some((b) => b.cenario === "acima");
+  // Recurso inativado: só aceita apontamento até a data de inativação. Editar um lançamento antigo sem mudar a data ou o
+  // recurso continua liberado (as regras do Firestore seguem a mesma lógica).
+  const mudouDataOuRecurso = !eventoEditando || eventoEditando.data !== dataEvento || eventoEditando.recursoId !== recursoId;
+  const bloqueioInativo = recurso && mudouDataOuRecurso && !aceitaApontamentoEm(recurso, dataEvento) ? mensagemRecursoInativo(recurso) : null;
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
     if (travadoPorAprovacao) return;
     setErro("");
     if (!projetoId || !recursoId) return;
+    if (bloqueioInativo) {
+      setErro(bloqueioInativo);
+      return;
+    }
     if (souConsultorEditandoMeuEvento && dataEvento > hojeISO) {
       setErro("Não é permitido apontar horas em datas futuras.");
       return;
@@ -277,6 +286,7 @@ export function EventoModal({
               {recursos.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.nomeCompleto}
+                  {rotuloInativo(r) ? ` (${rotuloInativo(r)})` : ""}
                 </option>
               ))}
             </Select>

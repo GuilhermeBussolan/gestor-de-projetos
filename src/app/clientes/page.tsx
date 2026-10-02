@@ -19,6 +19,7 @@ import { nomeExibicaoCliente } from "@/lib/cliente";
 import { semAcento } from "@/lib/mencoes";
 import { ImportarClientesModal } from "@/components/importacao/ImportarClientesModal";
 import { Search, Upload } from "lucide-react";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import type { Cliente, Projeto } from "@/types";
 
 type FiltroProjetos = "" | "com_ativo" | "so_encerrados" | "sem_projeto";
@@ -77,6 +78,23 @@ function ClientesPageContent() {
       .sort((a, b) => (ordem === "recentes" ? (b.createdAt ?? 0) - (a.createdAt ?? 0) : a.nome.localeCompare(b.nome, "pt-BR")));
   }, [clientes, busca, filtroProjetos, filtroCadastro, ordem, projetosPorCliente]);
   const temFiltro = !!busca.trim() || !!filtroProjetos || !!filtroCadastro;
+
+  // Clique no cabeçalho: ordena por cima da ordem escolhida no "Ordenar por".
+  const {
+    ordenados: clientesOrdenados,
+    ordem: ordemColuna,
+    ordenar,
+  } = useOrdenacao(clientesFiltrados, {
+    nome: (c) => c.nome,
+    nomeFantasia: (c) => c.nomeFantasia,
+    cnpj: (c) => c.cnpj,
+    codigoCI: (c) => c.codigoCI,
+    // Projetos ativos primeiro; empate decidido pelo total.
+    projetos: (c) => {
+      const qtd = projetosPorCliente.get(c.id);
+      return qtd ? qtd.ativos * 1_000_000 + qtd.total : null;
+    },
+  });
 
   function limparFiltros() {
     setBusca("");
@@ -200,18 +218,26 @@ function ClientesPageContent() {
         <table className="w-full text-[13.5px]">
           <thead>
             <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-              <th className="px-[18px] py-3.5">Nome</th>
-              <th className="px-[18px] py-3.5">Nome fantasia</th>
-              <th className="px-[18px] py-3.5">CNPJ</th>
-              <th className="px-[18px] py-3.5">Código CI</th>
-              <th className="px-[18px] py-3.5" title="Projetos ativos e total de projetos do cliente">
-                Projetos
-              </th>
+              <ThOrdenavel chave="nome" ordem={ordemColuna} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Nome
+              </ThOrdenavel>
+              <ThOrdenavel chave="nomeFantasia" ordem={ordemColuna} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Nome fantasia
+              </ThOrdenavel>
+              <ThOrdenavel chave="cnpj" ordem={ordemColuna} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                CNPJ
+              </ThOrdenavel>
+              <ThOrdenavel chave="codigoCI" ordem={ordemColuna} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Código CI
+              </ThOrdenavel>
+              <ThOrdenavel chave="projetos" ordem={ordemColuna} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                <span title="Projetos ativos e total de projetos do cliente">Projetos</span>
+              </ThOrdenavel>
               <th className="px-[18px] py-3.5" />
             </tr>
           </thead>
           <tbody>
-            {clientesFiltrados.map((c) => {
+            {clientesOrdenados.map((c) => {
               const qtd = projetosPorCliente.get(c.id);
               return (
               <tr key={c.id} className="border-t border-brand-border-soft hover:bg-brand-hover">

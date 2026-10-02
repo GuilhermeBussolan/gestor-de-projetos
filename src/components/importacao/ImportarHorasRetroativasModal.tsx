@@ -6,6 +6,7 @@ import { ImportModal, type LinhaValidada } from "@/components/importacao/ImportM
 import { pegarCampo, type LinhaImportada } from "@/lib/importarArquivo";
 import { calcularTotalHoras } from "@/lib/horas";
 import { nomeExibicaoCliente } from "@/lib/cliente";
+import { aceitaApontamentoEm } from "@/lib/recursoAtivo";
 import type { Cliente, Projeto, Recurso } from "@/types";
 
 interface HoraRetroativaImportada {
@@ -85,6 +86,14 @@ function processar(
       const parseada = parseDataBR(dataTexto);
       if (!parseada) erros.push("Data inválida (use DD/MM/AAAA)");
       else data = parseada;
+    }
+
+    if (recurso && data && !aceitaApontamentoEm(recurso, data)) {
+      erros.push(
+        recurso.dataInativacao
+          ? `Recurso inativado em ${recurso.dataInativacao.split("-").reverse().join("/")}: só aceita horas até essa data`
+          : "Recurso inativo: não aceita horas"
+      );
     }
 
     if (!horaInicioTexto || !horaValida(horaInicioTexto)) erros.push("Hora Início inválida (use HH:MM)");

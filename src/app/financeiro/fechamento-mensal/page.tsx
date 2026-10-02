@@ -8,6 +8,7 @@ import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select } from "@/components/ui/Field";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { calcularVencimentoFechamento } from "@/lib/feriados";
 import { formatarHoras } from "@/lib/horas";
 import { nomeExibicaoParceira } from "@/lib/parceira";
@@ -69,6 +70,32 @@ function FechamentoMensalPageContent() {
   const vencimento = mesAno ? calcularVencimentoFechamento(mesAno) : null;
   const colunas = 9 + (escopo.incluirVinculo ? 1 : 0) + (escopo.incluirDesconto ? 1 : 0);
   const sobrepostos = linhas.filter((l) => l.sobreposto).length;
+
+  const { ordenados: linhasOrdenadas, ordem, ordenar } = useOrdenacao(linhas, {
+    data: (l) => `${l.data} ${l.horaInicio}`,
+    recurso: (l) => l.recursoNome,
+    vinculo: (l) => l.vinculo,
+    cliente: (l) => l.cliente,
+    projeto: (l) => l.projeto,
+    horaInicio: (l) => l.horaInicio,
+    horaFim: (l) => l.horaFim,
+    desconto: (l) => (l.horaDesconto && l.horaDesconto !== "00:00" ? l.horaDesconto : ""),
+    totalHoras: (l) => l.totalHoras,
+    valorHora: (l) => l.valorHora,
+    valorRepasse: (l) => l.valorRepasse,
+  });
+  const {
+    ordenados: resumoOrdenado,
+    ordem: ordemResumo,
+    ordenar: ordenarResumo,
+  } = useOrdenacao(resumo, {
+    recurso: (r) => r.recursoNome,
+    vinculo: (r) => r.vinculo,
+    lancamentos: (r) => r.lancamentos,
+    totalHoras: (r) => r.totalHoras,
+    valorHora: (r) => r.valorHora,
+    valorRepasse: (r) => r.valorRepasse,
+  });
 
   function alterarTipo(novo: "" | TipoBox) {
     setTipo(novo);
@@ -199,21 +226,27 @@ function FechamentoMensalPageContent() {
           <table className="w-full text-[13.5px]">
             <thead>
               <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                <th className="px-[18px] py-3.5">Data</th>
-                <th className="px-[18px] py-3.5">Nome do recurso</th>
-                {escopo.incluirVinculo && <th className="px-[18px] py-3.5">Vínculo</th>}
-                <th className="px-[18px] py-3.5">Cliente</th>
-                <th className="px-[18px] py-3.5">Projeto</th>
-                <th className="px-[18px] py-3.5">Hora início</th>
-                <th className="px-[18px] py-3.5">Hora fim</th>
-                {escopo.incluirDesconto && <th className="px-[18px] py-3.5">Desconto</th>}
-                <th className="px-[18px] py-3.5">Total de horas</th>
-                <th className="px-[18px] py-3.5" title="Valor/hora do cadastro do recurso">Valor hora</th>
-                <th className="px-[18px] py-3.5">Valor de repasse</th>
+                <ThOrdenavel chave="data" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Data</ThOrdenavel>
+                <ThOrdenavel chave="recurso" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Nome do recurso</ThOrdenavel>
+                {escopo.incluirVinculo && (
+                  <ThOrdenavel chave="vinculo" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Vínculo</ThOrdenavel>
+                )}
+                <ThOrdenavel chave="cliente" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Cliente</ThOrdenavel>
+                <ThOrdenavel chave="projeto" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Projeto</ThOrdenavel>
+                <ThOrdenavel chave="horaInicio" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Hora início</ThOrdenavel>
+                <ThOrdenavel chave="horaFim" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Hora fim</ThOrdenavel>
+                {escopo.incluirDesconto && (
+                  <ThOrdenavel chave="desconto" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Desconto</ThOrdenavel>
+                )}
+                <ThOrdenavel chave="totalHoras" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Total de horas</ThOrdenavel>
+                <ThOrdenavel chave="valorHora" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                  <span title="Valor/hora do cadastro do recurso">Valor hora</span>
+                </ThOrdenavel>
+                <ThOrdenavel chave="valorRepasse" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">Valor de repasse</ThOrdenavel>
               </tr>
             </thead>
             <tbody>
-              {linhas.map((l, i) => (
+              {linhasOrdenadas.map((l, i) => (
                 <tr
                   key={i}
                   className={`border-t border-brand-border-soft ${l.sobreposto ? "bg-[#fff8eb]" : ""}`}
@@ -274,16 +307,30 @@ function FechamentoMensalPageContent() {
                 <table className="w-full text-[13.5px]">
                   <thead>
                     <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                      <th className="px-[18px] py-3">Nome do recurso</th>
-                      {escopo.incluirVinculo && <th className="px-[18px] py-3">Vínculo</th>}
-                      <th className="px-[18px] py-3">Lançamentos</th>
-                      <th className="px-[18px] py-3">Total de horas</th>
-                      <th className="px-[18px] py-3">Valor hora</th>
-                      <th className="px-[18px] py-3">Valor de repasse</th>
+                      <ThOrdenavel chave="recurso" ordem={ordemResumo} onOrdenar={ordenarResumo} className="px-[18px] py-3">
+                        Nome do recurso
+                      </ThOrdenavel>
+                      {escopo.incluirVinculo && (
+                        <ThOrdenavel chave="vinculo" ordem={ordemResumo} onOrdenar={ordenarResumo} className="px-[18px] py-3">
+                          Vínculo
+                        </ThOrdenavel>
+                      )}
+                      <ThOrdenavel chave="lancamentos" ordem={ordemResumo} onOrdenar={ordenarResumo} className="px-[18px] py-3">
+                        Lançamentos
+                      </ThOrdenavel>
+                      <ThOrdenavel chave="totalHoras" ordem={ordemResumo} onOrdenar={ordenarResumo} className="px-[18px] py-3">
+                        Total de horas
+                      </ThOrdenavel>
+                      <ThOrdenavel chave="valorHora" ordem={ordemResumo} onOrdenar={ordenarResumo} className="px-[18px] py-3">
+                        Valor hora
+                      </ThOrdenavel>
+                      <ThOrdenavel chave="valorRepasse" ordem={ordemResumo} onOrdenar={ordenarResumo} className="px-[18px] py-3">
+                        Valor de repasse
+                      </ThOrdenavel>
                     </tr>
                   </thead>
                   <tbody>
-                    {resumo.map((r) => (
+                    {resumoOrdenado.map((r) => (
                       <tr key={r.recursoId} className="border-t border-brand-border-soft">
                         <td className="px-[18px] py-3 font-bold text-brand-navy-2">{r.recursoNome}</td>
                         {escopo.incluirVinculo && <td className="px-[18px] py-3 text-brand-muted">{r.vinculo}</td>}

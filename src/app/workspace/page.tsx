@@ -16,6 +16,7 @@ import {
   SlidersHorizontal,
   StickyNote,
   Trash2,
+  Users,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -37,7 +38,9 @@ import {
   FILTROS_VAZIOS,
   filtrarAnotacoes,
   ordemAoSoltar,
+  ehCompartilhada,
   PERFIS_WORKSPACE,
+  podeCompartilharTarefas,
   porOrdem,
   PRIORIDADE_ANOTACAO,
   PRIORIDADES,
@@ -48,7 +51,7 @@ import {
   type FiltrosWorkspace,
 } from "@/lib/workspace";
 import { arquivarAnotacao, criarAnotacao, excluirDefinitivamente, moverAnotacao } from "@/lib/workspaceDb";
-import type { Anotacao, Cliente, PrioridadeAnotacao, Projeto, StatusAnotacao } from "@/types";
+import type { Anotacao, Cliente, PessoaDiretorio, PrioridadeAnotacao, Projeto, StatusAnotacao } from "@/types";
 
 type Visao = "kanban" | "lista" | "projetos";
 const VISOES: { id: Visao; label: string; icone: LucideIcon }[] = [
@@ -63,6 +66,8 @@ const ATALHOS_PRAZO: { id: AtalhoWorkspace; label: string; icone: LucideIcon; at
   { id: "hoje", label: "Vencem hoje", icone: CalendarDays, ativo: "border-[#f3dcb8] bg-[#fff2de] text-[#a4650d]" },
   { id: "arquivado", label: "Arquivadas", icone: Archive, ativo: "border-brand-accent bg-brand-accent-soft text-brand-accent" },
 ];
+/** Só para quem compartilha tarefas (administrador e financeiro). */
+const ATALHO_COMPARTILHADAS = { id: "compartilhadas" as AtalhoWorkspace, label: "Compartilhadas", icone: Users, ativo: "border-[#d9c8fb] bg-[#f3edff] text-[#7c3aed]" };
 
 const BOTAO_ICONE = "relative flex h-10 w-10 items-center justify-center rounded-[10px] border transition-colors";
 const BOTAO_ICONE_INATIVO = "border-brand-border bg-white text-brand-muted hover:bg-brand-hover";
@@ -71,8 +76,29 @@ const BOTAO_ICONE_ATIVO = "border-brand-accent bg-brand-accent-soft text-brand-a
 function WorkspaceContent() {
   const { usuario } = useAuth();
   const uid = usuario?.uid ?? "";
-  // A consulta já vem só com as anotações do consultor logado (as regras do Firestore também exigem isso).
-  const { data: todas, loading, erro } = useCollection<Anotacao>("anotacoes", [where("usuarioId", "==", uid)], !!uid, [uid]);
+  // As anotações da própria pessoa; admin e financeiro também recebem as tarefas em que foram marcados.
+  // (As regras do Firestore só liberam o dono e os participantes.)
+  const compartilha = podeCompartilharTarefas(usuario?.perfil);
+  const { data: minhas, loading, erro } = useCollection<Anotacao>("anotacoes", [where("usuarioId", "==", uid)], !!uid, [uid]);
+  const { data: comigo } = useCollection<Anotacao>("anotacoes", [where("participantesUids", "array-contains", uid)], !!uid && compartilha, [uid, compartilha]);
+  const { data: diretorio } = useCollection<PessoaDiretorio>("diretorio", [], compartilha, [compartilha]);
+  const todas = useMemo(() => {
+    const ids = new Set(minhas.map((a) => a.id));
+    return [...minhas, ...comigo.filter((a) => !ids.has(a.id))];
+  }, [minhas, comigo]);
+  const ator = { uid, nome: usuario?.nomeCompleto ?? "" };
+  // Quem pode ser marcado: os outros administradores e financeiros.
+  const pessoasCompartilhaveis = useMemo(
+    () => diretorio.filter((p) => p.id !== uid && podeCompartilharTarefas(p.perfil)).sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto, "pt-BR")),
+    [diretorio, uid]
+  );
+  const nomeDe = (id: string) => diretorio.find((p) => p.id === id)?.nomeCompleto ?? "alguém";
+  const compartilhamentoDe = (a: Anotacao) => {
+    if (!ehCompartilhada(a)) return null;
+    if (a.usuarioId !== uid) return `de ${a.usuarioNome || nomeDe(a.usuarioId)}`;
+    const nomes = (a.participantesUids ?? []).map((p) => nomeDe(p).split(" ")[0]);
+    return `com ${nomes.join(", ")}`;
+  };
   const { data: projetos } = useCollection<Projeto>("projetos");
   const { data: clientes } = useCollection<Cliente>("clientes");
 
@@ -93,7 +119,8 @@ function WorkspaceContent() {
 
   const hojeIso = new Date().toLocaleDateString("sv-SE");
   const ativas = useMemo(() => todas.filter((a) => !a.deletedAt), [todas]);
-  const naLixeira = useMemo(() => todas.filter((a) => !!a.deletedAt), [todas]);
+  // Lixeira: só o que é da própria pessoa (o participante não exclui a tarefa de outro).
+  const naLixeira = useMemo(() => minhas.filter((a) => !!a.deletedAt), [minhas]);
 
   // Lixeira: o que passou do prazo é apagado de vez ao abrir o Workspace (uma vez por anotação).
   const apagando = useRef(new Set<string>());
@@ -148,6 +175,7 @@ function WorkspaceContent() {
     atrasadas: ativas.filter((a) => estaAtrasada(a, hojeIso)).length,
     hoje: ativas.filter((a) => a.dataLimite === hojeIso && a.status !== "concluido" && a.status !== "arquivado").length,
     arquivado: ativas.filter((a) => a.status === "arquivado").length,
+    compartilhadas: ativas.filter((a) => ehCompartilhada(a) && a.status !== "arquivado").length,
   };
 
   /** Posição para ficar no topo da coluna. */
@@ -162,7 +190,7 @@ function WorkspaceContent() {
     setSalvandoRapida(true);
     setErroAcao("");
     try {
-      await criarAnotacao(uid, { titulo: rapida }, ordemTopo("a_fazer"));
+      await criarAnotacao(ator, { titulo: rapida }, ordemTopo("a_fazer"));
       setRapida("");
     } catch (err) {
       console.error("Erro ao criar anotação:", err);
@@ -179,7 +207,7 @@ function WorkspaceContent() {
     if (!movida || movida.id === alvoId) return;
     const coluna = ativas.filter((a) => a.status === status);
     try {
-      await moverAnotacao(movida, status, ordemAoSoltar(coluna, movida.id, alvoId));
+      await moverAnotacao(movida, status, ordemAoSoltar(coluna, movida.id, alvoId), ator);
     } catch (err) {
       console.error("Erro ao mover anotação:", err);
       setErroAcao("Não foi possível mover a anotação. Tente de novo.");
@@ -187,8 +215,8 @@ function WorkspaceContent() {
   }
 
   const concluir = (a: Anotacao) =>
-    void moverAnotacao(a, "concluido", ordemTopo("concluido")).catch(() => setErroAcao("Não foi possível concluir. Tente de novo."));
-  const arquivar = (a: Anotacao) => void arquivarAnotacao(a).catch(() => setErroAcao("Não foi possível arquivar. Tente de novo."));
+    void moverAnotacao(a, "concluido", ordemTopo("concluido"), ator).catch(() => setErroAcao("Não foi possível concluir. Tente de novo."));
+  const arquivar = (a: Anotacao) => void arquivarAnotacao(a, ator).catch(() => setErroAcao("Não foi possível arquivar. Tente de novo."));
 
   const alterarFiltro = <K extends keyof FiltrosWorkspace>(k: K, v: FiltrosWorkspace[K]) => setFiltros((f) => ({ ...f, [k]: v }));
   const alternarAtalho = (id: AtalhoWorkspace) => alterarFiltro("atalho", filtros.atalho === id ? "todas" : id);
@@ -207,10 +235,14 @@ function WorkspaceContent() {
           </h1>
           <p
             className="mt-0.5 flex items-center gap-1 text-[12.5px] text-brand-muted"
-            title="Nem o administrador nem os colegas têm acesso. Vincular a um projeto não muda isso nem altera o projeto."
+            title={
+              compartilha
+                ? "Suas anotações são privadas. Ao criar uma tarefa, você pode marcar outros administradores e o financeiro: eles veem, atualizam e comentam só aquela tarefa."
+                : "Nem o administrador nem os colegas têm acesso. Vincular a um projeto não muda isso nem altera o projeto."
+            }
           >
             <Lock size={12} />
-            Anotações privadas — só você vê
+            {compartilha ? "Privadas — a não ser as tarefas que você compartilhar" : "Anotações privadas — só você vê"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -277,7 +309,7 @@ function WorkspaceContent() {
           )}
         </button>
         <div className="flex flex-wrap items-center gap-1.5">
-          {ATALHOS_PRAZO.map((at) => {
+          {(compartilha ? [...ATALHOS_PRAZO, ATALHO_COMPARTILHADAS] : ATALHOS_PRAZO).map((at) => {
             const Icone = at.icone;
             const ativo = filtros.atalho === at.id;
             const n = contagemAtalho[at.id] ?? 0;
@@ -415,7 +447,7 @@ function WorkspaceContent() {
             {[...filtradas]
               .sort((a, b) => b.updatedAt - a.updatedAt)
               .map((a) => (
-                <CartaoAnotacao key={a.id} a={a} projeto={contextoDe(a).projeto} hojeIso={hojeIso} onAbrir={() => setEditando(a)} />
+                <CartaoAnotacao key={a.id} a={a} projeto={contextoDe(a).projeto} compartilhamento={compartilhamentoDe(a)} hojeIso={hojeIso} onAbrir={() => setEditando(a)} />
               ))}
           </div>
           {filtradas.length === 0 && <p className="text-[13px] text-brand-faint">Nenhuma anotação arquivada.</p>}
@@ -486,6 +518,7 @@ function WorkspaceContent() {
                       <CartaoAnotacao
                         a={a}
                         projeto={contextoDe(a).projeto}
+                        compartilhamento={compartilhamentoDe(a)}
                         hojeIso={hojeIso}
                         onAbrir={() => setEditando(a)}
                         onConcluir={status !== "concluido" ? () => concluir(a) : undefined}
@@ -516,7 +549,10 @@ function WorkspaceContent() {
         <AnotacaoModal
           key={emEdicao === "nova" ? "nova" : emEdicao.id}
           anotacao={emEdicao === "nova" ? null : emEdicao}
-          usuarioId={uid}
+          ator={ator}
+          podeCompartilhar={compartilha}
+          pessoasCompartilhaveis={pessoasCompartilhaveis}
+          nomeDe={nomeDe}
           projetosSelecionaveis={meusProjetos}
           todosProjetos={projetos}
           nomeProjeto={nomeProjeto}

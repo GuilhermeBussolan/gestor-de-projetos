@@ -11,6 +11,7 @@ import { FormRow, Input } from "@/components/ui/Field";
 import { ContatosParceiraFields } from "@/components/parceiras/ContatosParceiraFields";
 import { cnpjValido, formatarCnpj } from "@/lib/cnpj";
 import { nomeExibicaoParceira } from "@/lib/parceira";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import type { ContatoParceira, EmpresaParceira } from "@/types";
 
 const PARCEIRA_VAZIA = {
@@ -95,6 +96,16 @@ function ParceirasPageContent() {
     await deleteDoc(doc(db, "parceiras", p.id));
   }
 
+  const nomesContatos = (p: EmpresaParceira) =>
+    (p.contatos ?? []).map((c) => c.nome).filter(Boolean).join(", ");
+
+  const { ordenados: parceirasOrdenadas, ordem, ordenar } = useOrdenacao(parceiras, {
+    razaoSocial: (p) => p.razaoSocial,
+    nomeFantasia: (p) => p.nomeFantasia,
+    cnpj: (p) => p.cnpj,
+    contatos: nomesContatos,
+  });
+
   if (visualizacao === "formulario") {
     return (
       <div>
@@ -164,23 +175,29 @@ function ParceirasPageContent() {
         <table className="w-full text-[13.5px]">
           <thead>
             <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-              <th className="px-[18px] py-3.5">Razão social</th>
-              <th className="px-[18px] py-3.5">Nome fantasia</th>
-              <th className="px-[18px] py-3.5">CNPJ</th>
-              <th className="px-[18px] py-3.5">Contatos</th>
+              <ThOrdenavel chave="razaoSocial" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Razão social
+              </ThOrdenavel>
+              <ThOrdenavel chave="nomeFantasia" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Nome fantasia
+              </ThOrdenavel>
+              <ThOrdenavel chave="cnpj" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                CNPJ
+              </ThOrdenavel>
+              <ThOrdenavel chave="contatos" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Contatos
+              </ThOrdenavel>
               <th className="px-[18px] py-3.5" />
             </tr>
           </thead>
           <tbody>
-            {parceiras.map((p) => (
+            {parceirasOrdenadas.map((p) => (
               <tr key={p.id} className="border-t border-brand-border-soft hover:bg-brand-hover">
                 <td className="px-[18px] py-[15px] font-bold text-brand-navy-2">{p.razaoSocial}</td>
                 <td className="px-[18px] py-[15px] text-brand-muted">{p.nomeFantasia}</td>
                 <td className="px-[18px] py-[15px] text-brand-muted">{p.cnpj}</td>
                 <td className="px-[18px] py-[15px] text-brand-muted">
-                  {(p.contatos ?? []).length === 0
-                    ? "—"
-                    : (p.contatos ?? []).map((c) => c.nome).filter(Boolean).join(", ")}
+                  {(p.contatos ?? []).length === 0 ? "—" : nomesContatos(p)}
                 </td>
                 <td className="px-[18px] py-[15px] text-right">
                   <button

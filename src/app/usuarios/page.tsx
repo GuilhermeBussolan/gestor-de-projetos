@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { sincronizarDiretorio } from "@/lib/diretorio";
 import { nomeExibicaoParceira } from "@/lib/parceira";
 import { gerarSenhaForte, problemaDaSenha, REGRA_SENHA } from "@/lib/senha";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import type { EmpresaParceira, Perfil, Recurso, Usuario } from "@/types";
 
 const PERFIL_LABEL: Record<Perfil, string> = {
@@ -52,6 +53,13 @@ function UsuariosPageContent() {
   const [novoUsuario, setNovoUsuario] = useState(NOVO_USUARIO_VAZIO);
   const [criandoErro, setCriandoErro] = useState("");
   const [criandoSalvando, setCriandoSalvando] = useState(false);
+
+  const { ordenados: usuariosOrdenados, ordem, ordenar } = useOrdenacao(usuarios, {
+    nome: (u) => u.nomeCompleto,
+    email: (u) => u.email,
+    perfil: (u) => PERFIL_LABEL[u.perfil],
+    recurso: (u) => recursos.find((r) => r.id === u.recursoId)?.nomeCompleto,
+  });
 
   // Espelha as mudanças de usuários na lista de @ da linha do tempo.
   function atualizarDiretorio() {
@@ -153,15 +161,23 @@ function UsuariosPageContent() {
         <table className="w-full text-[13.5px]">
           <thead>
             <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-              <th className="px-[18px] py-3.5">Nome</th>
-              <th className="px-[18px] py-3.5">E-mail</th>
-              <th className="px-[18px] py-3.5">Perfil</th>
-              <th className="px-[18px] py-3.5">Recurso vinculado</th>
+              <ThOrdenavel chave="nome" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Nome
+              </ThOrdenavel>
+              <ThOrdenavel chave="email" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                E-mail
+              </ThOrdenavel>
+              <ThOrdenavel chave="perfil" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Perfil
+              </ThOrdenavel>
+              <ThOrdenavel chave="recurso" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Recurso vinculado
+              </ThOrdenavel>
               <th className="px-[18px] py-3.5" />
             </tr>
           </thead>
           <tbody>
-            {usuarios.map((u) => {
+            {usuariosOrdenados.map((u) => {
               const recurso = recursos.find((r) => r.id === u.recursoId);
               return (
                 <tr key={u.uid} className="border-t border-brand-border-soft hover:bg-brand-hover">

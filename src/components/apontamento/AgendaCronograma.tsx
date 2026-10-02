@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarCheck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { FormRow, Input, Select } from "@/components/ui/Field";
 import { EventoModal } from "@/components/calendario/EventoModal";
 import { nomeExibicaoCliente } from "@/lib/cliente";
@@ -22,6 +23,9 @@ const SITUACAO: Record<SituacaoPrevisto, { label: string; bg: string; text: stri
   atrasada: { label: "Atrasada", bg: "#fdeceb", text: "#b5392a" },
   apontada: { label: "Apontada", bg: "#e3f5ea", text: "#15754c" },
 };
+
+/** Ordem da coluna Situação: o mais urgente primeiro. */
+const ORDEM_SITUACAO: Record<SituacaoPrevisto, number> = { atrasada: 0, hoje: 1, a_fazer: 2, apontada: 3 };
 
 type FiltroSituacao = "pendentes" | SituacaoPrevisto | "todas";
 
@@ -123,6 +127,19 @@ export function AgendaCronograma({
       .sort((a, b) => a.data.localeCompare(b.data) || a.periodo.localeCompare(b.periodo));
   }, [doEscopo, filtroSituacao, filtroMes]);
 
+  const { ordenados, ordem, ordenar } = useOrdenacao(lista, {
+    data: (g: PrevistoCronograma) => g.data,
+    turno: (g: PrevistoCronograma) => (g.periodo === "manha" ? 0 : 1),
+    consultor: (g: PrevistoCronograma) => recursos.find((r) => r.id === g.recursoId)?.nomeCompleto,
+    projeto: (g: PrevistoCronograma) => {
+      const projeto = projetos.find((p) => p.id === g.projetoId);
+      return `${nomeExibicaoCliente(clientes.find((c) => c.id === projeto?.clienteId))} — ${projeto?.codigoProposta ?? ""}`;
+    },
+    tarefas: (g: PrevistoCronograma) => g.nomes[0],
+    horas: (g: PrevistoCronograma) => g.horas,
+    situacao: (g: PrevistoCronograma) => ORDEM_SITUACAO[g.situacao],
+  });
+
   if (souConsultor && !usuario.recursoId) {
     return (
       <p className="rounded-2xl border border-dashed border-brand-border bg-white p-6 text-sm text-brand-muted">
@@ -220,18 +237,34 @@ export function AgendaCronograma({
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-brand-border bg-brand-hover text-left text-[10.5px] font-bold tracking-[.08em] text-brand-faint uppercase">
-              <th className="px-4 py-2.5">Data</th>
-              <th className="px-3 py-2.5">Turno</th>
-              {!souConsultor && <th className="px-3 py-2.5">Consultor</th>}
-              <th className="px-3 py-2.5">Cliente / projeto</th>
-              <th className="px-3 py-2.5">Tarefas</th>
-              <th className="px-3 py-2.5 text-right">Horas</th>
-              <th className="px-3 py-2.5">Situação</th>
+              <ThOrdenavel chave="data" ordem={ordem} onOrdenar={ordenar} className="px-4 py-2.5">
+                Data
+              </ThOrdenavel>
+              <ThOrdenavel chave="turno" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5">
+                Turno
+              </ThOrdenavel>
+              {!souConsultor && (
+                <ThOrdenavel chave="consultor" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5">
+                  Consultor
+                </ThOrdenavel>
+              )}
+              <ThOrdenavel chave="projeto" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5">
+                Cliente / projeto
+              </ThOrdenavel>
+              <ThOrdenavel chave="tarefas" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5">
+                Tarefas
+              </ThOrdenavel>
+              <ThOrdenavel chave="horas" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5 text-right" alinhar="direita">
+                Horas
+              </ThOrdenavel>
+              <ThOrdenavel chave="situacao" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5">
+                Situação
+              </ThOrdenavel>
               <th className="px-4 py-2.5" />
             </tr>
           </thead>
           <tbody>
-            {lista.slice(0, limite).map((g) => {
+            {ordenados.slice(0, limite).map((g) => {
               const projeto = projetos.find((p) => p.id === g.projetoId);
               const cliente = nomeExibicaoCliente(clientes.find((c) => c.id === projeto?.clienteId));
               const recurso = recursos.find((r) => r.id === g.recursoId);

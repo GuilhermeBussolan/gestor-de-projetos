@@ -9,6 +9,14 @@ import type { Anotacao, Perfil, PrioridadeAnotacao, Projeto, StatusAnotacao } fr
 export const PERFIS_WORKSPACE: Perfil[] = ["administrador", "coordenador", "consultor", "financeiro"];
 
 /**
+ * Tarefas compartilhadas: só o administrador e o financeiro marcam pessoas (sempre entre eles) numa anotação, para se
+ * comunicarem por atividades. Consultor e coordenador continuam só com o próprio Workspace, sem marcar ninguém.
+ */
+export const PERFIS_COMPARTILHAM: Perfil[] = ["administrador", "financeiro"];
+export const podeCompartilharTarefas = (perfil: Perfil | null | undefined) => !!perfil && PERFIS_COMPARTILHAM.includes(perfil);
+export const ehCompartilhada = (a: Pick<Anotacao, "participantesUids">) => (a.participantesUids ?? []).length > 0;
+
+/**
  * Workspace pessoal do consultor (anotações privadas organizadas num Kanban). Regra-mãe: é uma camada 100% pessoal —
  * o vínculo com projeto/fase/atividade é só contexto e NUNCA altera o projeto, a atividade, o cronograma ou gera
  * apontamento. Esta parte é só cálculo (sem gravar nada).
@@ -102,7 +110,7 @@ export function normalizarTag(texto: string): string {
   return texto.trim().replace(/^#+/, "").replace(/\s+/g, " ").slice(0, 30);
 }
 
-export type AtalhoWorkspace = "todas" | "hoje" | "atrasadas" | "a_fazer" | "em_andamento" | "concluido" | "arquivado" | "sem_projeto";
+export type AtalhoWorkspace = "todas" | "hoje" | "atrasadas" | "a_fazer" | "em_andamento" | "concluido" | "arquivado" | "sem_projeto" | "compartilhadas";
 
 export const ATALHOS: { id: AtalhoWorkspace; label: string }[] = [
   { id: "todas", label: "Todas" },
@@ -141,6 +149,7 @@ export function filtrarAnotacoes(
     if (filtros.atalho === "atrasadas" && !estaAtrasada(a, hojeIso)) return false;
     if ((filtros.atalho === "a_fazer" || filtros.atalho === "em_andamento" || filtros.atalho === "concluido") && a.status !== filtros.atalho) return false;
     if (filtros.atalho === "sem_projeto" && a.projetoId) return false;
+    if (filtros.atalho === "compartilhadas" && !ehCompartilhada(a)) return false;
     if (filtros.projetoId === "sem" ? !!a.projetoId : filtros.projetoId && a.projetoId !== filtros.projetoId) return false;
     if (filtros.prioridade && a.prioridade !== filtros.prioridade) return false;
     if (filtros.tag && !(a.tags ?? []).includes(filtros.tag)) return false;

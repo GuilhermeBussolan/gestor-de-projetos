@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Check, FolderKanban } from "lucide-react";
+import { Archive, Check, FolderKanban, Users } from "lucide-react";
 import { ChipPrazo, ChipPrioridade } from "@/components/workspace/visual";
 import { estaAtrasada } from "@/lib/workspace";
 import type { Anotacao } from "@/types";
@@ -9,6 +9,7 @@ import type { Anotacao } from "@/types";
 export function CartaoAnotacao({
   a,
   projeto,
+  compartilhamento,
   hojeIso,
   onAbrir,
   onConcluir,
@@ -17,6 +18,8 @@ export function CartaoAnotacao({
 }: {
   a: Anotacao;
   projeto: string | null;
+  /** Tarefa compartilhada: "com Fulano" (sou o dono) ou "de Fulano" (fui marcado). */
+  compartilhamento?: string | null;
   hojeIso: string;
   onAbrir: () => void;
   onConcluir?: () => void;
@@ -79,6 +82,12 @@ export function CartaoAnotacao({
         <p className="mt-1.5 flex items-center gap-1 truncate text-[11.5px] text-brand-muted" title={projeto}>
           <FolderKanban size={11} className="shrink-0" />
           <span className="truncate">{projeto}</span>
+        </p>
+      )}
+      {compartilhamento && (
+        <p className="mt-1.5 flex items-center gap-1 truncate text-[11.5px] font-semibold text-[#7c3aed]" title={compartilhamento}>
+          <Users size={11} className="shrink-0" />
+          <span className="truncate">{compartilhamento}</span>
         </p>
       )}
       {(a.dataLimite || a.prioridade !== "normal" || tags.length > 0) && (

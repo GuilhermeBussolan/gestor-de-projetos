@@ -9,6 +9,7 @@ import { CadastrosTabs } from "@/components/layout/CadastrosTabs";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormRow, Input } from "@/components/ui/Field";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import type { TipoDocumento } from "@/types";
 
 const VAZIO = { codigo: "", descricao: "", pesoIndividual: "" };
@@ -16,6 +17,11 @@ const VAZIO = { codigo: "", descricao: "", pesoIndividual: "" };
 function DocumentosPageContent() {
   const { data: tipos, loading } = useCollection<TipoDocumento>("tiposDocumento", []);
   const ordenados = [...tipos].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+  const { ordenados: tiposOrdenados, ordem, ordenar } = useOrdenacao(ordenados, {
+    codigo: (t) => t.codigo,
+    descricao: (t) => t.descricao,
+    peso: (t) => t.pesoIndividual,
+  });
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<TipoDocumento | null>(null);
   const [form, setForm] = useState(VAZIO);
@@ -81,14 +87,20 @@ function DocumentosPageContent() {
         <table className="w-full text-[13.5px]">
           <thead>
             <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-              <th className="px-[18px] py-3.5">Código</th>
-              <th className="px-[18px] py-3.5">Descrição</th>
-              <th className="px-[18px] py-3.5">Peso individual</th>
+              <ThOrdenavel chave="codigo" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Código
+              </ThOrdenavel>
+              <ThOrdenavel chave="descricao" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Descrição
+              </ThOrdenavel>
+              <ThOrdenavel chave="peso" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Peso individual
+              </ThOrdenavel>
               <th className="px-[18px] py-3.5" />
             </tr>
           </thead>
           <tbody>
-            {ordenados.map((t) => (
+            {tiposOrdenados.map((t) => (
               <tr key={t.id} className="border-t border-brand-border-soft hover:bg-brand-hover">
                 <td className="px-[18px] py-[15px] font-bold text-brand-navy-2">{t.codigo}</td>
                 <td className="px-[18px] py-[15px] text-brand-muted">{t.descricao}</td>

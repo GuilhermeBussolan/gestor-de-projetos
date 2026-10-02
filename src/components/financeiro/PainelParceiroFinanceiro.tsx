@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileDown, ReceiptText } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal";
 import { LinkArquivo } from "@/components/financeiro/LinkArquivo";
 import { RegistrarPagamentoModal } from "@/components/financeiro/RegistrarPagamentoModal";
@@ -30,6 +31,12 @@ export function PainelParceiroFinanceiro({ f, hojeIso, onDocumentoFaturamento }:
   const [pagando, setPagando] = useState(false);
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
+  // Fica antes do retorno antecipado abaixo (hooks não podem ser condicionais).
+  const { ordenados: recursosOrdenados, ordem, ordenar } = useOrdenacao(f.recursos, {
+    consultor: (r) => r.recursoNome,
+    horas: (r) => r.horas,
+    valor: (r) => r.valorRepasse,
+  });
 
   const situacao = situacaoDaParceira(f);
   const ator = usuario ? { uid: usuario.uid, nomeCompleto: usuario.nomeCompleto } : null;
@@ -199,13 +206,19 @@ export function PainelParceiroFinanceiro({ f, hojeIso, onDocumentoFaturamento }:
           <table className="w-full text-[12px]">
             <thead>
               <tr className="bg-brand-hover text-left text-[10.5px] font-bold tracking-[.08em] text-brand-faint uppercase">
-                <th className="px-3 py-2">Consultor</th>
-                <th className="px-3 py-2 text-right">Horas apontadas</th>
-                <th className="px-3 py-2 text-right">Valor calculado</th>
+                <ThOrdenavel chave="consultor" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2">
+                  Consultor
+                </ThOrdenavel>
+                <ThOrdenavel chave="horas" ordem={ordem} onOrdenar={ordenar} alinhar="direita" className="px-3 py-2 text-right">
+                  Horas apontadas
+                </ThOrdenavel>
+                <ThOrdenavel chave="valor" ordem={ordem} onOrdenar={ordenar} alinhar="direita" className="px-3 py-2 text-right">
+                  Valor calculado
+                </ThOrdenavel>
               </tr>
             </thead>
             <tbody>
-              {f.recursos.map((r) => (
+              {recursosOrdenados.map((r) => (
                 <tr key={r.recursoId} className="border-t border-brand-border-soft">
                   <td className="px-3 py-1.5 text-brand-navy-2">{r.recursoNome}</td>
                   <td className="px-3 py-1.5 text-right text-brand-muted">{formatarHoras(r.horas)}</td>

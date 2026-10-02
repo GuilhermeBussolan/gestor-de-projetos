@@ -13,6 +13,7 @@ import { registrarContato } from "@/lib/contato";
 import { statusAoConfirmar, statusEfetivo } from "@/lib/statusHora";
 import { bloqueiosQueConflitam, mensagemConflitoBloqueio } from "@/lib/bloqueioAgenda";
 import { useBloqueiosAgenda } from "@/lib/useBloqueiosAgenda";
+import { aceitaApontamentoEm, mensagemRecursoInativo } from "@/lib/recursoAtivo";
 import type { Cliente, EventoCalendario, Projeto, Recurso, Usuario } from "@/types";
 
 type Decisao = "realizada" | "cancelada" | "";
@@ -49,7 +50,9 @@ function OcorrenciaForm({
   const [salvando, setSalvando] = useState(false);
   const { bloqueios } = useBloqueiosAgenda(usuario, ocorrencia.recursoId);
   const conflitosBloqueio = bloqueiosQueConflitam(bloqueios, ocorrencia.recursoId, ocorrencia.data, horaInicio, horaFim);
-  const bloqueadoParaRealizar = decisao === "realizada" && conflitosBloqueio.length > 0;
+  // Recurso inativado depois desta data: a ocorrência não pode mais virar apontamento (só ser cancelada).
+  const inativoNaData = !!recurso && !aceitaApontamentoEm(recurso, ocorrencia.data);
+  const bloqueadoParaRealizar = decisao === "realizada" && (conflitosBloqueio.length > 0 || inativoNaData);
 
   const projetosDisponiveis = souConsultor
     ? projetos.filter((p) => p.consultorIds?.includes(meuRecursoId) && p.status !== "finalizado")
@@ -199,7 +202,10 @@ function OcorrenciaForm({
         </>
       )}
 
-      {bloqueadoParaRealizar && (
+      {decisao === "realizada" && inativoNaData && recurso && (
+        <p className="rounded-md bg-[#fdeceb] p-3 text-[13px] text-[#b5392a]">{mensagemRecursoInativo(recurso)}</p>
+      )}
+      {bloqueadoParaRealizar && !inativoNaData && (
         <p className="rounded-md bg-[#fdeceb] p-3 text-sm text-[#b5392a]">{mensagemConflitoBloqueio(conflitosBloqueio)}</p>
       )}
 

@@ -72,7 +72,9 @@ export function NotificacoesMenu({
   function abrir(n: Notificacao) {
     setAberto(false);
     if (!n.lida) marcarNotificacaoLida(n.id).catch((err) => console.error("Erro ao marcar como lida:", err));
-    onAbrirProjeto(n.projetoId);
+    // Aviso de tarefa compartilhada do Workspace: abre a tarefa; os demais abrem o projeto.
+    if (n.origem === "workspace" && n.anotacaoId) router.push(`/workspace?anotacao=${n.anotacaoId}`);
+    else onAbrirProjeto(n.projetoId);
   }
 
   return (
@@ -167,9 +169,12 @@ export function NotificacoesMenu({
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-brand-navy-2">
                       <strong>{n.autorNome}</strong>
-                      {n.tipo === "ciencia" ? "deu ciência em" : "marcou você em"}
+                      {n.origem === "workspace" ? "· tarefa" : n.tipo === "ciencia" ? "deu ciência em" : "marcou você em"}
                       <strong className="truncate">{n.projetoNome || "um projeto"}</strong>
-                      {n.tipo !== "atualizacao" && (
+                      {n.origem === "workspace" && (
+                        <span className="rounded-full bg-[#f3edff] px-1.5 py-0.5 text-[9.5px] font-bold text-[#7c3aed]">Workspace</span>
+                      )}
+                      {n.tipo !== "atualizacao" && n.origem !== "workspace" && (
                         <span
                           className="rounded-full px-1.5 py-0.5 text-[9.5px] font-bold"
                           style={{ backgroundColor: cfg.bg, color: cfg.text }}

@@ -1,6 +1,7 @@
 "use client";
 
 import { Modal } from "@/components/ui/Modal";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { TIPO_ITEM_CONFIG, type LinhaClienteMes } from "@/lib/faturamentoPrevisto";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -12,6 +13,53 @@ function labelMes(mes: string): string {
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
   ];
   return `${nomes[Number(m) - 1]} de ${ano}`;
+}
+
+/** Tabela de parcelas/marcos de um cliente no mês (uma por cartão, cada uma com a própria ordenação). */
+function TabelaItensCliente({ itens }: { itens: LinhaClienteMes["itens"] }) {
+  const { ordenados, ordem, ordenar } = useOrdenacao(itens, {
+    projeto: (it) => it.codigoProposta,
+    identificacao: (it) => it.identificacao,
+    situacao: (it) => TIPO_ITEM_CONFIG[it.tipo].label,
+    valor: (it) => it.valor,
+  });
+  return (
+    <table className="w-full text-[12.5px]">
+      <thead>
+        <tr className="border-b border-brand-border-soft text-left text-[10.5px] font-bold tracking-[.08em] text-brand-faint uppercase">
+          <ThOrdenavel chave="projeto" ordem={ordem} onOrdenar={ordenar} className="py-1.5">
+            Projeto
+          </ThOrdenavel>
+          <ThOrdenavel chave="identificacao" ordem={ordem} onOrdenar={ordenar} className="py-1.5">
+            Identificação
+          </ThOrdenavel>
+          <ThOrdenavel chave="situacao" ordem={ordem} onOrdenar={ordenar} className="py-1.5">
+            Situação
+          </ThOrdenavel>
+          <ThOrdenavel chave="valor" ordem={ordem} onOrdenar={ordenar} alinhar="direita" className="py-1.5 text-right">
+            Valor
+          </ThOrdenavel>
+        </tr>
+      </thead>
+      <tbody>
+        {ordenados.map((it, i) => (
+          <tr key={i} className="border-b border-brand-border-soft last:border-b-0">
+            <td className="py-1.5 text-brand-muted">{it.codigoProposta}</td>
+            <td className="py-1.5 text-brand-navy-2">{it.identificacao}</td>
+            <td className="py-1.5">
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                style={{ backgroundColor: TIPO_ITEM_CONFIG[it.tipo].bg, color: TIPO_ITEM_CONFIG[it.tipo].text }}
+              >
+                {TIPO_ITEM_CONFIG[it.tipo].label}
+              </span>
+            </td>
+            <td className="py-1.5 text-right font-bold text-brand-navy-2">{moeda(it.valor)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 /**
@@ -62,33 +110,7 @@ export function DetalheMesFaturamentoModal({
                     )}
                   </div>
                 </div>
-                <table className="w-full text-[12.5px]">
-                  <thead>
-                    <tr className="border-b border-brand-border-soft text-left text-[10.5px] font-bold tracking-[.08em] text-brand-faint uppercase">
-                      <th className="py-1.5">Projeto</th>
-                      <th className="py-1.5">Identificação</th>
-                      <th className="py-1.5">Situação</th>
-                      <th className="py-1.5 text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {l.itens.map((it, i) => (
-                      <tr key={i} className="border-b border-brand-border-soft last:border-b-0">
-                        <td className="py-1.5 text-brand-muted">{it.codigoProposta}</td>
-                        <td className="py-1.5 text-brand-navy-2">{it.identificacao}</td>
-                        <td className="py-1.5">
-                          <span
-                            className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                            style={{ backgroundColor: TIPO_ITEM_CONFIG[it.tipo].bg, color: TIPO_ITEM_CONFIG[it.tipo].text }}
-                          >
-                            {TIPO_ITEM_CONFIG[it.tipo].label}
-                          </span>
-                        </td>
-                        <td className="py-1.5 text-right font-bold text-brand-navy-2">{moeda(it.valor)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <TabelaItensCliente itens={l.itens} />
               </div>
             ))}
             {linhas.length === 0 && (

@@ -8,6 +8,7 @@ import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Select } from "@/components/ui/Field";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { GraficoFaturamentoBarras, LegendaFaturamento } from "@/components/financeiro/GraficoFaturamentoBarras";
 import { DetalheMesFaturamentoModal } from "@/components/financeiro/DetalheMesFaturamentoModal";
 import { TIPO_FATURAMENTO_CONFIG, TIPO_FATURAMENTO_ORDEM } from "@/lib/constants";
@@ -85,6 +86,18 @@ function FaturamentoPrevistoPageContent() {
   const grupos = useMemo(() => gruposPorAno(meses), [meses]);
   const matriz = useMemo(() => matrizAnual(itens, projetos, meses), [itens, projetos, meses]);
   const totaisTabela = useMemo(() => totaisDaMatriz(matriz, meses.length), [matriz, meses.length]);
+  // Colunas dos meses mudam com o filtro, então não são ordenáveis; as fixas e o total sim.
+  const { ordenados: matrizOrdenada, ordem, ordenar } = useOrdenacao(matriz, {
+    cliente: (l) => l.cliente,
+    valorVenda: (l) => l.valorVenda,
+    realizado: (l) => l.realizado,
+    saldo: (l) => l.saldo,
+    liberado: (l) => l.porTipo.liberado,
+    faturado: (l) => l.porTipo.faturado,
+    recebido: (l) => l.porTipo.recebido,
+    cancelado: (l) => l.porTipo.cancelado,
+    totalPrevisto: (l) => l.totalPrevisto,
+  });
   const sufixo = sufixoAno(ano);
   const inicioDeAno = (i: number) => i === 0 || meses[i].slice(0, 4) !== meses[i - 1].slice(0, 4);
 
@@ -239,17 +252,23 @@ function FaturamentoPrevistoPageContent() {
           <table className="w-full text-[12px]">
             <thead>
               <tr className="bg-brand-hover text-left text-[10px] font-bold tracking-[.07em] whitespace-nowrap text-brand-faint uppercase">
-                <th rowSpan={2} className={`${colCliente} bg-brand-hover px-3 py-2.5 align-bottom`}>
+                <ThOrdenavel chave="cliente" ordem={ordem} onOrdenar={ordenar} rowSpan={2} className={`${colCliente} bg-brand-hover px-3 py-2.5 align-bottom`}>
                   Cliente
-                </th>
-                <th rowSpan={2} className="px-3 py-2.5 align-bottom">Valor Venda</th>
-                <th rowSpan={2} className="px-3 py-2.5 align-bottom">Realizado</th>
-                <th rowSpan={2} className="px-3 py-2.5 align-bottom">Saldo</th>
+                </ThOrdenavel>
+                <ThOrdenavel chave="valorVenda" ordem={ordem} onOrdenar={ordenar} rowSpan={2} className="px-3 py-2.5 align-bottom">
+                  Valor Venda
+                </ThOrdenavel>
+                <ThOrdenavel chave="realizado" ordem={ordem} onOrdenar={ordenar} rowSpan={2} className="px-3 py-2.5 align-bottom">
+                  Realizado
+                </ThOrdenavel>
+                <ThOrdenavel chave="saldo" ordem={ordem} onOrdenar={ordenar} rowSpan={2} className="px-3 py-2.5 align-bottom">
+                  Saldo
+                </ThOrdenavel>
                 {TIPOS_COLUNA.map((t) => (
-                  <th key={t} rowSpan={2} className="px-2 py-2.5 text-right align-bottom">
+                  <ThOrdenavel key={t} chave={t} ordem={ordem} onOrdenar={ordenar} rowSpan={2} alinhar="direita" className="px-2 py-2.5 text-right align-bottom">
                     {TIPO_ITEM_CONFIG[t].label}
                     {sufixo}
-                  </th>
+                  </ThOrdenavel>
                 ))}
                 {grupos.map((g) => (
                   <th
@@ -260,9 +279,16 @@ function FaturamentoPrevistoPageContent() {
                     {g.ano}
                   </th>
                 ))}
-                <th rowSpan={2} className="border-l-2 border-brand-border px-3 py-2.5 text-right align-bottom">
+                <ThOrdenavel
+                  chave="totalPrevisto"
+                  ordem={ordem}
+                  onOrdenar={ordenar}
+                  rowSpan={2}
+                  alinhar="direita"
+                  className="border-l-2 border-brand-border px-3 py-2.5 text-right align-bottom"
+                >
                   Total Previsto{sufixo}
-                </th>
+                </ThOrdenavel>
               </tr>
               <tr className="bg-brand-hover text-[10px] font-bold tracking-[.07em] whitespace-nowrap text-brand-faint uppercase">
                 {meses.map((m, i) => (
@@ -277,7 +303,7 @@ function FaturamentoPrevistoPageContent() {
               </tr>
             </thead>
             <tbody>
-              {matriz.map((l) => (
+              {matrizOrdenada.map((l) => (
                 <tr key={l.clienteId} className="group border-t border-brand-border-soft whitespace-nowrap">
                   <td className={`${colCliente} bg-white px-3 py-2 font-bold text-brand-navy-2 group-hover:bg-brand-hover`}>{l.cliente}</td>
                   <td className="px-3 py-2 text-brand-muted">{moeda(l.valorVenda)}</td>

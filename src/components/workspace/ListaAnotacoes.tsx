@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { STATUS_ANOTACAO } from "@/lib/workspace";
 import { ChipPrazo, ChipPrioridade, ICONE_STATUS } from "@/components/workspace/visual";
+import { ThOrdenavel, useOrdenacao, type EstadoOrdenacao } from "@/components/ui/Ordenacao";
 import type { Anotacao, PrioridadeAnotacao, StatusAnotacao } from "@/types";
 
 type Contexto = { projeto: string | null; fase: string | null; atividade: string | null };
@@ -12,35 +11,7 @@ type Coluna = "titulo" | "status" | "prioridade" | "projeto" | "dataLimite";
 const ORDEM_STATUS: Record<StatusAnotacao, number> = { a_fazer: 0, em_andamento: 1, concluido: 2, arquivado: 3 };
 const ORDEM_PRIORIDADE: Record<PrioridadeAnotacao, number> = { alta: 0, normal: 1, baixa: 2 };
 
-type EstadoOrdem = { coluna: Coluna; asc: boolean };
-
-/** Título de coluna clicável: ordena por ela (clicar de novo inverte). */
-function Cabecalho({
-  coluna,
-  ordem,
-  onOrdenar,
-  children,
-}: {
-  coluna: Coluna;
-  ordem: EstadoOrdem;
-  onOrdenar: (c: Coluna) => void;
-  children: React.ReactNode;
-}) {
-  const ativa = ordem.coluna === coluna;
-  const Icone = !ativa ? ArrowUpDown : ordem.asc ? ArrowUp : ArrowDown;
-  return (
-    <th className="px-3 py-2.5">
-      <button
-        type="button"
-        onClick={() => onOrdenar(coluna)}
-        className={`flex items-center gap-1 uppercase ${ativa ? "text-brand-navy-2" : "hover:text-brand-navy-2"}`}
-      >
-        {children}
-        <Icone size={11} className={ativa ? "" : "opacity-50"} />
-      </button>
-    </th>
-  );
-}
+const ORDEM_INICIAL: EstadoOrdenacao<Coluna> = { chave: "status", asc: true };
 
 /** Visualização em lista: uma linha por anotação, colunas ordenáveis (clique no título da coluna). */
 export function ListaAnotacoes({
@@ -54,22 +25,20 @@ export function ListaAnotacoes({
   hojeIso: string;
   onAbrir: (a: Anotacao) => void;
 }) {
-  const [ordem, setOrdem] = useState<EstadoOrdem>({ coluna: "status", asc: true });
-  const ordenar = (coluna: Coluna) => setOrdem((o) => ({ coluna, asc: o.coluna === coluna ? !o.asc : true }));
-
-  const valor = (a: Anotacao, c: Coluna): string | number => {
-    if (c === "titulo") return a.titulo.toLowerCase();
-    if (c === "status") return ORDEM_STATUS[a.status];
-    if (c === "prioridade") return ORDEM_PRIORIDADE[a.prioridade];
-    if (c === "projeto") return (contextoDe(a).projeto ?? "￿").toLowerCase();
-    return a.dataLimite ?? "9999-12-31";
-  };
-  const linhas = [...anotacoes].sort((x, y) => {
-    const a = valor(x, ordem.coluna);
-    const b = valor(y, ordem.coluna);
-    const r = typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b), "pt-BR");
-    return (ordem.asc ? r : -r) || x.ordem - y.ordem;
-  });
+  // Ordem "natural" (a do Kanban): desempate de qualquer coluna e o que volta no 3º clique.
+  const porOrdem = [...anotacoes].sort((x, y) => x.ordem - y.ordem);
+  const { ordenados: linhas, ordem, ordenar } = useOrdenacao(
+    porOrdem,
+    {
+      titulo: (a: Anotacao) => a.titulo,
+      status: (a: Anotacao) => ORDEM_STATUS[a.status],
+      prioridade: (a: Anotacao) => ORDEM_PRIORIDADE[a.prioridade],
+      // Sem projeto / sem prazo ficam sempre no fim.
+      projeto: (a: Anotacao) => contextoDe(a).projeto,
+      dataLimite: (a: Anotacao) => a.dataLimite,
+    },
+    ORDEM_INICIAL
+  );
 
   return (
     <div className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-card">
@@ -77,11 +46,21 @@ export function ListaAnotacoes({
         <table className="w-full text-[13px]">
           <thead>
             <tr className="bg-brand-hover text-left text-[10.5px] font-bold tracking-[.07em] whitespace-nowrap text-brand-faint">
-              <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="titulo">Título</Cabecalho>
-              <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="status">Status</Cabecalho>
-              <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="prioridade">Prioridade</Cabecalho>
-              <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="projeto">Projeto</Cabecalho>
-              <Cabecalho ordem={ordem} onOrdenar={ordenar} coluna="dataLimite">Prazo</Cabecalho>
+              <ThOrdenavel chave="titulo" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5 uppercase">
+                Título
+              </ThOrdenavel>
+              <ThOrdenavel chave="status" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5 uppercase">
+                Status
+              </ThOrdenavel>
+              <ThOrdenavel chave="prioridade" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5 uppercase">
+                Prioridade
+              </ThOrdenavel>
+              <ThOrdenavel chave="projeto" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5 uppercase">
+                Projeto
+              </ThOrdenavel>
+              <ThOrdenavel chave="dataLimite" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5 uppercase">
+                Prazo
+              </ThOrdenavel>
               <th className="px-3 py-2.5 uppercase">Tags</th>
             </tr>
           </thead>

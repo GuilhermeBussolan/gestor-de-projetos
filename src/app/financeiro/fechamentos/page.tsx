@@ -11,6 +11,7 @@ import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal";
 import { LinkArquivo } from "@/components/financeiro/LinkArquivo";
 import { PainelParceiroFinanceiro } from "@/components/financeiro/PainelParceiroFinanceiro";
@@ -126,6 +127,25 @@ function TabelaItens({
       return n;
     });
 
+  // Ordenação: um estado só para a lista inteira, aplicado aos consultores dentro de cada grupo (próprios e cada parceira).
+  const confirmacaoDe = new Map<string, string>();
+  parceiras.forEach((g) =>
+    g.itens.forEach((i) => {
+      const st = g.etapa !== "rascunho" ? g.salvo?.statusConsultores?.[i.recursoId] : undefined;
+      if (st && st !== "nao_aplicavel") confirmacaoDe.set(i.id, st === "pendente" ? "Não confirmou" : CONFIRMACAO[st].label);
+    })
+  );
+  const { ordenados: todosOrdenados, ordem, ordenar } = useOrdenacao([...proprios, ...parceiras.flatMap((g) => g.itens)], {
+    consultor: (i) => i.recursoNome,
+    lancamentos: (i) => i.lancamentos.length,
+    horas: (i) => i.horas,
+    valor: (i) => i.valorRepasse,
+    confirmacao: (i) => confirmacaoDe.get(i.id),
+  });
+  const posicao = new Map(todosOrdenados.map((i, k) => [i.id, k]));
+  const ordenarLista = (lista: ItemExibido[]) =>
+    ordem.chave === null ? lista : [...lista].sort((a, b) => (posicao.get(a.id) ?? 0) - (posicao.get(b.id) ?? 0));
+
   const cols = 5;
   const linhaItem = (i: ItemExibido, g?: GrupoParceira) => {
     // Confirmação do próprio consultor terceiro (começa no envio para revisão).
@@ -223,11 +243,13 @@ function TabelaItens({
 
   const cabecalho = (
     <tr className="bg-brand-hover text-left text-[10.5px] font-bold tracking-[.08em] text-brand-faint uppercase">
-      <th className="px-4 py-2.5">Consultor</th>
-      <th className="px-3 py-2.5">Lançamentos</th>
-      <th className="px-3 py-2.5">Horas</th>
-      <th className="px-3 py-2.5">Valor a repassar</th>
-      <th className="px-3 py-2.5 text-right">Confirmação do consultor</th>
+      <ThOrdenavel chave="consultor" ordem={ordem} onOrdenar={ordenar} className="px-4 py-2.5">Consultor</ThOrdenavel>
+      <ThOrdenavel chave="lancamentos" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5">Lançamentos</ThOrdenavel>
+      <ThOrdenavel chave="horas" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5">Horas</ThOrdenavel>
+      <ThOrdenavel chave="valor" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2.5">Valor a repassar</ThOrdenavel>
+      <ThOrdenavel chave="confirmacao" ordem={ordem} onOrdenar={ordenar} alinhar="direita" className="px-3 py-2.5 text-right">
+        Confirmação do consultor
+      </ThOrdenavel>
     </tr>
   );
   const subtotal = (lista: ItemExibido[]) => ({ h: lista.reduce((s, i) => s + i.horas, 0), v: lista.reduce((s, i) => s + i.valorRepasse, 0) });
@@ -429,7 +451,7 @@ function TabelaItens({
             <table className="w-full text-[13px]">
               <thead>{cabecalho}</thead>
               <tbody>
-                {lista.map((i) => linhaItem(i, g))}
+                {ordenarLista(lista).map((i) => linhaItem(i, g))}
                 {lista.length === 0 && (
                   <tr>
                     <td colSpan={cols + 1} className="px-4 py-6 text-center text-brand-faint">

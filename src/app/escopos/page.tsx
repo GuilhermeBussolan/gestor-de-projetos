@@ -11,6 +11,7 @@ import { ImportarEscopoModal } from "@/components/importacao/ImportarEscopoModal
 import { EscopoFormModal } from "@/components/escopos/EscopoFormModal";
 import { formatarMinutos, nivelAtividade, numerarAtividades, somaDuracaoBloco, temFilhos } from "@/lib/escopo";
 import { Upload, ChevronDown, ChevronUp } from "lucide-react";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import type { Escopo } from "@/types";
 
 function EscoposPageContent() {
@@ -18,6 +19,10 @@ function EscoposPageContent() {
   const [importarAberto, setImportarAberto] = useState(false);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [editando, setEditando] = useState<Escopo | "novo" | null>(null);
+  const { ordenados: escoposOrdenados, ordem, ordenar } = useOrdenacao(escopos, {
+    nome: (e) => e.nome,
+    atividades: (e) => e.atividades?.length ?? 0,
+  });
 
   async function excluir(escopo: Escopo) {
     if (
@@ -46,13 +51,17 @@ function EscoposPageContent() {
         <table className="w-full text-[13.5px]">
           <thead>
             <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-              <th className="px-[18px] py-3.5">Nome do escopo</th>
-              <th className="px-[18px] py-3.5">Atividades</th>
+              <ThOrdenavel chave="nome" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Nome do escopo
+              </ThOrdenavel>
+              <ThOrdenavel chave="atividades" ordem={ordem} onOrdenar={ordenar} className="px-[18px] py-3.5">
+                Atividades
+              </ThOrdenavel>
               <th className="px-[18px] py-3.5" />
             </tr>
           </thead>
           <tbody>
-            {escopos.map((e) => {
+            {escoposOrdenados.map((e) => {
               const expandido = expandidoId === e.id;
               const numeros = expandido ? numerarAtividades(e.atividades ?? []) : [];
               return (

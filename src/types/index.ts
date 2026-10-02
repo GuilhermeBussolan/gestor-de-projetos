@@ -26,6 +26,10 @@ export interface Recurso {
   tipoBox?: TipoBox;
   /** Obrigatório quando tipoBox é "terceiro" — id da empresa parceira em /parceiras. */
   parceiraId?: string | null;
+  /** Ausente = ativo. Inativo aceita apontamento só até `dataInativacao` (inclusive). */
+  ativo?: boolean;
+  /** YYYY-MM-DD: último dia em que o recurso inativo ainda pode ter apontamento. */
+  dataInativacao?: string | null;
   createdAt: number;
 }
 
@@ -159,6 +163,9 @@ export interface ContatoProjeto {
 export interface Notificacao {
   id: string;
   destinatarioUid: string;
+  /** "workspace" = aviso de tarefa compartilhada (abre a anotação em anotacaoId; projetoNome traz o título). */
+  origem?: "workspace";
+  anotacaoId?: string;
   projetoId: string;
   projetoNome: string;
   contatoId: string;
@@ -678,8 +685,14 @@ export type PrioridadeAnotacao = "baixa" | "normal" | "alta";
 
 export interface Anotacao {
   id: string;
-  /** Dono (uid do Firebase Auth). Só ele lê e grava. */
+  /** Dono (uid do Firebase Auth). Só ele (e os participantes, se houver) lê e grava. */
   usuarioId: string;
+  /** Nome de quem criou (para os participantes saberem de quem é a tarefa). */
+  usuarioNome?: string | null;
+  /**
+   * Tarefa compartilhada (só admin/financeiro marcam): uids de quem também vê, atualiza e comenta. Vazio = privada.
+   */
+  participantesUids?: string[];
   titulo: string;
   descricao?: string | null;
   status: StatusAnotacao;
@@ -713,9 +726,20 @@ export interface Anotacao {
   lembreteLidoEm?: number | null;
 }
 
+/** Atualização registrada na conversa de uma tarefa compartilhada. */
+export interface ComentarioAnotacao {
+  id: string;
+  usuarioId: string;
+  usuarioNome: string;
+  texto: string;
+  criadoEm: number;
+}
+
 export interface HistoricoAnotacao {
   id: string;
   usuarioId: string;
+  /** Quem fez a mudança (nas tarefas compartilhadas pode ser um participante). */
+  usuarioNome?: string | null;
   acao: string;
   valorAnterior?: string | null;
   valorNovo?: string | null;

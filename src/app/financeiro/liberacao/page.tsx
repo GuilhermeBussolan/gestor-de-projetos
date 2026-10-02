@@ -7,6 +7,7 @@ import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { FinanceiroTabs } from "@/components/layout/FinanceiroTabs";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input } from "@/components/ui/Field";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { AlterarStatusParcelaModal } from "@/components/financeiro/AlterarStatusParcelaModal";
 import { STATUS_FATURAMENTO_ORDEM, STATUS_PARCELA_CONFIG, STATUS_PARCELA_ORDEM } from "@/lib/constants";
 import { alterarStatusParcela, type DadosStatusParcela } from "@/lib/parcela";
@@ -109,6 +110,18 @@ function FinanceiroLiberacaoPageContent() {
   const totalAReceber = totaisPorStatus.LIBERADO + totaisPorStatus.FATURADO;
 
   const liberacoesExibidas = filtroStatus ? noPeriodo.filter((l) => l.status === filtroStatus) : noPeriodo;
+
+  const { ordenados: liberacoesOrdenadas, ordem, ordenar } = useOrdenacao(liberacoesExibidas, {
+    cliente: (l) => l.cliente,
+    parcela: (l) => l.numero,
+    valor: (l) => l.valor,
+    contato: (l) => l.contato,
+    cnpj: (l) => l.cnpj,
+    email: (l) => l.email,
+    emailNF: (l) => l.emailNF,
+    liberadoEm: (l) => l.dataLiberacao,
+    status: (l) => STATUS_PARCELA_CONFIG[l.status].label,
+  });
 
   function limparFiltros() {
     setFiltroMes("");
@@ -215,19 +228,19 @@ function FinanceiroLiberacaoPageContent() {
           <table className="w-full min-w-[980px] text-[13px]">
             <thead>
               <tr className="bg-brand-hover text-left text-[11px] font-bold tracking-[.09em] text-brand-faint uppercase">
-                <th className="px-4 py-3">Cliente</th>
-                <th className="px-4 py-3">Parcela</th>
-                <th className="px-4 py-3">Valor a faturar</th>
-                <th className="px-4 py-3">Contato</th>
-                <th className="px-4 py-3">CNPJ</th>
-                <th className="px-4 py-3">E-mail</th>
-                <th className="px-4 py-3">E-mail para NF</th>
-                <th className="px-4 py-3">Liberado em</th>
-                <th className="px-4 py-3">Status</th>
+                <ThOrdenavel chave="cliente" ordem={ordem} onOrdenar={ordenar} className="px-4 py-3">Cliente</ThOrdenavel>
+                <ThOrdenavel chave="parcela" ordem={ordem} onOrdenar={ordenar} className="px-4 py-3">Parcela</ThOrdenavel>
+                <ThOrdenavel chave="valor" ordem={ordem} onOrdenar={ordenar} className="px-4 py-3">Valor a faturar</ThOrdenavel>
+                <ThOrdenavel chave="contato" ordem={ordem} onOrdenar={ordenar} className="px-4 py-3">Contato</ThOrdenavel>
+                <ThOrdenavel chave="cnpj" ordem={ordem} onOrdenar={ordenar} className="px-4 py-3">CNPJ</ThOrdenavel>
+                <ThOrdenavel chave="email" ordem={ordem} onOrdenar={ordenar} className="px-4 py-3">E-mail</ThOrdenavel>
+                <ThOrdenavel chave="emailNF" ordem={ordem} onOrdenar={ordenar} className="px-4 py-3">E-mail para NF</ThOrdenavel>
+                <ThOrdenavel chave="liberadoEm" ordem={ordem} onOrdenar={ordenar} className="px-4 py-3">Liberado em</ThOrdenavel>
+                <ThOrdenavel chave="status" ordem={ordem} onOrdenar={ordenar} className="px-4 py-3">Status</ThOrdenavel>
               </tr>
             </thead>
             <tbody>
-              {liberacoesExibidas.map((l) => (
+              {liberacoesOrdenadas.map((l) => (
                 <tr key={`${l.projetoId}-${l.numero}`} className="border-t border-brand-border-soft">
                   <td className="px-4 py-3 font-bold text-brand-navy-2">{l.cliente}</td>
                   <td className="px-4 py-3 text-brand-muted">{l.parcela}</td>

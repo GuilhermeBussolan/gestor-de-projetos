@@ -26,7 +26,9 @@ import {
   montarRelatorio,
   exportarRelatorioWord,
   exportarRelatorioPdf,
+  type LinhaRelatorio,
 } from "@/lib/relatorioApontamento";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { TIPO_BOX_CONFIG } from "@/lib/constants";
 import { idsFolhas } from "@/lib/escopo";
 import { gerarOrdemServicoPdf } from "@/lib/ordemServico";
@@ -41,6 +43,43 @@ function formatarDataBR(iso: string) {
 
 function dataHojeISO() {
   return format(new Date(), "yyyy-MM-dd");
+}
+
+const COLUNAS_RELATORIO = {
+  data: (l: LinhaRelatorio) => l.data,
+  projeto: (l: LinhaRelatorio) => l.projeto,
+  total: (l: LinhaRelatorio) => l.totalHoras,
+};
+
+/** Tabela de lançamentos de um recurso no relatório analítico (colunas ordenáveis). */
+function TabelaLinhasRelatorio({ linhas }: { linhas: LinhaRelatorio[] }) {
+  const { ordenados, ordem, ordenar } = useOrdenacao(linhas, COLUNAS_RELATORIO);
+  return (
+    <table className="w-full text-[13px]">
+      <thead>
+        <tr className="border-b border-brand-border-soft text-left text-[11px] font-bold tracking-[.08em] text-brand-faint uppercase">
+          <ThOrdenavel chave="data" ordem={ordem} onOrdenar={ordenar} className="py-2">
+            Data
+          </ThOrdenavel>
+          <ThOrdenavel chave="projeto" ordem={ordem} onOrdenar={ordenar} className="py-2">
+            Projeto
+          </ThOrdenavel>
+          <ThOrdenavel chave="total" ordem={ordem} onOrdenar={ordenar} className="py-2 text-right" alinhar="direita">
+            Total
+          </ThOrdenavel>
+        </tr>
+      </thead>
+      <tbody>
+        {ordenados.map((l, i) => (
+          <tr key={i} className="border-b border-brand-border-soft last:border-b-0">
+            <td className="py-2 text-brand-muted">{formatarDataBR(l.data)}</td>
+            <td className="py-2 text-brand-navy-2">{l.projeto}</td>
+            <td className="py-2 text-right font-bold text-brand-navy-2">{formatarHoras(l.totalHoras)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 function LinhaHora({
@@ -760,26 +799,7 @@ function AbaAprovadas({
                     </>
                   )}
                 </p>
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="border-b border-brand-border-soft text-left text-[11px] font-bold tracking-[.08em] text-brand-faint uppercase">
-                      <th className="py-2">Data</th>
-                      <th className="py-2">Projeto</th>
-                      <th className="py-2 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {r.linhas.map((l, i) => (
-                      <tr key={i} className="border-b border-brand-border-soft last:border-b-0">
-                        <td className="py-2 text-brand-muted">{formatarDataBR(l.data)}</td>
-                        <td className="py-2 text-brand-navy-2">{l.projeto}</td>
-                        <td className="py-2 text-right font-bold text-brand-navy-2">
-                          {formatarHoras(l.totalHoras)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <TabelaLinhasRelatorio linhas={r.linhas} />
               </div>
             ))}
             {relatorio.length === 0 && (

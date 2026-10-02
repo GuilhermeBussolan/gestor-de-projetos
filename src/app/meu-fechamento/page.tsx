@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronRight, FileText, MessageSquareWarning } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { Button } from "@/components/ui/Button";
+import { ThOrdenavel, useOrdenacao } from "@/components/ui/Ordenacao";
 import { AcaoFechamentoModal } from "@/components/financeiro/AcaoFechamentoModal";
 import { DocumentosDoFinanceiro, NotaFiscalParceira } from "@/components/financeiro/NotaFiscalParceira";
 import { useAuth } from "@/contexts/AuthContext";
@@ -100,6 +101,13 @@ function CartaoMes({
   const [erro, setErro] = useState("");
   const cfg = situacao(item);
   const podeResponder = item.confirmacao.status === "pendente" || item.confirmacao.status === "contestado";
+  const { ordenados: lancamentosOrdenados, ordem, ordenar } = useOrdenacao(item.lancamentos, {
+    data: (l) => `${l.data} ${l.horaInicio}`,
+    clienteProjeto: (l) => `${l.cliente} — ${l.projeto}`,
+    horario: (l) => l.horaInicio,
+    horas: (l) => l.totalHoras,
+    valor: (l) => l.valorRepasse,
+  });
 
   async function responder(decisao: "confirmado" | "contestado", motivo?: string) {
     if (!usuario) return;
@@ -158,15 +166,19 @@ function CartaoMes({
             <table className="w-full text-[12.5px]">
               <thead>
                 <tr className="bg-brand-hover text-left text-[10.5px] font-bold tracking-[.08em] text-brand-faint uppercase">
-                  <th className="px-3 py-2">Data</th>
-                  <th className="px-3 py-2">Cliente — projeto</th>
-                  <th className="px-3 py-2">Horário</th>
-                  <th className="px-3 py-2 text-right">Horas</th>
-                  <th className="px-3 py-2 text-right">Valor</th>
+                  <ThOrdenavel chave="data" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2">Data</ThOrdenavel>
+                  <ThOrdenavel chave="clienteProjeto" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2">Cliente — projeto</ThOrdenavel>
+                  <ThOrdenavel chave="horario" ordem={ordem} onOrdenar={ordenar} className="px-3 py-2">Horário</ThOrdenavel>
+                  <ThOrdenavel chave="horas" ordem={ordem} onOrdenar={ordenar} alinhar="direita" className="px-3 py-2 text-right">
+                    Horas
+                  </ThOrdenavel>
+                  <ThOrdenavel chave="valor" ordem={ordem} onOrdenar={ordenar} alinhar="direita" className="px-3 py-2 text-right">
+                    Valor
+                  </ThOrdenavel>
                 </tr>
               </thead>
               <tbody>
-                {item.lancamentos.map((l, i) => (
+                {lancamentosOrdenados.map((l, i) => (
                   <tr key={i} className="border-t border-brand-border-soft">
                     <td className="px-3 py-1.5 whitespace-nowrap text-brand-muted">{dataBR(l.data)}</td>
                     <td className="px-3 py-1.5 text-brand-navy-2">

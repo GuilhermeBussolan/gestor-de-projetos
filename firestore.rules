@@ -105,13 +105,20 @@ service cloud.firestore {
       // Só usuários da NG notificam, sempre no próprio nome (o nome vem do cadastro, não dá para se passar por outro),
       // com os campos que o sistema usa, texto curto e um projeto que exista.
       allow create: if isInterno() &&
-        request.resource.data.keys().hasOnly(
-          ['destinatarioUid', 'projetoId', 'projetoNome', 'contatoId', 'autorUid', 'autorNome', 'tipo', 'texto', 'criadoEm', 'lida']) &&
         request.resource.data.autorUid == request.auth.uid &&
         request.resource.data.autorNome == meuUsuario().get('nomeCompleto', '') &&
         request.resource.data.lida == false &&
         request.resource.data.texto is string && request.resource.data.texto.size() <= 200 &&
-        exists(/databases/$(database)/documents/projetos/$(request.resource.data.projetoId));
+        ((request.resource.data.keys().hasOnly(
+            ['destinatarioUid', 'projetoId', 'projetoNome', 'contatoId', 'autorUid', 'autorNome', 'tipo', 'texto', 'criadoEm', 'lida']) &&
+          exists(/databases/$(database)/documents/projetos/$(request.resource.data.projetoId))) ||
+        // Aviso de tarefa compartilhada do Workspace: quem avisa e quem recebe precisam ser dono ou participante dela.
+        (request.resource.data.keys().hasOnly(
+            ['destinatarioUid', 'anotacaoId', 'projetoId', 'projetoNome', 'contatoId', 'autorUid', 'autorNome', 'tipo', 'texto', 'criadoEm', 'lida', 'origem']) &&
+          request.resource.data.origem == 'workspace' &&
+          souDonoOuParticipante(get(/databases/$(database)/documents/anotacoes/$(request.resource.data.anotacaoId)).data) &&
+          (get(/databases/$(database)/documents/anotacoes/$(request.resource.data.anotacaoId)).data.usuarioId == request.resource.data.destinatarioUid ||
+            request.resource.data.destinatarioUid in get(/databases/$(database)/documents/anotacoes/$(request.resource.data.anotacaoId)).data.get('participantesUids', []))));
       allow update: if isSignedIn() &&
         resource.data.destinatarioUid == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lida']);
@@ -328,6 +335,17 @@ service cloud.firestore {
         (statusDoConsultor(d) || meuRecursoEhCoordenador());
     }
 
+    // Recurso inativado (ativo == false) só aceita apontamento até a data de inativação, inclusive. Vale para todos os
+    // perfis. Sem data de inativação, o inativo não aceita nenhum.
+    function recursoAceitaData(d) {
+      return get(/databases/$(database)/documents/recursos/$(d.recursoId)).data.get('ativo', true) != false ||
+        get(/databases/$(database)/documents/recursos/$(d.recursoId)).data.get('dataInativacao', '') >= d.data;
+    }
+    // Na edição, só confere quando a data ou o recurso mudam (ajustar um lançamento antigo continua liberado).
+    function dataOuRecursoMudou() {
+      return request.resource.data.data != resource.data.data || request.resource.data.recursoId != resource.data.recursoId;
+    }
+
     match /eventosCalendario/{id} {
       // Além do próprio apontamento, um consultor também pode ler os apontamentos de outros
       // consultores DENTRO DE UM PROJETO em que ele esteja alocado — para ele enxergar o que já
@@ -342,14 +360,14 @@ service cloud.firestore {
       // (admin/coordenador continuam podendo, mesmo com o projeto finalizado).
       // .get() com padrão 'ativo' evita erro em projetos antigos sem o campo status.
       // O consultor só cria com status de "lançado/aguardando" (nunca já aprovado ou retroativo).
-      allow create: if isAdmin() || isCoordenador() ||
-        (isSignedIn() && gravacaoDoConsultorPermitida(request.resource.data) &&
-          get(/databases/$(database)/documents/projetos/$(request.resource.data.projetoId)).data.get('status', 'ativo') != 'finalizado');
+      allow create: if isSignedIn() && recursoAceitaData(request.resource.data) && (isAdmin() || isCoordenador() ||
+        (gravacaoDoConsultorPermitida(request.resource.data) &&
+          get(/databases/$(database)/documents/projetos/$(request.resource.data.projetoId)).data.get('status', 'ativo') != 'finalizado'));
       // O consultor não mexe em apontamento já aprovado (nem para editar, nem para excluir) e não consegue se aprovar.
-      allow update: if isAdmin() || isCoordenador() ||
-        (isSignedIn() && resource.data.recursoId == meuRecursoId() &&
+      allow update: if isSignedIn() && (!dataOuRecursoMudou() || recursoAceitaData(request.resource.data)) && (isAdmin() || isCoordenador() ||
+        (resource.data.recursoId == meuRecursoId() &&
           (!apontamentoAprovado(resource.data) || meuRecursoEhCoordenador()) &&
-          gravacaoDoConsultorPermitida(request.resource.data));
+          gravacaoDoConsultorPermitida(request.resource.data)));
       allow delete: if isAdmin() || isCoordenador() ||
         (isSignedIn() && resource.data.recursoId == meuRecursoId() &&
           (!apontamentoAprovado(resource.data) || meuRecursoEhCoordenador()));
@@ -362,9 +380,18 @@ service cloud.firestore {
     function temWorkspace() {
       return isInterno();
     }
+    // Tarefa compartilhada: o administrador e o financeiro podem marcar outras pessoas (participantes) numa anotação, para
+    // se comunicarem por atividades. Consultor e coordenador nunca marcam ninguém. O participante lê, atualiza e comenta,
+    // mas não muda o dono, os participantes nem manda para a lixeira (isso é só do dono).
+    function podeCompartilhar() {
+      return isAdmin() || isFinanceiro();
+    }
+    function souDonoOuParticipante(d) {
+      return d.usuarioId == request.auth.uid || request.auth.uid in d.get('participantesUids', []);
+    }
     function anotacaoValida(d) {
-      return d.usuarioId == request.auth.uid &&
-        d.titulo is string && d.titulo.size() > 0 && d.titulo.size() <= 200 &&
+      return d.titulo is string && d.titulo.size() > 0 && d.titulo.size() <= 200 &&
+        (d.get('participantesUids', []) is list && d.get('participantesUids', []).size() <= 10) &&
         d.status in ['a_fazer', 'em_andamento', 'concluido', 'arquivado'] &&
         d.prioridade in ['baixa', 'normal', 'alta'] &&
         (d.get('descricao', null) == null || (d.descricao is string && d.descricao.size() <= 5000)) &&
@@ -375,16 +402,40 @@ service cloud.firestore {
           (d.lembretesDiasAntes is list && d.lembretesDiasAntes.size() <= 10));
     }
     match /anotacoes/{anotacaoId} {
-      allow read: if temWorkspace() && resource.data.usuarioId == request.auth.uid;
-      allow create: if temWorkspace() && anotacaoValida(request.resource.data);
-      allow update: if temWorkspace() && resource.data.usuarioId == request.auth.uid && anotacaoValida(request.resource.data);
+      allow read: if temWorkspace() && souDonoOuParticipante(resource.data);
+      allow create: if temWorkspace() && request.resource.data.usuarioId == request.auth.uid && anotacaoValida(request.resource.data) &&
+        (request.resource.data.get('participantesUids', []).size() == 0 || podeCompartilhar());
+      allow update: if temWorkspace() && anotacaoValida(request.resource.data) && (
+        // Dono: tudo (marcar participantes só admin/financeiro).
+        (resource.data.usuarioId == request.auth.uid && request.resource.data.usuarioId == request.auth.uid &&
+          (request.resource.data.get('participantesUids', []) == resource.data.get('participantesUids', []) ||
+            request.resource.data.get('participantesUids', []).size() == 0 || podeCompartilhar())) ||
+        // Participante: atualiza a tarefa, sem mexer no dono, nos participantes nem na lixeira.
+        (request.auth.uid in resource.data.get('participantesUids', []) &&
+          request.resource.data.usuarioId == resource.data.usuarioId &&
+          request.resource.data.get('participantesUids', []) == resource.data.get('participantesUids', []) &&
+          request.resource.data.get('deletedAt', null) == resource.data.get('deletedAt', null)));
       allow delete: if temWorkspace() && resource.data.usuarioId == request.auth.uid && resource.data.get('deletedAt', null) != null;
 
       match /historico/{historicoId} {
         allow read: if temWorkspace() &&
-          get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.usuarioId == request.auth.uid;
+          souDonoOuParticipante(get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data);
         allow create: if temWorkspace() && request.resource.data.usuarioId == request.auth.uid &&
-          getAfter(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.usuarioId == request.auth.uid;
+          souDonoOuParticipante(getAfter(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data);
+        allow update: if false;
+        allow delete: if temWorkspace() &&
+          get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.usuarioId == request.auth.uid &&
+          get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.get('deletedAt', null) != null;
+      }
+
+      // Conversa da tarefa compartilhada: dono e participantes registram atualizações (sempre no próprio nome).
+      match /comentarios/{comentarioId} {
+        allow read: if temWorkspace() &&
+          souDonoOuParticipante(get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data);
+        allow create: if temWorkspace() && request.resource.data.usuarioId == request.auth.uid &&
+          request.resource.data.usuarioNome == meuUsuario().get('nomeCompleto', '') &&
+          request.resource.data.texto is string && request.resource.data.texto.size() > 0 && request.resource.data.texto.size() <= 2000 &&
+          souDonoOuParticipante(get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data);
         allow update: if false;
         allow delete: if temWorkspace() &&
           get(/databases/$(database)/documents/anotacoes/$(anotacaoId)).data.usuarioId == request.auth.uid &&

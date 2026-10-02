@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { orderBy } from "firebase/firestore";
-import { Archive, Bell, Check, CircleCheck, Flag, History, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { Archive, Bell, Check, CircleCheck, Flag, History, Plus, RotateCcw, Trash2, Users, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormRow, Input, Select, Textarea } from "@/components/ui/Field";
 import { useCollection } from "@/lib/useCollection";
 import { ICONE_STATUS } from "@/components/workspace/visual";
+import { ConversaTarefa } from "@/components/workspace/ConversaTarefa";
 import {
   atividadesDoContexto,
   COLUNAS_KANBAN,
@@ -22,8 +23,8 @@ import {
   PRIORIDADES,
   STATUS_ANOTACAO,
 } from "@/lib/workspace";
-import { arquivarAnotacao, atualizarAnotacao, criarAnotacao, excluirAnotacao, restaurarAnotacao, type NomesContexto } from "@/lib/workspaceDb";
-import type { Anotacao, HistoricoAnotacao, PrioridadeAnotacao, Projeto, StatusAnotacao } from "@/types";
+import { arquivarAnotacao, atualizarAnotacao, criarAnotacao, excluirAnotacao, restaurarAnotacao, type AtorWorkspace, type NomesContexto } from "@/lib/workspaceDb";
+import type { Anotacao, HistoricoAnotacao, PessoaDiretorio, PrioridadeAnotacao, Projeto, StatusAnotacao } from "@/types";
 
 const ACAO_ICONE = "flex h-9 w-9 items-center justify-center rounded-[10px] text-brand-faint transition-colors hover:bg-brand-hover hover:text-brand-navy-2 disabled:opacity-50";
 
@@ -35,7 +36,10 @@ const dataHora = (ms: number) => new Date(ms).toLocaleString("pt-BR", { dateStyl
  */
 export function AnotacaoModal({
   anotacao,
-  usuarioId,
+  ator,
+  podeCompartilhar = false,
+  pessoasCompartilhaveis = [],
+  nomeDe = () => "alguém",
   projetosSelecionaveis,
   todosProjetos,
   nomeProjeto,
@@ -46,7 +50,13 @@ export function AnotacaoModal({
 }: {
   /** null = nova anotação. */
   anotacao: Anotacao | null;
-  usuarioId: string;
+  /** Quem está usando (dono ou participante da tarefa). */
+  ator: AtorWorkspace;
+  /** Administrador e financeiro: podem marcar outras pessoas (tarefa compartilhada). */
+  podeCompartilhar?: boolean;
+  /** Quem dá para marcar (os outros administradores e financeiros). */
+  pessoasCompartilhaveis?: PessoaDiretorio[];
+  nomeDe?: (uid: string) => string;
   /** Projetos em que o consultor está alocado (os que ele pode vincular). */
   projetosSelecionaveis: Projeto[];
   /** Todos os projetos (para mostrar o vinculado mesmo que o consultor não esteja mais alocado nele). */
@@ -83,6 +93,11 @@ export function AnotacaoModal({
   }
   const antecedenciasPersonalizadas = antecedencias.filter((d) => !OPCOES_LEMBRETE.some((o) => o.dias === d));
   const [tags, setTags] = useState<string[]>(anotacao?.tags ?? []);
+  // Tarefa compartilhada: só o dono escolhe quem participa; o participante só vê e atualiza.
+  const souDono = !anotacao || anotacao.usuarioId === ator.uid;
+  const [participantes, setParticipantes] = useState<string[]>(anotacao?.participantesUids ?? []);
+  const alternarParticipante = (uid: string) => setParticipantes((p) => (p.includes(uid) ? p.filter((x) => x !== uid) : [...p, uid]));
+  const compartilhadaSalva = (anotacao?.participantesUids ?? []).length > 0;
   const [tagDigitada, setTagDigitada] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
@@ -149,19 +164,25 @@ export function AnotacaoModal({
       faseId: projetoId ? faseId || null : null,
       atividadeId: projetoId ? atividadeId || null : null,
       dataLimite: dataLimite || null,
-      lembretesDiasAntes: dataLimite && lembreteAtivo ? antecedencias : [],
+      lembretesDiasAntes: souDono ? (dataLimite && lembreteAtivo ? antecedencias : []) : (anotacao?.lembretesDiasAntes ?? []),
       tags,
+      ...(souDono && podeCompartilhar ? { participantesUids: participantes } : {}),
     };
     setSalvando(true);
     try {
       if (!anotacao) {
-        await criarAnotacao(usuarioId, dados, ordemTopo(status));
+        await criarAnotacao(ator, dados, ordemTopo(status));
       } else {
         const mudouColuna = status !== anotacao.status;
-        await atualizarAnotacao(anotacao, mudouColuna ? { ...dados, ordem: ordemTopo(status) } : dados, {
-          antes: nomesDe(anotacao.projetoId, anotacao.faseId, anotacao.atividadeId),
-          depois: nomesDe(dados.projetoId, dados.faseId, dados.atividadeId),
-        });
+        await atualizarAnotacao(
+          anotacao,
+          mudouColuna ? { ...dados, ordem: ordemTopo(status) } : dados,
+          {
+            antes: nomesDe(anotacao.projetoId, anotacao.faseId, anotacao.atividadeId),
+            depois: nomesDe(dados.projetoId, dados.faseId, dados.atividadeId),
+          },
+          ator
+        );
       }
       onClose();
     } catch (err) {
@@ -193,8 +214,20 @@ export function AnotacaoModal({
     }`;
 
   return (
-    <Modal open onClose={onClose} title={anotacao ? "Anotação" : "Nova anotação"} wide>
+    <Modal open onClose={onClose} title={compartilhadaSalva ? "Tarefa compartilhada" : anotacao ? "Anotação" : "Nova anotação"} wide>
       <form onSubmit={salvar} className="space-y-4">
+        {anotacao && !souDono && (
+          <p className="flex items-center gap-2 rounded-xl bg-[#f3edff] p-3 text-[12.5px] text-[#5b21b6]">
+            <Users size={15} />
+            <span>
+              Tarefa de <strong>{anotacao.usuarioNome || nomeDe(anotacao.usuarioId)}</strong> compartilhada com você
+              {(anotacao.participantesUids ?? []).length > 1
+                ? ` e com ${(anotacao.participantesUids ?? []).filter((p) => p !== ator.uid).map(nomeDe).join(", ")}`
+                : ""}
+              . Você pode atualizar o status, os dados e registrar o andamento abaixo.
+            </span>
+          </p>
+        )}
         {arquivada && anotacao && (
           <div className="flex flex-wrap items-center gap-2 rounded-xl bg-brand-hover p-3 text-[12.5px] text-brand-muted">
             <Archive size={15} className="text-brand-faint" />
@@ -204,7 +237,7 @@ export function AnotacaoModal({
               variant="secondary"
               disabled={salvando}
               className="h-8 px-3 text-[12px]"
-              onClick={() => executar(() => restaurarAnotacao(anotacao, "a_fazer", ordemTopo("a_fazer")))}
+              onClick={() => executar(() => restaurarAnotacao(anotacao, "a_fazer", ordemTopo("a_fazer"), ator))}
             >
               <RotateCcw size={13} />
               Voltar para A fazer
@@ -214,7 +247,7 @@ export function AnotacaoModal({
               variant="secondary"
               disabled={salvando}
               className="h-8 px-3 text-[12px]"
-              onClick={() => executar(() => restaurarAnotacao(anotacao, "em_andamento", ordemTopo("em_andamento")))}
+              onClick={() => executar(() => restaurarAnotacao(anotacao, "em_andamento", ordemTopo("em_andamento"), ator))}
             >
               <RotateCcw size={13} />
               Voltar para Em andamento
@@ -276,6 +309,41 @@ export function AnotacaoModal({
           </FormRow>
         </div>
 
+        {souDono && podeCompartilhar && (
+          <div className={`rounded-xl border p-3 transition-colors ${participantes.length > 0 ? "border-[#d9c8fb] bg-[#faf7ff]" : "border-brand-border"}`}>
+            <p className="mb-1 flex items-center gap-1.5 text-[13px] font-semibold text-brand-navy-2">
+              <Users size={14} className={participantes.length > 0 ? "text-[#7c3aed]" : "text-brand-faint"} />
+              Compartilhar com
+              <span className="font-normal text-brand-faint">(opcional)</span>
+            </p>
+            <p className="mb-2 text-[11.5px] text-brand-faint">
+              Quem você marcar vê esta tarefa no Workspace dele, recebe o aviso no sino e pode atualizar e registrar o andamento.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {pessoasCompartilhaveis.map((p) => {
+                const ativo = participantes.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => alternarParticipante(p.id)}
+                    aria-pressed={ativo}
+                    className={`flex items-center gap-1 rounded-full border px-3 py-1 text-[12.5px] font-semibold transition-colors ${
+                      ativo ? "border-[#d9c8fb] bg-[#f3edff] text-[#7c3aed]" : "border-brand-border bg-white text-brand-muted hover:bg-brand-hover"
+                    }`}
+                  >
+                    {ativo && <Check size={12} strokeWidth={3} />}
+                    {p.nomeCompleto}
+                    <span className="font-normal opacity-70">· {p.perfil === "financeiro" ? "Financeiro" : "Admin"}</span>
+                  </button>
+                );
+              })}
+              {pessoasCompartilhaveis.length === 0 && <span className="text-[12px] text-brand-faint">Nenhum outro administrador ou financeiro cadastrado.</span>}
+            </div>
+          </div>
+        )}
+
+        {souDono && (
         <div className={`rounded-xl border p-3 transition-colors ${lembreteAtivo && dataLimite ? "border-[#f3dcb8] bg-[#fffaf1]" : "border-brand-border"}`}>
           <label className={`flex items-center gap-2.5 ${dataLimite ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}>
             <button
@@ -354,6 +422,7 @@ export function AnotacaoModal({
             </div>
           )}
         </div>
+        )}
 
         <FormRow label="Projeto (opcional, só para referência)">
           <Select value={projetoId} onChange={(e) => trocarProjeto(e.target.value)}>
@@ -432,6 +501,8 @@ export function AnotacaoModal({
             Concluída em {dataHora(anotacao.dataConclusao)}
           </p>
         )}
+        {anotacao && compartilhadaSalva && <ConversaTarefa anotacao={anotacao} ator={ator} />}
+
         {anotacao && verHistorico && (
           <ul className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-brand-border bg-white p-3 text-[12.5px]">
             {historico.length === 0 && <li className="text-brand-faint">Carregando…</li>}
@@ -439,6 +510,7 @@ export function AnotacaoModal({
               <li key={h.id} className="flex gap-3">
                 <span className="shrink-0 text-brand-faint">{dataHora(h.criadoEm)}</span>
                 <span className="text-brand-navy-2">
+                  {compartilhadaSalva && h.usuarioNome ? <strong>{h.usuarioId === ator.uid ? "Você" : h.usuarioNome}: </strong> : null}
                   {h.acao}
                   {h.valorAnterior || h.valorNovo ? (
                     <span className="text-brand-muted">
@@ -468,14 +540,16 @@ export function AnotacaoModal({
             <div className="flex items-center gap-1">
               {anotacao && (
                 <>
-                  <button type="button" onClick={() => setConfirmandoExclusao(true)} title="Excluir (vai para a lixeira por 15 dias)" aria-label="Excluir" className={ACAO_ICONE + " hover:text-red-600"}>
-                    <Trash2 size={16} />
-                  </button>
+                  {souDono && (
+                    <button type="button" onClick={() => setConfirmandoExclusao(true)} title="Excluir (vai para a lixeira por 15 dias)" aria-label="Excluir" className={ACAO_ICONE + " hover:text-red-600"}>
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                   {!arquivada && (
                     <button
                       type="button"
                       disabled={salvando}
-                      onClick={() => executar(() => arquivarAnotacao(anotacao))}
+                      onClick={() => executar(() => arquivarAnotacao(anotacao, ator))}
                       title="Arquivar"
                       aria-label="Arquivar"
                       className={ACAO_ICONE}
